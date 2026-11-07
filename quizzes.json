@@ -1,0 +1,867 @@
+{
+ "py-setup": [
+  [
+   "You ran `pip install httpx` with no venv active. Where did httpx go?",
+   [
+    "Into the current folder",
+    "Into whichever Python's site-packages `pip` belongs to, usually the global one",
+    "Into `.venv` automatically"
+   ],
+   1,
+   "pip installs into the interpreter it belongs to. Without an active venv that's the global (or user) Python, where projects collide."
+  ],
+  [
+   "What does `if __name__ == \"__main__\":` do?",
+   [
+    "Runs the block only when the file is executed directly, not when imported",
+    "Marks the file as the package entry point for pip",
+    "Makes the function run at import time"
+   ],
+   0,
+   "Importing sets `__name__` to the module's name; running the file sets it to \"__main__\"."
+  ],
+  [
+   "The closest PHP equivalent of a virtualenv is…",
+   [
+    "php.ini",
+    "The `vendor/` folder Composer manages",
+    "OPcache"
+   ],
+   1,
+   "A venv is a per-project package folder, like `vendor/`. The difference: you must run the venv's python for it to be used."
+  ]
+ ],
+ "py-syntax": [
+  [
+   "What marks the body of an `if` in Python?",
+   [
+    "Curly braces",
+    "The colon and the indentation under it",
+    "`then` ... `endif`"
+   ],
+   1,
+   "A colon opens the block; the indented lines are the block."
+  ],
+  [
+   "What is `7 / 2` in Python 3?",
+   [
+    "3",
+    "3.5",
+    "4"
+   ],
+   1,
+   "`/` always produces a float. Floor division is `//`, which gives 3."
+  ],
+  [
+   "`\"1\" == 1` evaluates to…",
+   [
+    "True, like PHP's loose ==",
+    "False: no type juggling",
+    "A TypeError"
+   ],
+   1,
+   "Python never converts types to compare. Different types are simply not equal."
+  ]
+ ],
+ "py-types": [
+  [
+   "Which of these is truthy?",
+   [
+    "`\"\"`",
+    "`[]`",
+    "`\"0\"`",
+    "`None`"
+   ],
+   2,
+   "Only empty or zero values are falsy. `\"0\"` is a non-empty string, so it's true (unlike PHP)."
+  ],
+  [
+   "When should you use `is`?",
+   [
+    "For comparing any two strings",
+    "For None, True and False",
+    "For numbers under 256"
+   ],
+   1,
+   "`is` checks identity. It only makes sense for singletons; small-int caching makes number comparisons with `is` work by accident."
+  ],
+  [
+   "`if not token:` vs `if token is None:` when token is `\"\"`…",
+   [
+    "Both are true",
+    "Only `if not token` is true",
+    "Only `is None` is true"
+   ],
+   1,
+   "An empty string is falsy but it is not None. Know which one you mean, especially in auth checks that could fail open."
+  ]
+ ],
+ "py-collections": [
+  [
+   "`b = a; b.append(3)` where `a` is a list. What happens to `a`?",
+   [
+    "Nothing: b is a copy",
+    "a also gets the 3: both names point at one list",
+    "TypeError"
+   ],
+   1,
+   "Assignment never copies a list or dict. Use `a.copy()` or `list(a)`."
+  ],
+  [
+   "`d[\"missing\"]` on a dict without that key…",
+   [
+    "Returns None",
+    "Raises KeyError",
+    "Returns an empty string"
+   ],
+   1,
+   "Indexing raises. Use `d.get(\"missing\")` for None or `d.get(key, default)`."
+  ],
+  [
+   "How do you make an empty set?",
+   [
+    "`{}`",
+    "`set()`",
+    "`[]`"
+   ],
+   1,
+   "`{}` is an empty dict."
+  ]
+ ],
+ "py-loops": [
+  [
+   "Which gives the names of active users?",
+   [
+    "`[u.name if u.active for u in users]`",
+    "`[u.name for u in users if u.active]`",
+    "`[for u in users: u.name]`"
+   ],
+   1,
+   "Expression first, then `for`, then the filter `if`."
+  ],
+  [
+   "What's wrong with deleting dict keys inside `for k in d:`?",
+   [
+    "Nothing",
+    "RuntimeError: the dict changed size during iteration",
+    "It deletes every key"
+   ],
+   1,
+   "Build a new dict instead, or loop over `list(d)`."
+  ],
+  [
+   "`sorted(users, key=lambda u: u.age)` — what is `key`?",
+   [
+    "A comparator returning -1/0/1",
+    "A function returning the value to sort by",
+    "The dict key to sort on"
+   ],
+   1,
+   "Python sorts by the key function's result; there's no comparator like `usort`."
+  ]
+ ],
+ "py-functions": [
+  [
+   "`def add(tag, tags=[])` called twice with no list. What do the calls share?",
+   [
+    "Nothing",
+    "The same list object, created once when def ran",
+    "The same tag"
+   ],
+   1,
+   "Defaults are evaluated once. Use `tags=None` and create the list inside."
+  ],
+  [
+   "In `def send(to, *, retries=3)`, how must retries be passed?",
+   [
+    "Positionally",
+    "By name: `retries=1`",
+    "It can't be passed"
+   ],
+   1,
+   "Everything after a bare `*` is keyword-only."
+  ],
+  [
+   "`def f(at=datetime.now())` in a server that runs for a week. What is `at` on day 7?",
+   [
+    "The current time",
+    "The time the module was imported",
+    "None"
+   ],
+   1,
+   "Same trap as mutable defaults: evaluated once at definition."
+  ]
+ ],
+ "py-modules": [
+  [
+   "You created `json.py` in your project. What does `import json` load?",
+   [
+    "The standard library json",
+    "Your json.py, shadowing the real one",
+    "Both"
+   ],
+   1,
+   "The script's directory comes first on sys.path. Never name files after libraries."
+  ],
+  [
+   "How often does a module's top-level code run in a server process?",
+   [
+    "Once per request",
+    "Once per import statement",
+    "Once per process, at first import"
+   ],
+   2,
+   "Modules are cached after the first import, which is why module-level state is shared by every request."
+  ],
+  [
+   "PHP's `use App\\Models\\User;` is closest to…",
+   [
+    "`from app.models import User`",
+    "`require 'app/models.py'`",
+    "`include User`"
+   ],
+   0,
+   "The file path is the namespace; the import statement does the loading."
+  ]
+ ],
+ "py-errors": [
+  [
+   "Why is `except: pass` dangerous?",
+   [
+    "It's slow",
+    "It hides every error, even typos and shutdown signals",
+    "It re-raises the exception"
+   ],
+   1,
+   "Bugs vanish silently. Catch the specific exception, and log with `log.exception` at boundaries."
+  ],
+  [
+   "When does an `else:` block on a try run?",
+   [
+    "Always",
+    "Only if the try block raised nothing",
+    "Only if an exception was caught"
+   ],
+   1,
+   "`finally` always runs; `else` runs only on success."
+  ],
+  [
+   "What does `with open(path) as f:` guarantee?",
+   [
+    "The file is read entirely",
+    "The file is closed even if an error happens inside",
+    "The file exists"
+   ],
+   1,
+   "A context manager is a guaranteed cleanup, like a built-in finally."
+  ]
+ ],
+ "py-classes": [
+  [
+   "In Python, `self` is…",
+   [
+    "A keyword like `this`",
+    "The instance, passed explicitly as the first parameter",
+    "The class"
+   ],
+   1,
+   "It's just the conventional name for the first parameter of a method."
+  ],
+  [
+   "`class Cache: items = {}` — who shares `items`?",
+   [
+    "Each instance has its own",
+    "Every instance (and every request in a server)",
+    "Only subclasses"
+   ],
+   1,
+   "Class attributes are shared. Per-instance state goes in `__init__`."
+  ],
+  [
+   "Correct way to give a dataclass field an empty list default?",
+   [
+    "`tags: list[str] = []`",
+    "`tags: list[str] = field(default_factory=list)`",
+    "`tags = list`"
+   ],
+   1,
+   "dataclasses forbid mutable defaults for the same reason as functions; `default_factory` makes a fresh one each time."
+  ]
+ ],
+ "py-typing": [
+  [
+   "`def f(x: int)` called as `f(\"ab\")` in plain Python…",
+   [
+    "TypeError",
+    "Runs: hints aren't enforced at runtime",
+    "Converts to int"
+   ],
+   1,
+   "Plain Python ignores hints. mypy catches it before running; Pydantic/FastAPI enforce at the edge."
+  ],
+  [
+   "`User | None` means…",
+   [
+    "A User or nothing (None)",
+    "A User whose fields may be None",
+    "Either type, decided by FastAPI"
+   ],
+   0,
+   "Same as `Optional[User]`."
+  ],
+  [
+   "`Annotated[int, Query(le=100)]` tells FastAPI…",
+   [
+    "It's an int; also treat it as a query param capped at 100",
+    "It's a list of ints",
+    "Nothing; Annotated is ignored"
+   ],
+   0,
+   "Annotated attaches extra metadata to a type; FastAPI reads it."
+  ]
+ ],
+ "py-iter": [
+  [
+   "What does a function containing `yield` return when called?",
+   [
+    "The first yielded value",
+    "A generator that produces values lazily",
+    "A list of all values"
+   ],
+   1,
+   "Nothing in the body runs until you iterate it."
+  ],
+  [
+   "You iterate a generator a second time. What do you get?",
+   [
+    "The same values again",
+    "Nothing: it's exhausted",
+    "An error"
+   ],
+   1,
+   "Generators are one-shot. Make a list if you need it twice."
+  ],
+  [
+   "Why process a 10 GB log with a generator?",
+   [
+    "It's multithreaded",
+    "Only one line needs to be in memory at a time",
+    "It compresses the file"
+   ],
+   1,
+   "Lazy iteration keeps memory flat regardless of input size."
+  ]
+ ],
+ "py-stdlib": [
+  [
+   "Which gives the current time correctly for a server?",
+   [
+    "`datetime.now()`",
+    "`datetime.utcnow()`",
+    "`datetime.now(timezone.utc)`"
+   ],
+   2,
+   "Aware UTC. `now()` is naive local time; `utcnow()` is naive and deprecated."
+  ],
+  [
+   "Comparing a provided API key to the real one:",
+   [
+    "`provided == expected`",
+    "`hmac.compare_digest(provided, expected)`",
+    "`provided in expected`"
+   ],
+   1,
+   "Constant-time comparison doesn't leak where the strings differ."
+  ],
+  [
+   "Which module for an unguessable reset token?",
+   [
+    "`random`",
+    "`secrets`",
+    "`uuid.uuid1`"
+   ],
+   1,
+   "`random` is predictable; `secrets.token_urlsafe()` is for security."
+  ]
+ ],
+ "py-runtime": [
+  [
+   "A module-level `cache = {}` in a FastAPI app is…",
+   [
+    "Reset per request, like PHP",
+    "Shared by every request in that worker process",
+    "Shared across all servers"
+   ],
+   1,
+   "The process lives for days; module state lives with it."
+  ],
+  [
+   "With `--workers 4`, an in-memory counter is…",
+   [
+    "One shared counter",
+    "Four separate counters, one per process",
+    "Stored in the database"
+   ],
+   1,
+   "Each worker is its own process with its own memory. Shared state belongs in a database or Redis."
+  ],
+  [
+   "Which is fine to create once and share?",
+   [
+    "A SQLAlchemy Session",
+    "The SQLAlchemy engine",
+    "The current user"
+   ],
+   1,
+   "The engine is a thread-safe connection pool. Sessions and users are per request."
+  ]
+ ],
+ "py-async": [
+  [
+   "Where can the event loop switch to another coroutine?",
+   [
+    "Anywhere",
+    "Only at `await`",
+    "At every function call"
+   ],
+   1,
+   "Code between awaits runs without interruption, which is why a blocking call there stalls everything."
+  ],
+  [
+   "`time.sleep(2)` inside an `async def` endpoint…",
+   [
+    "Pauses only that request",
+    "Blocks the whole event loop: every request on that worker waits",
+    "Raises an error"
+   ],
+   1,
+   "Use `await asyncio.sleep(2)`."
+  ],
+  [
+   "`await requests.get(url)` …",
+   [
+    "Makes requests async",
+    "Is a TypeError: a Response isn't awaitable",
+    "Works but slowly"
+   ],
+   1,
+   "requests is synchronous. Use httpx.AsyncClient."
+  ]
+ ],
+ "fa-first": [
+  [
+   "What actually listens on the port and speaks HTTP?",
+   [
+    "FastAPI",
+    "uvicorn (the ASGI server)",
+    "Pydantic"
+   ],
+   1,
+   "FastAPI is the app; uvicorn serves it, like PHP-FPM behind nginx."
+  ],
+  [
+   "`GET /items/abc` on `def read(item_id: int)`?",
+   [
+    "item_id is \"abc\"",
+    "422 validation error before your function runs",
+    "500"
+   ],
+   1,
+   "FastAPI converts from the type hint and rejects what doesn't fit."
+  ],
+  [
+   "Where are the interactive docs?",
+   [
+    "/docs",
+    "/swagger.php",
+    "Only with a plugin"
+   ],
+   0,
+   "Generated from your code: /docs (Swagger UI) and /redoc."
+  ]
+ ],
+ "fa-params": [
+  [
+   "`def f(org_id: int, page: int = 1)` on route `/orgs/{org_id}` — what is `page`?",
+   [
+    "Path parameter",
+    "Query parameter",
+    "Body"
+   ],
+   1,
+   "Not in the path and a simple type, so query."
+  ],
+  [
+   "A parameter typed as a Pydantic model is read from…",
+   [
+    "The query string",
+    "The JSON body",
+    "Headers"
+   ],
+   1,
+   "Models are bodies."
+  ],
+  [
+   "`tags: list[str]` without `Query()` is read from…",
+   [
+    "The query string",
+    "The body",
+    "Headers"
+   ],
+   1,
+   "Lists aren't simple types, so FastAPI assumes a body. Wrap in `Query()`."
+  ]
+ ],
+ "fa-pydantic": [
+  [
+   "Why have separate `UserIn` and `UserOut` models?",
+   [
+    "Speed",
+    "So fields like password_hash never appear in responses",
+    "Pydantic requires it"
+   ],
+   1,
+   "The response model filters output to what you declare."
+  ],
+  [
+   "For a PATCH, `model_dump(exclude_unset=True)` gives…",
+   [
+    "All fields",
+    "Only fields the client actually sent",
+    "Only non-None fields"
+   ],
+   1,
+   "It tells \"not sent\" apart from \"sent as null\"."
+  ],
+  [
+   "A client sends `is_admin: true` to a model without that field. By default…",
+   [
+    "It's ignored",
+    "422",
+    "It's set on the user"
+   ],
+   0,
+   "Extra fields are ignored by default; `extra=\"forbid\"` rejects them. Never put such fields on input models."
+  ]
+ ],
+ "fa-errors": [
+  [
+   "Valid token, but the device belongs to someone else. Best response?",
+   [
+    "401",
+    "403 or 404 (404 avoids revealing it exists)",
+    "500"
+   ],
+   1,
+   "401 is for missing/invalid credentials. Hiding existence with 404 is common for other users' objects."
+  ],
+  [
+   "Duplicate serial on create:",
+   [
+    "400",
+    "409",
+    "422"
+   ],
+   1,
+   "Conflict with current state."
+  ],
+  [
+   "`return HTTPException(404)` instead of raise…",
+   [
+    "Same thing",
+    "Sends a 200 with a strange body",
+    "Sends 404 without a body"
+   ],
+   1,
+   "Exceptions must be raised to stop the handler."
+  ]
+ ],
+ "fa-depends": [
+  [
+   "How is a DB session meant to reach a handler?",
+   [
+    "A module-level `db = Session(engine)`",
+    "`Depends(get_db)` with a `yield` dependency",
+    "A global set in middleware"
+   ],
+   1,
+   "One fresh session per request, closed after."
+  ],
+  [
+   "Two dependencies in one request both depend on `get_db`. How many sessions?",
+   [
+    "Two",
+    "One: results are cached within a request",
+    "Zero"
+   ],
+   1,
+   "FastAPI calls each dependency once per request and shares the result."
+  ],
+  [
+   "Why route auth through Depends rather than importing a function?",
+   [
+    "It's faster",
+    "Tests can swap it with `dependency_overrides`",
+    "It's required"
+   ],
+   1,
+   "Injection makes it overridable."
+  ]
+ ],
+ "fa-async": [
+  [
+   "A plain `def` endpoint runs…",
+   [
+    "On the event loop",
+    "In a thread pool (about 40 threads)",
+    "In a new process"
+   ],
+   1,
+   "So blocking code in plain def doesn't freeze the loop."
+  ],
+  [
+   "Where should a shared `httpx.AsyncClient` be created?",
+   [
+    "Per request",
+    "Once, in lifespan, and closed at shutdown",
+    "In every dependency"
+   ],
+   1,
+   "One client, one connection pool."
+  ],
+  [
+   "BackgroundTasks are a good fit for…",
+   [
+    "Billing that must never be lost",
+    "A welcome email after signup",
+    "Long video encoding"
+   ],
+   1,
+   "They run in-process after the response; lost on restart. Important work needs a queue."
+  ]
+ ],
+ "fa-security": [
+  [
+   "How should passwords be stored?",
+   [
+    "SHA-256",
+    "A slow hash like argon2 or bcrypt",
+    "Encrypted with the app key"
+   ],
+   1,
+   "Fast hashes are brute-forceable. Use pwdlib/argon2 or bcrypt."
+  ],
+  [
+   "`db.get(Device, device_id)` for any logged-in user is…",
+   [
+    "Fine",
+    "An IDOR: filter by owner in the query",
+    "A SQL injection"
+   ],
+   1,
+   "Being logged in isn't permission. Scope every query by owner or tenant."
+  ],
+  [
+   "What does CORS protect against?",
+   [
+    "curl requests",
+    "Other websites' JavaScript reading your API's responses in a browser",
+    "SQL injection"
+   ],
+   1,
+   "CORS is a browser policy, not authentication."
+  ]
+ ],
+ "fa-structure": [
+  [
+   "What does `pydantic-settings` do if a required env var is missing?",
+   [
+    "Uses an empty string",
+    "Fails at startup",
+    "Fails at the first request"
+   ],
+   1,
+   "Failing at startup beats discovering an empty secret in production."
+  ],
+  [
+   "Router-level `dependencies=[Depends(require_admin)]` …",
+   [
+    "Applies the check to every route on the router",
+    "Applies only to the first route",
+    "Is ignored"
+   ],
+   0,
+   "New routes can't forget it."
+  ],
+  [
+   "Production schema changes should use…",
+   [
+    "`Base.metadata.create_all()`",
+    "Alembic migrations",
+    "Manual SQL in the app at startup"
+   ],
+   1,
+   "create_all doesn't alter existing tables."
+  ]
+ ],
+ "db-sqlalchemy": [
+  [
+   "Which is SQL injection?",
+   [
+    "`select(Device).where(Device.serial == s)`",
+    "`text(f\"... WHERE serial = '{s}'\")`",
+    "`text(\"... WHERE serial = :s\")` with params"
+   ],
+   1,
+   "f-strings put user input into the SQL. The others bind parameters."
+  ],
+  [
+   "The SQLAlchemy engine is…",
+   [
+    "Per request",
+    "A connection pool, created once per process",
+    "A single connection"
+   ],
+   1,
+   "Share the engine; create sessions per request."
+  ],
+  [
+   "How do you let clients choose a sort column safely?",
+   [
+    "Bind it as a parameter",
+    "Map it through an allow-list of columns",
+    "Escape it"
+   ],
+   1,
+   "Identifiers can't be bound parameters."
+  ]
+ ],
+ "db-sessions": [
+  [
+   "Why is \"check if serial exists, then insert\" wrong?",
+   [
+    "It's slow",
+    "Two requests can both pass the check: a race",
+    "It uses two queries"
+   ],
+   1,
+   "Use a unique constraint and catch IntegrityError → 409."
+  ],
+  [
+   "After a failed flush, a session that isn't rolled back…",
+   [
+    "Recovers automatically",
+    "Fails on every later use (PendingRollbackError)",
+    "Commits partially"
+   ],
+   1,
+   "Roll back, or throw the per-request session away."
+  ],
+  [
+   "Loading 100 owners then reading `o.devices` in a loop runs…",
+   [
+    "1 query",
+    "2 queries",
+    "101 queries (N+1)"
+   ],
+   2,
+   "Use `selectinload(Owner.devices)`."
+  ]
+ ],
+ "test-pytest": [
+  [
+   "How does a test get a fixture?",
+   [
+    "By importing it",
+    "By naming it as a parameter",
+    "With @use"
+   ],
+   1,
+   "pytest matches parameter names to fixtures, including ones in conftest.py."
+  ],
+  [
+   "Which built-in fixture sets an env var just for one test?",
+   [
+    "`tmp_path`",
+    "`monkeypatch`",
+    "`capsys`"
+   ],
+   1,
+   "`monkeypatch.setenv` and undoes it after."
+  ],
+  [
+   "Asserting an exception is raised:",
+   [
+    "`with pytest.raises(ValueError):`",
+    "`assert raises ValueError`",
+    "`try/except: pass`"
+   ],
+   0,
+   "Optionally with `match=` to check the message."
+  ]
+ ],
+ "test-fastapi": [
+  [
+   "How do you swap the real DB for a test one?",
+   [
+    "Edit get_db",
+    "`app.dependency_overrides[get_db] = ...`",
+    "Set DATABASE_URL in the test"
+   ],
+   1,
+   "Overrides replace a dependency for the app under test. Clear them after."
+  ],
+  [
+   "A sequential test posts the same serial twice and gets 409. What can't it prove?",
+   [
+    "That 409 is returned",
+    "That concurrent requests are handled correctly",
+    "That the first post succeeds"
+   ],
+   1,
+   "Only the unique constraint protects the race; say so."
+  ],
+  [
+   "Best way to fake a vendor API in tests?",
+   [
+    "Call the real API",
+    "`httpx.MockTransport` behind the real client",
+    "Patch every function that calls it"
+   ],
+   1,
+   "It exercises your real client code: URLs, headers, error handling."
+  ]
+ ],
+ "iv-review": [
+  [
+   "First thing in a live code review?",
+   [
+    "List every style issue",
+    "Read the whole snippet and say what it's meant to do",
+    "Rewrite it"
+   ],
+   1,
+   "Understanding first; then the worst bug first."
+  ],
+  [
+   "What comes after naming a bug and its fix?",
+   [
+    "Move on",
+    "The test that would catch it, and what that test can't prove",
+    "Blame the author"
+   ],
+   1,
+   "That's what shows judgement."
+  ],
+  [
+   "Unsure of exact syntax in the interview, you should…",
+   [
+    "Guess confidently",
+    "Say the PHP equivalent, the fix, and that you'd check the docs",
+    "Skip it"
+   ],
+   1,
+   "Judgement is what's scored; docs are allowed."
+  ]
+ ]
+}

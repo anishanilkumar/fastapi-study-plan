@@ -1,0 +1,52 @@
+<p>Before any syntax: how to run Python, and how to keep one project's packages away from another's. Get this right once and every later lesson is just typing into a file and running it.</p>
+
+<h3>Which Python</h3>
+<p>macOS ships a <code>python3</code>, but install your own (Homebrew <code>brew install python</code>, or let <code>uv</code> manage versions). Check with <code>python3 --version</code>. Anything 3.11 or newer is fine for this course; FastAPI and SQLAlchemy 2.0 need 3.8+, and the <code>str | None</code> type syntax needs 3.10+.</p>
+
+<h3>The REPL</h3>
+<p>Type <code>python3</code> with no arguments and you get an interactive prompt. Use it constantly while reading: paste each example, change it, see what happens.</p>
+<pre><code>&gt;&gt;&gt; 7 // 2
+3
+&gt;&gt;&gt; "abc".upper()
+'ABC'
+&gt;&gt;&gt; help(str.split)      # docs for anything
+&gt;&gt;&gt; dir([])              # what methods does a list have?</code></pre>
+
+<h3>Virtual environments</h3>
+<p>A virtual environment (<em>venv</em>) is a folder holding a private copy of the interpreter plus the packages one project needs. Without it, <code>pip install</code> puts packages into the global Python and projects start fighting over versions.</p>
+<pre><code>python3 -m venv .venv            # create it, once per project
+source .venv/bin/activate        # use it in this shell
+pip install httpx                # installs into .venv only
+python -c "import httpx; print(httpx.__version__)"
+deactivate                       # leave it</code></pre>
+<p><code>uv</code> is a much faster tool that does the same job and also manages Python versions:</p>
+<pre><code>uv venv                          # makes .venv
+uv pip install "fastapi[standard]"
+uv run python main.py            # runs inside .venv without activating</code></pre>
+
+<aside class="php"><span class="label">From PHP</span><p>A venv is <code>vendor/</code>, and <code>pip</code>/<code>uv</code> is Composer. The difference: PHP finds <code>vendor/</code> through <code>require 'vendor/autoload.php'</code>; Python finds packages through whichever interpreter you run, so you must run the venv's <code>python</code> (activate, or <code>uv run</code>).</p></aside>
+
+<h3>Running a script</h3>
+<pre><code># hello.py
+def main():
+    name = input("Name? ")
+    print(f"Hello, {name}")
+
+if __name__ == "__main__":
+    main()</code></pre>
+<p><code>python3 hello.py</code> runs it. The <code>if __name__ == "__main__":</code> guard means "only when run directly, not when imported". You'll see it at the bottom of most scripts (this site's <code>app.py</code> uses it to start the server).</p>
+
+<h3>Dependencies in a project</h3>
+<p>Modern projects list dependencies in <code>pyproject.toml</code> (like <code>composer.json</code>). Older ones use <code>requirements.txt</code>, a plain list you install with <code>pip install -r requirements.txt</code>.</p>
+<pre><code>[project]
+name = "notes-api"
+requires-python = "&gt;=3.11"
+dependencies = ["fastapi[standard]", "sqlalchemy&gt;=2"]</code></pre>
+
+<aside class="try"><span class="label">Try it</span><p>Make a folder, create a venv, install <code>httpx</code>, and write a script that prints the status code of <code>httpx.get("https://example.com")</code>. Then delete <code>.venv</code> and watch the import fail.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/venv.html" target="_blank" rel="noopener">Python tutorial: virtual environments and packages</a></li>
+<li><a href="https://docs.astral.sh/uv/getting-started/" target="_blank" rel="noopener">uv: getting started</a></li>
+<li><a href="https://docs.python.org/3/tutorial/interpreter.html" target="_blank" rel="noopener">Python tutorial: using the interpreter</a></li>
+</ul></aside>

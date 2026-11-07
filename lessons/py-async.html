@@ -1,0 +1,62 @@
+<p>Async lets one thread juggle many requests that spend most of their time waiting on the network. It only works if nothing blocks the thread.</p>
+
+<h3>The event loop</h3>
+<p>An <code>async def</code> function returns a <em>coroutine</em>. The event loop runs one coroutine at a time on one thread. When it hits <code>await</code> on something that waits (a socket read, a sleep), it pauses there and the loop runs another coroutine. Switching happens <strong>only at <code>await</code></strong>.</p>
+<pre><code>import asyncio, httpx
+
+async def fetch(client, url):
+    r = await client.get(url)          # pauses here; others run meanwhile
+    return r.status_code
+
+async def main():
+    async with httpx.AsyncClient() as client:
+        codes = await asyncio.gather(  # run all three at once
+            fetch(client, "https://a.example"),
+            fetch(client, "https://b.example"),
+            fetch(client, "https://c.example"),
+        )
+    print(codes)
+
+asyncio.run(main())</code></pre>
+<p>Three one-second requests take about one second total, not three.</p>
+
+<h3>Blocking calls freeze everything</h3>
+<p>Code that waits <em>without</em> <code>await</code> holds the only thread. While it waits, no other request on that worker makes progress.</p>
+<table><thead><tr><th>Blocking (don't use in async def)</th><th>Non-blocking</th></tr></thead><tbody>
+<tr><td><code>time.sleep(1)</code></td><td><code>await asyncio.sleep(1)</code></td></tr>
+<tr><td><code>requests.get(url)</code></td><td><code>await httpx.AsyncClient().get(url)</code></td></tr>
+<tr><td>sync DB driver (psycopg2, sqlite3, <code>Session</code>)</td><td>async driver (asyncpg, <code>AsyncSession</code>)</td></tr>
+<tr><td>CPU-heavy loop, big file read</td><td><code>await asyncio.to_thread(fn)</code></td></tr>
+</tbody></table>
+<pre><code>@app.get("/report")
+async def report():
+    data = requests.get(VENDOR_URL).json()   # BUG: blocks the event loop
+    return data</code></pre>
+<p>One slow vendor call now stalls every other endpoint on that worker, even <code>/health</code>. This is the classic async review question.</p>
+
+<aside class="trap"><span class="label">Trap</span><p><code>await requests.get(url)</code> doesn't make it async; it's a <code>TypeError</code> because a <code>Response</code> isn't awaitable. And forgetting <code>await</code> on a coroutine (<code>client.get(url)</code> without it) gives you a coroutine object instead of a response, plus a "was never awaited" warning.</p></aside>
+
+<h3>Tasks</h3>
+<pre><code>task = asyncio.create_task(send_email(user))   # starts now, in the background
+...
+await task                                      # wait for it later
+
+async with asyncio.TaskGroup() as tg:           # 3.11+: structured, cancels on error
+    tg.create_task(a())
+    tg.create_task(b())
+
+await asyncio.wait_for(fetch(c, url), timeout=5)</code></pre>
+<p>Keep a reference to tasks you create; a task with no reference can be garbage-collected mid-run.</p>
+
+<h3>Async vs threads vs processes</h3>
+<p>Async: many waiting I/O jobs, one thread. Threads: also for I/O, works with blocking libraries, but limited by the GIL for CPU. Processes (<code>multiprocessing</code>, more uvicorn workers): real CPU parallelism.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>PHP-FPM handles concurrency with many processes, each blocking freely. In async Python, one process serves many requests at once, so a single blocking call hurts everyone, not just its own request. Closest PHP relatives: ReactPHP, Amp, Swoole coroutines.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write three coroutines that each <code>await asyncio.sleep(1)</code>, gather them and time it (about 1 s). Swap one for <code>time.sleep(1)</code> and time again. Explain the difference out loud.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/async/" target="_blank" rel="noopener">FastAPI: concurrency and async / await (read first)</a></li>
+<li><a href="https://docs.python.org/3/library/asyncio-task.html" target="_blank" rel="noopener">Python docs: coroutines and tasks</a></li>
+<li><a href="https://www.python-httpx.org/async/" target="_blank" rel="noopener">HTTPX: async support</a></li>
+</ul></aside>

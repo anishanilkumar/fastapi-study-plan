@@ -1,0 +1,42 @@
+<p>The single most important difference between PHP and a Python web server. Most "this works in testing, breaks in production" bugs in code-review questions come from it.</p>
+
+<h3>Shared-nothing vs one long process</h3>
+<p>PHP-FPM starts every request with a clean slate: globals, static variables and connections are thrown away when the response is sent. A Python server (uvicorn running FastAPI) is a process that starts once and then handles thousands of requests, for days. Anything at module level, or on a class, or in a default argument, lives the whole time and is <strong>shared by every request</strong>.</p>
+
+<pre><code>app = FastAPI()
+cache = {}                       # one dict, for every user, forever
+current_user = None              # set by one request, read by another
+
+@app.get("/me")
+def me(token: str):
+    global current_user
+    current_user = lookup(token) # request A sets it...
+    audit()                      # ...request B can overwrite it meanwhile
+    return current_user</code></pre>
+
+<h3>What goes wrong</h3>
+<ul class="points">
+<li><strong>Data leaks between users</strong>: per-user data in a module variable or class attribute.</li>
+<li><strong>Memory grows without bound</strong>: a cache dict that's only ever added to.</li>
+<li><strong>Race conditions</strong>: plain-<code>def</code> handlers run in a thread pool, so two requests modify the same list at once.</li>
+<li><strong>Stale values</strong>: <code>NOW = datetime.now()</code> or <code>def f(at=datetime.now())</code> evaluated once at import.</li>
+<li><strong>Shared connections</strong>: <code>db = Session(engine)</code> at module level, used by every request and thread.</li>
+</ul>
+
+<h3>What <em>should</em> be shared</h3>
+<p>Some things are created once on purpose because they are expensive and safe to share: the SQLAlchemy <code>engine</code> (a connection pool), an <code>httpx.AsyncClient</code>, loaded config, compiled regexes. Create them at import or in the lifespan handler. Per-request things (session, current user, request data) come in through function parameters and <code>Depends()</code>.</p>
+
+<h3>Several processes</h3>
+<p>Production runs several worker processes (<code>uvicorn --workers 4</code>). Each has its <em>own</em> module state. So an in-memory cache or rate-limit counter is both shared between users <em>and</em> inconsistent between workers. Shared state belongs in the database or Redis.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Closest PHP analogy: Swoole, RoadRunner or Laravel Octane, which keep the app booted between requests and come with the same warnings about static properties and singletons.</p></aside>
+
+<h3>The two questions</h3>
+<p>For any snippet in the interview, ask: <em>what here is shared that PHP would have thrown away?</em> and <em>what here waits without <code>await</code>?</em> (the second is the async lesson).</p>
+
+<aside class="try"><span class="label">Try it</span><p>Run a FastAPI app with a module-level <code>hits = []</code> that each request appends to and returns. Hit it from two browser tabs. Then restart and run with <code>--workers 2</code> and watch the counts disagree.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/deployment/server-workers/" target="_blank" rel="noopener">FastAPI: server workers</a></li>
+<li><a href="https://fastapi.tiangolo.com/advanced/events/" target="_blank" rel="noopener">FastAPI: lifespan events (what to create once)</a></li>
+</ul></aside>

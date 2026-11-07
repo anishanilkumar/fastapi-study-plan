@@ -1,0 +1,65 @@
+<p>The live round is a code review. This is a routine to follow under pressure, a checklist of what to look for, and a worked example.</p>
+
+<h3>The routine</h3>
+<ol class="points">
+<li><strong>Read all of it first.</strong> Say what the code is meant to do in one sentence before criticising anything.</li>
+<li><strong>Worst bug first</strong>, with a concrete scenario: "if two requests register the same serial at once, both pass the check and we get duplicates".</li>
+<li><strong>The fix</strong>, in code or precise words.</li>
+<li><strong>The test</strong> that would catch it, and <strong>what that test can't prove</strong>.</li>
+<li><strong>Then rank the rest</strong>: security and data loss, then correctness, then performance, then style. Say which you'd block a merge on.</li>
+</ol>
+
+<h3>The checklist</h3>
+<table><thead><tr><th>Look for</th><th>Lesson</th></tr></thead><tbody>
+<tr><td>Module-level mutable state, shared session, frozen <code>datetime.now()</code></td><td>Long-running processes</td></tr>
+<tr><td>Blocking call in <code>async def</code>; missing <code>await</code>; no timeout</td><td>Async</td></tr>
+<tr><td>Missing auth dependency; no owner/tenant filter (IDOR)</td><td>Dependencies, Security</td></tr>
+<tr><td>f-string SQL; sort column from the client</td><td>SQLAlchemy</td></tr>
+<tr><td>Check-then-insert; read-modify-write; no rollback</td><td>Sessions and transactions</td></tr>
+<tr><td>N+1; list with no limit</td><td>Sessions and transactions</td></tr>
+<tr><td><code>==</code> on secrets; fail-open on empty config; plain password hashes</td><td>Standard library, Security</td></tr>
+<tr><td>Naive datetimes</td><td>Standard library</td></tr>
+<tr><td>Bare <code>except</code>; leaking internals in errors; wrong status code</td><td>Errors</td></tr>
+<tr><td>Returning ORM objects without a response model (leaks fields); mass assignment</td><td>Pydantic</td></tr>
+<tr><td>Mutable default arguments; <code>is</code> for values</td><td>Functions, Types</td></tr>
+</tbody></table>
+
+<h3>Worked example</h3>
+<pre><code>db = SessionLocal()
+cache = {}
+
+@app.post("/devices")
+async def register(serial: str, owner_id: int, key: str = Header()):
+    if key == API_KEY:
+        if db.query(Device).filter(Device.serial == serial).first():
+            return {"error": "exists"}
+        d = Device(serial=serial, owner_id=owner_id,
+                   registered=datetime.now())
+        db.add(d); db.commit()
+        cache[serial] = d
+        requests.post(WEBHOOK, json={"serial": serial})
+        return d</code></pre>
+<p>Cover the answer and find at least eight issues before reading on.</p>
+<ol class="points">
+<li><strong>Shared session</strong> (<code>db</code> at module level): shared across requests; one failed commit breaks it for everyone. Fix: <code>get_db</code> with <code>yield</code>, via <code>Depends</code>.</li>
+<li><strong>Blocking calls in <code>async def</code></strong>: sync DB queries and <code>requests.post</code> freeze the loop; the webhook has no timeout. Fix: plain <code>def</code> (or async client and session), timeout, ideally a background task or queue.</li>
+<li><strong>Race on registration</strong>: check-then-insert. Fix: unique constraint, catch <code>IntegrityError</code>, return 409.</li>
+<li><strong>Wrong status codes</strong>: "exists" returns 200; a wrong key returns 200 with <code>null</code>. Fix: 409, and 401.</li>
+<li><strong>Timing-unsafe key comparison</strong>: <code>==</code>. Fix: <code>hmac.compare_digest</code>, and fail closed if <code>API_KEY</code> is empty.</li>
+<li><strong><code>owner_id</code> from the client</strong>: anyone with the key registers devices to anyone. Fix: derive the owner from the authenticated identity.</li>
+<li><strong>Naive <code>datetime.now()</code></strong>. Fix: <code>datetime.now(timezone.utc)</code>.</li>
+<li><strong>Unbounded module-level cache</strong> holding ORM objects detached from a session; inconsistent across workers. Fix: drop it or use a bounded cache keyed on plain data.</li>
+<li><strong>No response model</strong>: returns the ORM object directly. Fix: <code>-&gt; DeviceOut</code>, <code>status_code=201</code>.</li>
+<li><strong>Params as query strings</strong> on a POST; no validation of serial. Fix: a Pydantic body with a pattern.</li>
+</ol>
+<p>Worst first: I'd lead with the shared session plus blocking calls (it takes the service down under load), or the <code>owner_id</code> trust (security), and say why I ranked it there.</p>
+
+<h3>When you're unsure of syntax</h3>
+<p>"In PHP I'd do X. I'd check the docs for the exact Python API, but the fix is Y." Judgement is what's scored; docs are allowed.</p>
+
+<aside class="try"><span class="label">Try it</span><p>Do the example out loud with a timer: 2 minutes reading, then the routine. Then do the drills tab against the clock.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://google.github.io/eng-practices/review/reviewer/looking-for.html" target="_blank" rel="noopener">Google engineering practices: what to look for in a code review</a></li>
+<li><a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/" target="_blank" rel="noopener">OWASP API Security Top 10 (2023)</a></li>
+</ul></aside>

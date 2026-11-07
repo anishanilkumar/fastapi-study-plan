@@ -1,0 +1,69 @@
+<p>FastAPI decides where each parameter comes from by looking at its name and type. Learn the three rules and you can read any endpoint.</p>
+
+<h3>The rules</h3>
+<ol class="points">
+<li>Name appears in the path (<code>{device_id}</code>) → <strong>path parameter</strong>.</li>
+<li>Simple type (int, str, bool, float, enum, date) and not in the path → <strong>query parameter</strong>.</li>
+<li>Pydantic model → <strong>request body</strong> (JSON).</li>
+</ol>
+<pre><code>@app.put("/devices/{device_id}")
+def update_device(
+    device_id: int,            # path
+    body: DeviceUpdate,        # body (JSON)
+    dry_run: bool = False,     # query: ?dry_run=true
+    q: str | None = None,      # optional query
+):
+    ...</code></pre>
+<p>A query param with no default is <em>required</em>; missing it is a 422.</p>
+
+<h3>Validation with Annotated</h3>
+<pre><code>from typing import Annotated
+from fastapi import Path, Query, Header, Cookie, Body
+
+@app.get("/devices")
+def list_devices(
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    serial: Annotated[str | None, Query(max_length=64, pattern=r"^[A-Z0-9-]+$")] = None,
+    tag: Annotated[list[str], Query()] = [],        # ?tag=a&amp;tag=b
+):
+    ...
+
+@app.get("/devices/{device_id}")
+def get_device(device_id: Annotated[int, Path(gt=0)]): ...</code></pre>
+
+<aside class="trap"><span class="label">Trap</span><p><code>tags: list[str]</code> without <code>Query()</code> is read as a <em>body</em>, because a list isn't a "simple" type. Lists from the query string always need <code>Query()</code>. (The <code>= []</code> default is safe here: FastAPI copies it per request; in your own functions it is the mutable-default trap.)</p></aside>
+
+<h3>Headers and cookies</h3>
+<pre><code>def endpoint(
+    user_agent: Annotated[str | None, Header()] = None,        # User-Agent
+    x_request_id: Annotated[str | None, Header()] = None,      # X-Request-Id
+    session: Annotated[str | None, Cookie()] = None,
+): ...</code></pre>
+<p>Underscores become hyphens for headers automatically.</p>
+
+<h3>Several bodies, single values in a body</h3>
+<p>Two model parameters make FastAPI expect <code>{"device": {...}, "owner": {...}}</code>. <code>Body()</code> pulls a plain value from the JSON instead of the query: <code>priority: Annotated[int, Body()]</code>.</p>
+
+<h3>Forms and files</h3>
+<p>For HTML forms and uploads (needs <code>python-multipart</code>): <code>Form()</code> and <code>UploadFile</code>. JSON APIs rarely need them.</p>
+
+<h3>Enums for fixed choices</h3>
+<pre><code>from enum import StrEnum
+class Status(StrEnum):
+    active = "active"
+    revoked = "revoked"
+
+@app.get("/certs")
+def certs(status: Status = Status.active): ...   # anything else → 422</code></pre>
+
+<aside class="php"><span class="label">From PHP</span><p>Path params are Laravel route params, query params are <code>$request-&gt;query()</code>, the body model is a FormRequest's <code>validated()</code>, and the <code>Query(ge=1, le=100)</code> limits are validation rules, all in the signature.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>For each parameter of <code>def search(org_id: int, body: Filters, page: int = 1, tags: list[str] = Query([]))</code> on route <code>/orgs/{org_id}/search</code>, say where it comes from. Then check your answer in <code>/docs</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/query-params/" target="_blank" rel="noopener">FastAPI tutorial: query parameters</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/query-params-str-validations/" target="_blank" rel="noopener">FastAPI tutorial: query parameters and string validations</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/body-multiple-params/" target="_blank" rel="noopener">FastAPI tutorial: body, multiple parameters</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/header-params/" target="_blank" rel="noopener">FastAPI tutorial: header parameters</a></li>
+</ul></aside>

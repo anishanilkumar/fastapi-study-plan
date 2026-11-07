@@ -1,0 +1,72 @@
+<p>SQLAlchemy 2.0 is the standard database toolkit. The ORM maps classes to tables; queries are built with <code>select()</code> and always use bound parameters.</p>
+
+<h3>Engine and models</h3>
+<pre><code>from sqlalchemy import create_engine, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+engine = create_engine("postgresql+psycopg://app:pw@localhost/app")   # once per process
+
+class Base(DeclarativeBase):
+    pass
+
+class Owner(Base):
+    __tablename__ = "owners"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    devices: Mapped[list["Device"]] = relationship(back_populates="owner")
+
+class Device(Base):
+    __tablename__ = "devices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    serial: Mapped[str] = mapped_column(String(64), unique=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("owners.id"))
+    note: Mapped[str | None]                       # nullable because of | None
+    owner: Mapped[Owner] = relationship(back_populates="devices")</code></pre>
+<p>The engine holds a connection pool and is safe to share. The <code>Mapped[...]</code> hints define column types and nullability.</p>
+
+<h3>Querying</h3>
+<pre><code>from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+with Session(engine) as session:
+    d = session.get(Device, 5)                                  # by primary key, or None
+    d = session.scalar(select(Device).where(Device.serial == serial))   # one or None
+    ds = session.scalars(
+        select(Device)
+        .where(Device.owner_id == owner_id)
+        .order_by(Device.id)
+        .limit(20).offset(40)
+    ).all()
+    n = session.scalar(select(func.count()).select_from(Device))</code></pre>
+
+<h3>Writing</h3>
+<pre><code>with Session(engine) as session:
+    session.add(Device(serial="A-1", owner_id=1))
+    d = session.get(Device, 5)
+    d.note = "rack 3"                 # change tracking: no explicit update call
+    session.delete(old)
+    session.commit()                  # one transaction for all of the above</code></pre>
+
+<h3>Bound parameters, always</h3>
+<pre><code># BUG: SQL injection
+session.execute(text(f"SELECT * FROM devices WHERE serial = '{serial}'"))
+
+# fine: ORM expression (parameters are bound)
+select(Device).where(Device.serial == serial)
+
+# fine: raw SQL with a named parameter
+session.execute(text("SELECT * FROM devices WHERE serial = :serial"), {"serial": serial})</code></pre>
+<p>Column and table names can't be parameters. If a client picks the sort column, map it through an allow-list: <code>{"serial": Device.serial, "id": Device.id}[sort]</code>.</p>
+
+<h3>Async</h3>
+<p>For <code>async def</code> handlers: <code>create_async_engine("postgresql+asyncpg://...")</code>, <code>AsyncSession</code>, and <code>await session.scalars(...)</code>. Lazy loading doesn't work in async; load relationships explicitly.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Doctrine is the close match: entities ↔ mapped classes, EntityManager ↔ Session (unit of work, <code>flush</code> ↔ <code>commit</code>), QueryBuilder ↔ <code>select()</code>. Eloquent's active record (<code>$device-&gt;save()</code>) has no direct equivalent; changes go through the session.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>With SQLite (<code>sqlite:///test.db</code>), define Owner and Device, <code>Base.metadata.create_all(engine)</code>, insert two owners and five devices, and query "devices of owner 1, newest first, 2 per page".</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/quickstart.html" target="_blank" rel="noopener">SQLAlchemy 2.0: ORM quick start</a></li>
+<li><a href="https://docs.sqlalchemy.org/en/20/tutorial/" target="_blank" rel="noopener">SQLAlchemy 2.0: unified tutorial</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/sql-databases/" target="_blank" rel="noopener">FastAPI tutorial: SQL databases</a></li>
+</ul></aside>

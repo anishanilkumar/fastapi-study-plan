@@ -1,0 +1,64 @@
+<p>PHP has one <code>array</code> that is both a list and a map. Python splits it into separate types, each better at its job.</p>
+
+<h3>list: ordered, by position</h3>
+<pre><code>nums = [3, 1, 2]
+nums.append(4)          # $nums[] = 4
+nums.extend([5, 6])     # array_push(...)
+nums.insert(0, 9)
+nums.pop()              # remove and return the last
+nums.remove(9)          # remove the first 9 (ValueError if absent)
+len(nums)
+nums[0], nums[-1]       # first, last
+nums.sort()             # in place, returns None
+sorted(nums)            # new sorted list</code></pre>
+
+<h3>Slicing</h3>
+<p><code>seq[start:stop:step]</code>, with <code>stop</code> excluded. Works on lists, strings and tuples, and always returns a new object.</p>
+<pre><code>xs = [0, 1, 2, 3, 4, 5]
+xs[1:4]     # [1, 2, 3]
+xs[:2]      # [0, 1]
+xs[-2:]     # [4, 5]
+xs[::-1]    # reversed copy
+xs[:]       # shallow copy</code></pre>
+
+<h3>tuple: fixed, immutable</h3>
+<p><code>point = (3, 4)</code>. Used for small fixed groups and for returning several values: <code>return total, count</code> then <code>total, count = f()</code>. A one-item tuple needs a comma: <code>(5,)</code>.</p>
+
+<h3>dict: by key</h3>
+<pre><code>user = {"name": "Asha", "age": 31}
+user["email"] = "a@x.de"
+user["name"]                 # KeyError if missing
+user.get("phone")            # None if missing
+user.get("phone", "n/a")     # default
+"age" in user                # isset-ish (but True even if the value is None)
+del user["age"]
+for key, value in user.items():
+    print(key, value)
+merged = {**defaults, **overrides}    # array_merge; also defaults | overrides</code></pre>
+<p>Dicts keep insertion order. Keys must be hashable (strings, numbers, tuples), so not lists.</p>
+
+<h3>set: unique, unordered</h3>
+<pre><code>tags = {"python", "api"}
+tags.add("web")
+"api" in tags                # fast membership test
+{1, 2, 3} &amp; {2, 3, 4}        # {2, 3}  intersection
+{1, 2} | {3}                 # union
+set(["a", "a", "b"])         # deduplicate</code></pre>
+<p>Careful: <code>{}</code> is an empty <em>dict</em>; an empty set is <code>set()</code>.</p>
+
+<h3>Mutability and references</h3>
+<p>Assigning a list or dict does not copy it. Both names point at the same object.</p>
+<pre><code>a = [1, 2]
+b = a
+b.append(3)
+a          # [1, 2, 3]  ← changed too
+c = a.copy()   # or list(a), a[:]; copy.deepcopy for nested data</code></pre>
+
+<aside class="php"><span class="label">From PHP</span><p>PHP arrays are copied on assignment (copy-on-write); Python lists and dicts are shared. Passing a list to a function and having it changed there is a classic surprise. Also, there's no auto-vivification: <code>d["a"]["b"] = 1</code> fails if <code>d["a"]</code> doesn't exist. Use <code>d.setdefault("a", {})</code> or <code>collections.defaultdict(dict)</code>.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Given <code>orders = [{"id": 1, "user": "a", "total": 20}, {"id": 2, "user": "b", "total": 5}, {"id": 3, "user": "a", "total": 7}]</code>, build a dict of total spent per user, then a set of users who spent more than 10.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/datastructures.html" target="_blank" rel="noopener">Python tutorial: data structures</a></li>
+<li><a href="https://docs.python.org/3/library/collections.html" target="_blank" rel="noopener">Python docs: collections (defaultdict, Counter, deque)</a></li>
+</ul></aside>

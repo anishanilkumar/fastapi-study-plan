@@ -1,0 +1,74 @@
+<p>Classes work much like PHP's, with less ceremony: no visibility keywords, and <code>self</code> written out.</p>
+
+<h3>A class</h3>
+<pre><code>class Account:
+    fee = 0.5                        # class attribute, shared by all instances
+
+    def __init__(self, owner: str, balance: float = 0.0):
+        self.owner = owner           # instance attributes are created here
+        self.balance = balance
+
+    def deposit(self, amount: float) -&gt; None:
+        if amount &lt;= 0:
+            raise ValueError("amount must be positive")
+        self.balance += amount
+
+    def __repr__(self) -&gt; str:      # what the REPL and logs show
+        return f"Account({self.owner!r}, {self.balance})"
+
+acc = Account("Asha")                # no "new"
+acc.deposit(10)</code></pre>
+<p><code>self</code> is <code>$this</code>, passed explicitly as the first parameter. <code>__init__</code> is the constructor.</p>
+
+<h3>No private</h3>
+<p>Everything is public. A leading underscore (<code>self._cache</code>) is the convention for "internal, don't touch". Two underscores trigger name mangling; you rarely need it.</p>
+
+<h3>Properties</h3>
+<pre><code>class Cert:
+    def __init__(self, not_after):
+        self.not_after = not_after
+
+    @property
+    def expired(self) -&gt; bool:      # read like an attribute: cert.expired
+        return self.not_after &lt;= datetime.now(timezone.utc)</code></pre>
+
+<h3>Inheritance</h3>
+<pre><code>class SavingsAccount(Account):
+    def __init__(self, owner, rate):
+        super().__init__(owner)
+        self.rate = rate</code></pre>
+
+<h3>Dunder methods</h3>
+<p>Double-underscore methods hook into language features: <code>__eq__</code> for <code>==</code>, <code>__len__</code> for <code>len()</code>, <code>__iter__</code> for <code>for</code>, <code>__enter__</code>/<code>__exit__</code> for <code>with</code>, <code>__str__</code> for <code>str()</code>.</p>
+
+<h3>dataclasses</h3>
+<p>For classes that mostly hold data, <code>@dataclass</code> writes <code>__init__</code>, <code>__repr__</code> and <code>__eq__</code> for you from type hints.</p>
+<pre><code>from dataclasses import dataclass, field
+
+@dataclass
+class Device:
+    serial: str
+    model: str
+    tags: list[str] = field(default_factory=list)   # not tags=[]!
+    active: bool = True
+
+@dataclass(frozen=True)              # immutable, hashable
+class Point:
+    x: float
+    y: float</code></pre>
+<p>Pydantic models (FastAPI lesson) look similar but also <em>validate and convert</em> input. Use dataclasses for internal data, Pydantic at the edges where untrusted data arrives.</p>
+
+<h3>Duck typing and Protocols</h3>
+<p>Python cares whether an object has the method, not what class it is. To describe "anything with a <code>.send()</code>" for the type checker, use <code>typing.Protocol</code> instead of an interface.</p>
+
+<aside class="php"><span class="label">From PHP</span><p><code>public function __construct(private string $owner)</code> (constructor promotion) is closest to a <code>@dataclass</code>. <code>static</code> methods exist (<code>@staticmethod</code>, <code>@classmethod</code>), and <code>@classmethod</code> is the idiomatic alternative constructor: <code>Device.from_row(row)</code>.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>A mutable <em>class attribute</em> (<code>class Cache: items = {}</code>) is shared by every instance, and in a server, by every request. Create per-instance state in <code>__init__</code>.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write a <code>@dataclass Cert</code> with <code>serial</code>, <code>not_after: datetime</code>, an <code>expired</code> property, and a <code>@classmethod from_dict(d)</code>. Sort a list of certs by expiry.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/classes.html" target="_blank" rel="noopener">Python tutorial: classes</a></li>
+<li><a href="https://docs.python.org/3/library/dataclasses.html" target="_blank" rel="noopener">Python docs: dataclasses</a></li>
+<li><a href="https://docs.python.org/3/reference/datamodel.html#special-method-names" target="_blank" rel="noopener">Python reference: special method names</a></li>
+</ul></aside>

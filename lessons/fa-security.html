@@ -1,0 +1,71 @@
+<p>Authentication, password storage, tokens and the browser-facing settings. Most review findings in API code are here.</p>
+
+<h3>Passwords</h3>
+<pre><code>from pwdlib import PasswordHash          # what the FastAPI docs use now
+hasher = PasswordHash.recommended()      # argon2
+
+hash_ = hasher.hash(password)            # store this
+hasher.verify(password, hash_)           # True / False</code></pre>
+<p>Never store plain or fast-hashed (MD5, SHA-256) passwords. bcrypt is also fine. Return the same error for "no such user" and "wrong password".</p>
+
+<h3>Bearer tokens</h3>
+<pre><code>from fastapi.security import OAuth2PasswordBearer
+oauth2 = OAuth2PasswordBearer(tokenUrl="token")   # also adds an Authorize button to /docs
+
+def current_user(token: Annotated[str, Depends(oauth2)], db: DB) -&gt; User:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "invalid token", headers={"WWW-Authenticate": "Bearer"})
+    user = db.get(User, int(payload["sub"]))
+    if user is None:
+        raise HTTPException(401, "invalid token", headers={"WWW-Authenticate": "Bearer"})
+    return user</code></pre>
+<ul class="points">
+<li>JWTs (PyJWT): always pass <code>algorithms=[...]</code> explicitly; set an <code>exp</code>; keep the secret out of the code (env var).</li>
+<li>Opaque tokens (random strings in the DB) are simpler and revocable. Store a hash of the token and compare with <code>hmac.compare_digest</code>.</li>
+<li>API keys from headers: compare with <code>compare_digest</code>, never <code>==</code>.</li>
+</ul>
+
+<h3>Authorization: the IDOR check</h3>
+<pre><code># BUG: any logged-in user can read any device
+device = db.get(Device, device_id)
+
+# fix: scope by owner in the query
+device = db.scalar(select(Device).where(Device.id == device_id,
+                                        Device.owner_id == user.id))
+if device is None:
+    raise HTTPException(404)</code></pre>
+
+<h3>mTLS / client certificates</h3>
+<p>With client-cert auth, TLS is usually terminated at nginx, which verifies the cert and forwards details in headers (e.g. <code>X-SSL-Client-Verify</code>, the subject DN). The app must trust those headers <em>only</em> from the proxy, and nginx must strip any client-supplied copies; otherwise anyone can send <code>X-SSL-Client-Verify: SUCCESS</code>.</p>
+
+<h3>CORS</h3>
+<pre><code>app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://portal.example.com"],   # not ["*"] with credentials
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+)</code></pre>
+<p>CORS only controls which <em>browser</em> origins may read responses. It isn't authentication, and doesn't stop curl.</p>
+
+<h3>Other checks</h3>
+<ul class="points">
+<li>SQL: bound parameters only (database lesson).</li>
+<li>Secrets from env/config, never committed; don't log them.</li>
+<li>Limits: max page size, max body size, rate limiting on login.</li>
+<li>Error bodies: no stack traces or internal details.</li>
+<li>Uploaded filenames and paths: never trust them.</li>
+</ul>
+
+<aside class="php"><span class="label">From PHP</span><p><code>password_hash</code>/<code>password_verify</code> → pwdlib/bcrypt. Sanctum/Passport tokens → OAuth2PasswordBearer + JWT or DB tokens. Policies → an explicit owner check in each query or a dependency.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Find four issues: <code>if request.headers.get("X-Api-Key") == settings.api_key or settings.debug: return db.query(Device).get(id)</code>. (Hint: comparison, fail-open, scoping, and what <code>debug</code> does in production.)</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/security/" target="_blank" rel="noopener">FastAPI tutorial: security</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/" target="_blank" rel="noopener">FastAPI tutorial: OAuth2 with password hashing and JWT</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/cors/" target="_blank" rel="noopener">FastAPI tutorial: CORS</a></li>
+<li><a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/" target="_blank" rel="noopener">OWASP API Security Top 10 (2023)</a></li>
+</ul></aside>

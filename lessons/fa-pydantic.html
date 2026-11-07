@@ -1,0 +1,81 @@
+<p>Pydantic models describe the shape of data and validate it. In FastAPI they define what a request may contain and what a response is allowed to reveal.</p>
+
+<h3>A model</h3>
+<pre><code>from pydantic import BaseModel, Field, EmailStr
+
+class UserIn(BaseModel):
+    email: EmailStr                              # needs email-validator
+    name: str = Field(min_length=1, max_length=100)
+    age: int | None = Field(default=None, ge=0, le=150)
+    tags: list[str] = []                         # safe in Pydantic: copied per instance</code></pre>
+<p>Pydantic converts where it can (<code>"31"</code> → <code>31</code>) and rejects what it can't, with a list of every error. In FastAPI, a failure is a 422 response before your function runs.</p>
+
+<h3>Validators</h3>
+<pre><code>from pydantic import field_validator, model_validator
+
+class Booking(BaseModel):
+    start: datetime
+    end: datetime
+    serial: str
+
+    @field_validator("serial")
+    @classmethod
+    def upper_serial(cls, v: str) -&gt; str:
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def end_after_start(self):
+        if self.end &lt;= self.start:
+            raise ValueError("end must be after start")
+        return self</code></pre>
+
+<h3>Input model ≠ output model</h3>
+<p>Never return your database object or a model that has secret fields. Use separate models and let <code>response_model</code> (or the return annotation) filter the output.</p>
+<pre><code>class UserOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    model_config = ConfigDict(from_attributes=True)   # read from ORM objects
+
+@app.post("/users", response_model=UserOut, status_code=201)
+def create_user(body: UserIn, db: DB):
+    user = User(**body.model_dump(), password_hash=hash_pw(...))
+    db.add(user); db.commit()
+    return user              # has password_hash, but UserOut drops it</code></pre>
+<p>With the return annotation <code>-&gt; UserOut</code> you get the same filtering. Without either, FastAPI would serialise whatever you return.</p>
+
+<h3>Useful methods</h3>
+<pre><code>body.model_dump()                       # → dict
+body.model_dump(exclude_unset=True)     # only fields the client sent (for PATCH)
+body.model_dump_json()
+UserOut.model_validate(orm_user)        # build from an object or dict
+body.model_copy(update={"name": "x"})</code></pre>
+
+<h3>PATCH done right</h3>
+<pre><code>class UserPatch(BaseModel):
+    name: str | None = None
+    age: int | None = None
+
+@app.patch("/users/{user_id}")
+def patch_user(user_id: int, body: UserPatch, db: DB) -&gt; UserOut:
+    user = get_or_404(db, user_id)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    db.commit()
+    return user</code></pre>
+<p><code>exclude_unset</code> tells "not sent" apart from "sent as null".</p>
+
+<h3>Extra fields and mass assignment</h3>
+<p>By default unknown fields are ignored. <code>model_config = ConfigDict(extra="forbid")</code> rejects them. Never accept fields like <code>is_admin</code> or <code>owner_id</code> in an input model the client controls.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Input models are FormRequest rules plus a DTO in one class. <code>response_model</code> is an API Resource / <code>$hidden</code>, applied automatically. Mass-assignment risk is the same as Eloquent's <code>$fillable</code>: only put allowed fields on the input model.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Make <code>DeviceIn</code> (serial pattern, model, optional tags), <code>DeviceOut</code> (adds id and created_at) and <code>DevicePatch</code>. Post a bad body in <code>/docs</code> and read the 422 response.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/body/" target="_blank" rel="noopener">FastAPI tutorial: request body</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/response-model/" target="_blank" rel="noopener">FastAPI tutorial: response model</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/extra-models/" target="_blank" rel="noopener">FastAPI tutorial: extra models (in/out/db)</a></li>
+<li><a href="https://docs.pydantic.dev/latest/concepts/models/" target="_blank" rel="noopener">Pydantic: models</a></li>
+<li><a href="https://docs.pydantic.dev/latest/concepts/validators/" target="_blank" rel="noopener">Pydantic: validators</a></li>
+</ul></aside>

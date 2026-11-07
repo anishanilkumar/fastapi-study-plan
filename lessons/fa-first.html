@@ -1,0 +1,76 @@
+<p>FastAPI is a framework for JSON APIs built on type hints. You write ordinary functions; FastAPI turns their parameters into request parsing, validation and docs.</p>
+
+<h3>Install and run</h3>
+<pre><code>uv venv &amp;&amp; source .venv/bin/activate
+uv pip install "fastapi[standard]"      # FastAPI + uvicorn + the fastapi CLI</code></pre>
+<pre><code># main.py
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"message": "hello"}
+
+@app.get("/items/{item_id}")
+def read_item(item_id: int, q: str | None = None):
+    return {"item_id": item_id, "q": q}</code></pre>
+<pre><code>fastapi dev main.py        # reloads on save; http://127.0.0.1:8000
+# or: uvicorn main:app --reload</code></pre>
+
+<h3>What just happened</h3>
+<ul class="points">
+<li><code>app</code> is an ASGI application. <strong>uvicorn</strong> is the server that speaks HTTP and calls it (like PHP-FPM + nginx calling your <code>index.php</code>).</li>
+<li><code>@app.get("/items/{item_id}")</code> registers the function for <code>GET</code> on that path. There's <code>.post</code>, <code>.put</code>, <code>.patch</code>, <code>.delete</code> too.</li>
+<li><code>item_id: int</code> is taken from the path and converted to int. <code>/items/abc</code> gets a 422 with a clear error, and your function never runs.</li>
+<li>Returning a dict (or list, or Pydantic model) is serialised to JSON.</li>
+</ul>
+
+<h3>Free docs</h3>
+<p>Open <code>/docs</code>: interactive Swagger UI generated from your code, where you can call every endpoint. <code>/redoc</code> is another view; <code>/openapi.json</code> is the raw OpenAPI schema. Use <code>/docs</code> constantly while learning.</p>
+
+<h3>Order of routes</h3>
+<p>Routes match in the order they're declared. Put <code>/users/me</code> before <code>/users/{user_id}</code>, or "me" is parsed as an id (and fails as an int).</p>
+
+<h3>A whole small API</h3>
+<pre><code>from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class NoteIn(BaseModel):
+    text: str
+
+class Note(NoteIn):
+    id: int
+
+notes: dict[int, Note] = {}      # in memory: fine for practice, shared by all!
+next_id = 1
+
+@app.get("/notes")
+def list_notes() -&gt; list[Note]:
+    return list(notes.values())
+
+@app.post("/notes", status_code=201)
+def create_note(body: NoteIn) -&gt; Note:
+    global next_id
+    note = Note(id=next_id, text=body.text)
+    notes[note.id] = note
+    next_id += 1
+    return note
+
+@app.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: int) -&gt; None:
+    if notes.pop(note_id, None) is None:
+        raise HTTPException(404, "note not found")</code></pre>
+<p>That's the "Build one" exercise from the plan. Notice the comment: <code>notes</code> and <code>next_id</code> are module-level state, so this is fine for practice and wrong for production (see the long-running process lesson). <code>app.py</code> behind this site is the same shape with SQLite.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Like Slim or Laravel's <code>Route::get('/items/{id}', fn(int $id) =&gt; ...)</code>, but the parameter types drive validation and OpenAPI docs, with no FormRequest classes or annotations.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Build the notes API above, call every route from <code>/docs</code>, then add <code>PATCH /notes/{id}</code> that changes the text and returns 404 for a missing id.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/first-steps/" target="_blank" rel="noopener">FastAPI tutorial: first steps</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/path-params/" target="_blank" rel="noopener">FastAPI tutorial: path parameters</a></li>
+<li><a href="https://fastapi.tiangolo.com/features/" target="_blank" rel="noopener">FastAPI: features overview</a></li>
+</ul></aside>

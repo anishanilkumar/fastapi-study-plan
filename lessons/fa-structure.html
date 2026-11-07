@@ -1,0 +1,69 @@
+<p>How a real FastAPI project is laid out, configured and run. Useful for the project deep-dive and for reading an unfamiliar codebase quickly.</p>
+
+<h3>Routers</h3>
+<pre><code># app/routers/devices.py
+router = APIRouter(prefix="/devices", tags=["devices"],
+                   dependencies=[Depends(current_user)])
+
+@router.get("/{device_id}")
+def get_device(device_id: int): ...
+
+# app/main.py
+app = FastAPI(lifespan=lifespan)
+app.include_router(devices.router)
+app.include_router(admin.router)</code></pre>
+<p>Like route groups / controllers. Tags group endpoints in <code>/docs</code>.</p>
+
+<h3>Layers</h3>
+<ul class="points">
+<li><strong>routers/</strong>: HTTP only. Parse, call a service, map errors to status codes.</li>
+<li><strong>schemas.py</strong>: Pydantic in/out models.</li>
+<li><strong>models.py</strong>: SQLAlchemy tables.</li>
+<li><strong>services/</strong> (optional): business logic that doesn't know about HTTP, so it's testable alone.</li>
+<li><strong>db.py</strong>, <strong>config.py</strong>, <strong>deps.py</strong>: engine and <code>get_db</code>, settings, shared dependencies.</li>
+</ul>
+
+<h3>Settings</h3>
+<pre><code>from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    database_url: str
+    secret_key: str
+    debug: bool = False
+    model_config = SettingsConfigDict(env_file=".env")
+
+settings = Settings()        # reads env vars; fails at startup if one is missing</code></pre>
+<p>Failing at startup on missing config is a feature: better than discovering an empty secret at the first request.</p>
+
+<h3>Middleware</h3>
+<pre><code>@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    rid = request.headers.get("X-Request-Id") or uuid.uuid4().hex
+    response = await call_next(request)
+    response.headers["X-Request-Id"] = rid
+    return response</code></pre>
+
+<h3>Migrations</h3>
+<p>Alembic is SQLAlchemy's migration tool: <code>alembic revision --autogenerate -m "add serial"</code>, review the generated file, <code>alembic upgrade head</code>. Never rely on <code>Base.metadata.create_all()</code> in production; it doesn't alter existing tables.</p>
+
+<h3>Running in production</h3>
+<pre><code>fastapi run app/main.py --workers 4
+# or
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4</code></pre>
+<ul class="points">
+<li>Behind nginx or a load balancer that terminates TLS; pass <code>--proxy-headers</code> so the app sees the real scheme and client IP.</li>
+<li>Each worker is a separate process with its own memory (see the long-running process lesson).</li>
+<li>In containers, often one worker per container and let the orchestrator scale.</li>
+<li>A <code>/health</code> endpoint that doesn't touch slow dependencies.</li>
+</ul>
+
+<aside class="php"><span class="label">From PHP</span><p><code>config/*.php</code> + <code>.env</code> → <code>BaseSettings</code>. Laravel migrations → Alembic. nginx + PHP-FPM pool → nginx + uvicorn workers; <code>pm.max_children</code> ≈ <code>--workers</code> (but each worker serves many requests concurrently).</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Split your notes API into <code>app/main.py</code>, <code>app/routers/notes.py</code> and <code>app/schemas.py</code>, with a <code>Settings</code> class reading <code>APP_NAME</code> from the environment.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/bigger-applications/" target="_blank" rel="noopener">FastAPI: bigger applications</a></li>
+<li><a href="https://fastapi.tiangolo.com/advanced/settings/" target="_blank" rel="noopener">FastAPI: settings and environment variables</a></li>
+<li><a href="https://alembic.sqlalchemy.org/en/latest/tutorial.html" target="_blank" rel="noopener">Alembic tutorial</a></li>
+<li><a href="https://fastapi.tiangolo.com/deployment/" target="_blank" rel="noopener">FastAPI: deployment</a></li>
+</ul></aside>

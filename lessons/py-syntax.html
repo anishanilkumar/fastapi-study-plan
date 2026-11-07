@@ -1,0 +1,69 @@
+<p>Python's syntax is small. Most of what feels strange coming from PHP is just three things: indentation instead of braces, no sigils, and <code>for</code> always iterating over something.</p>
+
+<h3>Indentation is the block</h3>
+<pre><code>if temperature &gt; 30:
+    print("hot")
+    fan_on = True
+elif temperature &lt; 5:
+    print("cold")
+else:
+    print("fine")
+print("always runs")       # back at the left: outside the if</code></pre>
+<p>A colon opens a block; the indented lines are the block. Use 4 spaces, never tabs. There are no semicolons and no <code>$</code> on variables. Comments start with <code>#</code>.</p>
+
+<h3>Variables</h3>
+<p>Assigning creates the variable. There is no declaration and no <code>let</code>/<code>var</code>. A name can be rebound to a value of a different type, but don't.</p>
+<pre><code>count = 0
+name, age = "Asha", 31      # assign two at once (tuple unpacking)
+a, b = b, a                 # swap without a temp</code></pre>
+
+<h3>Loops</h3>
+<p><code>for</code> walks over any iterable: a list, a string, a dict, a file, a range. There is no C-style <code>for (i = 0; ...)</code>.</p>
+<pre><code>for fruit in ["apple", "fig"]:
+    print(fruit)
+
+for i in range(3):          # 0, 1, 2
+    print(i)
+
+for i in range(10, 0, -2):  # 10, 8, 6, 4, 2
+    print(i)
+
+while queue:
+    job = queue.pop()
+    if job is None:
+        continue            # next iteration
+    if job == "stop":
+        break               # leave the loop
+    run(job)</code></pre>
+<p><code>for ... else</code> exists: the <code>else</code> runs if the loop finished without <code>break</code>. It's handy for searches, but readers often misread it, so use it sparingly.</p>
+
+<h3>Operators that differ</h3>
+<ul class="points">
+<li><code>and</code>, <code>or</code>, <code>not</code> instead of <code>&amp;&amp;</code>, <code>||</code>, <code>!</code>.</li>
+<li><code>/</code> always gives a float (<code>7 / 2 == 3.5</code>); <code>//</code> is floor division; <code>**</code> is power.</li>
+<li><code>==</code> compares values with no type juggling: <code>"1" == 1</code> is <code>False</code>. There is no <code>===</code>.</li>
+<li>Chained comparisons work: <code>0 &lt; x &lt;= 10</code>.</li>
+<li><code>in</code> tests membership: <code>"a" in "cat"</code>, <code>3 in [1, 2, 3]</code>, <code>"key" in some_dict</code>.</li>
+<li>Conditional expression: <code>label = "even" if n % 2 == 0 else "odd"</code> (PHP's ternary, reordered).</li>
+</ul>
+
+<h3><code>match</code> (3.10+)</h3>
+<p>Like <code>match</code> in PHP 8, but it can also destructure:</p>
+<pre><code>match command.split():
+    case ["go", direction]:
+        move(direction)
+    case ["quit" | "exit"]:
+        stop()
+    case _:
+        print("unknown")</code></pre>
+
+<aside class="php"><span class="label">From PHP</span><p><code>elseif</code> is <code>elif</code>. <code>foreach ($items as $k =&gt; $v)</code> is <code>for k, v in items.items():</code>. <code>null</code>, <code>true</code>, <code>false</code> are <code>None</code>, <code>True</code>, <code>False</code>, capitalised.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Mixing tabs and spaces, or an accidental extra indent, gives <code>IndentationError</code>, or worse, silently moves a line into or out of a block. Let your editor insert 4 spaces.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>FizzBuzz from 1 to 30 using <code>for</code>, <code>range</code> and <code>if/elif/else</code>. Then rewrite it with <code>match</code> on the tuple <code>(n % 3, n % 5)</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/controlflow.html" target="_blank" rel="noopener">Python tutorial: more control flow tools</a></li>
+<li><a href="https://peps.python.org/pep-0008/" target="_blank" rel="noopener">PEP 8: the style guide everyone follows</a></li>
+</ul></aside>

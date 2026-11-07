@@ -1,0 +1,49 @@
+<p>Python code reads best when it iterates directly over things instead of counting indexes. These tools replace most of PHP's <code>array_*</code> functions.</p>
+
+<h3>enumerate and zip</h3>
+<pre><code>for i, name in enumerate(names, start=1):   # index and value
+    print(i, name)
+
+for name, score in zip(names, scores):      # walk two lists together
+    print(name, score)
+
+dict(zip(keys, values))                     # array_combine</code></pre>
+
+<h3>Unpacking</h3>
+<pre><code>first, *rest = [1, 2, 3, 4]       # 1, [2, 3, 4]
+for user_id, (lat, lon) in positions.items():
+    ...
+def area(w, h): return w * h
+area(*[3, 4])                     # spread a list into arguments
+render(**{"title": "Hi"})         # spread a dict into keyword arguments</code></pre>
+
+<h3>Comprehensions</h3>
+<p>A comprehension builds a list, dict or set from a loop in one expression. It replaces <code>array_map</code> plus <code>array_filter</code>.</p>
+<pre><code>squares = [n * n for n in range(10)]
+active  = [u.name for u in users if u.active]
+by_id   = {u.id: u for u in users}             # dict comprehension
+domains = {e.split("@")[1] for e in emails}    # set comprehension
+pairs   = [(x, y) for x in range(3) for y in range(3) if x != y]</code></pre>
+<p>Read it left to right as English: "u.name, for each u in users, if u is active". If it needs more than one <code>if</code> or nesting, write a normal loop instead.</p>
+
+<h3>Useful built-ins</h3>
+<pre><code>sum(o.total for o in orders)          # generator expression, no [] needed
+any(u.is_admin for u in users)
+all(r.ok for r in results)
+max(users, key=lambda u: u.age)
+sorted(users, key=lambda u: (u.last, u.first))
+sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+min([], default=None)                 # min/max of empty raise without default</code></pre>
+<p><code>key=</code> takes a function that returns what to sort by; it replaces <code>usort</code> with a comparator.</p>
+
+<aside class="trap"><span class="label">Trap</span><p>Don't add or remove items from a list or dict while looping over it. For a dict this raises <code>RuntimeError: dictionary changed size during iteration</code>; for a list it silently skips items. Build a new collection instead: <code>items = [i for i in items if keep(i)]</code>.</p></aside>
+
+<aside class="php"><span class="label">From PHP</span><p><code>array_map(fn($u) =&gt; $u-&gt;name, array_filter($users, fn($u) =&gt; $u-&gt;active))</code> becomes <code>[u.name for u in users if u.active]</code>. <code>in_array</code> is <code>in</code>. <code>array_keys</code>/<code>array_values</code> are <code>d.keys()</code>/<code>d.values()</code>. <code>count</code> is <code>len</code>.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>From a list of email strings, produce: the lowercased unique domains (set), a dict of domain to count, and the three most common domains sorted by count. Then do the last part with <code>collections.Counter(...).most_common(3)</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions" target="_blank" rel="noopener">Python tutorial: list comprehensions</a></li>
+<li><a href="https://docs.python.org/3/howto/sorting.html" target="_blank" rel="noopener">Python HOWTO: sorting</a></li>
+<li><a href="https://docs.python.org/3/library/functions.html" target="_blank" rel="noopener">Python docs: built-in functions</a></li>
+</ul></aside>

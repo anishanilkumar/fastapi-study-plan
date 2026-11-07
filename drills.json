@@ -1,0 +1,200 @@
+[
+ {
+  "id": "login",
+  "title": "A login endpoint",
+  "minutes": 8,
+  "context": "Users log in with email and password and get a token for the API. Assume `db`, `User` and `SECRET` exist.",
+  "code": "import hashlib, random, string, jwt\n\n@app.post(\"/login\")\ndef login(email: str, password: str):\n    user = db.query(User).filter(User.email == email).first()\n    if user is None:\n        raise HTTPException(404, \"no such user\")\n    if user.password_hash != hashlib.sha256(password.encode()).hexdigest():\n        raise HTTPException(401, \"wrong password\")\n    token = jwt.encode({\"sub\": user.id}, SECRET)\n    session_id = \"\".join(random.choice(string.ascii_letters) for _ in range(16))\n    return {\"token\": token, \"session\": session_id, \"user\": user}",
+  "findings": [
+   {
+    "t": "Passwords hashed with plain SHA-256",
+    "d": "Fast and unsalted, so leaked hashes are cracked in bulk. Use a slow, salted hash (argon2 via pwdlib, or bcrypt) and its verify function."
+   },
+   {
+    "t": "Returns the whole user object",
+    "d": "`\"user\": user` serialises every column, password_hash included. Add a response model (UserOut) with only safe fields."
+   },
+   {
+    "t": "Different errors reveal which emails exist",
+    "d": "404 \"no such user\" vs 401 \"wrong password\" lets anyone enumerate accounts. Return the same 401 for both."
+   },
+   {
+    "t": "Token never expires",
+    "d": "No `exp` claim: a leaked token works forever. Add `exp` and decode with explicit `algorithms=[...]`."
+   },
+   {
+    "t": "Session id from `random`",
+    "d": "`random` is predictable. Use `secrets.token_urlsafe(32)`."
+   },
+   {
+    "t": "Credentials in the query string",
+    "d": "Simple-typed params are query params, so the password lands in URLs and access logs. Take a Pydantic body (or OAuth2 form) instead. Also: no rate limit on login."
+   }
+  ]
+ },
+ {
+  "id": "report",
+  "title": "An async report",
+  "minutes": 8,
+  "context": "Fetches the status of each of a customer's devices from a vendor API and returns a summary.",
+  "code": "import requests, time\nfrom datetime import datetime\n\n@app.get(\"/report/{customer_id}\")\nasync def report(customer_id: int):\n    devices = get_devices(customer_id)          # sync DB call\n    results = []\n    for d in devices:\n        try:\n            r = requests.get(f\"{VENDOR}/status/{d.serial}\")\n            results.append(r.json())\n        except:\n            pass\n        time.sleep(0.1)                          # be nice to the vendor\n    return {\"generated\": datetime.now(), \"devices\": results}",
+  "findings": [
+   {
+    "t": "Blocking calls inside `async def`",
+    "d": "requests.get, time.sleep and the sync DB call all block the event loop: one slow report stalls every request on the worker. Use httpx.AsyncClient and asyncio.sleep (and an async DB), or make the handler plain `def`."
+   },
+   {
+    "t": "No timeout on the vendor call",
+    "d": "requests has no default timeout; a hung vendor hangs the request (and with the bug above, the worker). Always pass a timeout."
+   },
+   {
+    "t": "Bare `except: pass` hides failures",
+    "d": "Vendor errors, JSON errors and typos all vanish; the report silently omits devices. Catch httpx/requests errors, log them, and mark the device as unknown."
+   },
+   {
+    "t": "Sequential calls",
+    "d": "N devices × (latency + 0.1 s). With an async client, run them concurrently with asyncio.gather and a semaphore to stay polite."
+   },
+   {
+    "t": "No authorization on customer_id",
+    "d": "Anyone can request any customer's report (IDOR). Depend on the current user and check ownership."
+   },
+   {
+    "t": "Naive `datetime.now()`",
+    "d": "Server-local time with no zone. Use `datetime.now(timezone.utc)`."
+   }
+  ]
+ },
+ {
+  "id": "orders",
+  "title": "Listing orders",
+  "minutes": 8,
+  "context": "Returns a user's orders with item counts, optionally sorted by a column the client chooses.",
+  "code": "db = SessionLocal()\n\n@app.get(\"/users/{user_id}/orders\")\ndef orders(user_id: int, sort: str = \"created_at\"):\n    rows = db.execute(text(\n        f\"SELECT * FROM orders WHERE user_id = {user_id} ORDER BY {sort}\"\n    )).fetchall()\n    out = []\n    for row in rows:\n        order = db.get(Order, row.id)\n        out.append({\"id\": order.id, \"total\": float(order.total),\n                    \"items\": len(order.items)})\n    return out",
+  "findings": [
+   {
+    "t": "SQL injection through `sort`",
+    "d": "`sort` is pasted into the SQL. Identifiers can't be bound parameters, so map it through an allow-list: `{\"created_at\": Order.created_at, ...}[sort]`, else 422."
+   },
+   {
+    "t": "Module-level shared session",
+    "d": "`db = SessionLocal()` is shared by all requests and threads; one error poisons it for everyone. Use a per-request session via Depends(get_db) with yield."
+   },
+   {
+    "t": "No ownership check",
+    "d": "Any caller can list any user's orders. Derive the user from auth, or check `user_id == current_user.id`."
+   },
+   {
+    "t": "N+1 queries",
+    "d": "One get() and one lazy load of items per row. Query Orders with `selectinload(Order.items)` (or a COUNT with GROUP BY)."
+   },
+   {
+    "t": "No limit",
+    "d": "Returns every order ever. Add limit/offset with a capped maximum."
+   },
+   {
+    "t": "Money as float",
+    "d": "`float(order.total)` introduces rounding errors. Keep Decimal and serialise as a string, or use integer cents."
+   }
+  ]
+ },
+ {
+  "id": "cache",
+  "title": "Settings and a cache",
+  "minutes": 6,
+  "context": "A small helper module imported by several routers.",
+  "code": "import os\nfrom datetime import datetime\n\nAPI_KEY = os.environ.get(\"API_KEY\", \"\")\nDEBUG = os.environ.get(\"DEBUG\", True)\n_cache = {}\n\ndef check_key(provided):\n    if not API_KEY or provided == API_KEY:\n        return True\n    return False\n\ndef current_profile(user_id, extra_tags=[], now=datetime.now()):\n    if user_id not in _cache:\n        _cache[user_id] = load_profile(user_id)\n    profile = _cache[user_id]\n    profile.tags.extend(extra_tags)\n    profile.seen_at = now\n    return profile",
+  "findings": [
+   {
+    "t": "Auth fails open when API_KEY is unset",
+    "d": "`if not API_KEY or ...` lets everyone in when the env var is missing. Fail closed: refuse to start (or deny) without a key; compare with hmac.compare_digest."
+   },
+   {
+    "t": "Mutable default `extra_tags=[]`",
+    "d": "Shared between calls; and `extend` mutates the cached profile, so tags pile up across requests. Default to None and don't mutate shared objects."
+   },
+   {
+    "t": "`now=datetime.now()` frozen at import",
+    "d": "Evaluated once, so seen_at never changes. Default to None and compute inside (aware UTC)."
+   },
+   {
+    "t": "Unbounded per-user module cache",
+    "d": "Grows forever, never invalidates, differs per worker, and hands one request's mutations to the next. Use a bounded TTL cache or none."
+   },
+   {
+    "t": "DEBUG defaults to truthy",
+    "d": "`os.environ.get(\"DEBUG\", True)` is True when unset, and any set string (even \"false\") is truthy. Parse explicitly, default False (pydantic-settings does this)."
+   },
+   {
+    "t": "`==` on a secret",
+    "d": "Timing leak. Use hmac.compare_digest."
+   }
+  ]
+ },
+ {
+  "id": "transfer",
+  "title": "Transferring credit",
+  "minutes": 8,
+  "context": "Moves credit between two accounts the caller owns.",
+  "code": "@app.post(\"/transfer\")\ndef transfer(body: TransferIn, db: DB, user: CurrentUser):\n    src = db.get(Account, body.from_id)\n    dst = db.get(Account, body.to_id)\n    if src.balance < body.amount:\n        return {\"ok\": False, \"error\": \"insufficient funds\"}\n    src.balance = src.balance - body.amount\n    db.commit()\n    dst.balance = dst.balance + body.amount\n    db.commit()\n    return {\"ok\": True}",
+  "findings": [
+   {
+    "t": "Two commits: money can vanish",
+    "d": "If the second update fails, the debit is committed and the credit isn't. Do both in one transaction (`with db.begin():`)."
+   },
+   {
+    "t": "Race: lost updates and overdraft",
+    "d": "Read-check-write in Python: two concurrent transfers both see enough balance. Lock rows (`with_for_update()`) or update atomically with a `balance >= amount` condition and check the row count."
+   },
+   {
+    "t": "No ownership check",
+    "d": "`user` is never used: anyone can move anyone's money. Load accounts filtered by owner_id."
+   },
+   {
+    "t": "Amount not validated",
+    "d": "A negative amount moves money the other way. `amount: Decimal = Field(gt=0)` in TransferIn. Also from_id == to_id."
+   },
+   {
+    "t": "Missing accounts crash with 500",
+    "d": "db.get returns None for unknown ids, then `.balance` raises AttributeError. Return 404."
+   },
+   {
+    "t": "Errors as 200 responses",
+    "d": "Insufficient funds returns 200 with ok: false. Use 409 (or 422) via HTTPException."
+   }
+  ]
+ },
+ {
+  "id": "tests",
+  "title": "A test file",
+  "minutes": 6,
+  "context": "Tests for a certificate-expiry endpoint that also calls a vendor revocation API.",
+  "code": "from fastapi.testclient import TestClient\nfrom app.main import app, get_db\nimport time\nfrom datetime import datetime, timedelta\n\nclient = TestClient(app)\napp.dependency_overrides[get_db] = lambda: test_session\n\ndef test_expiring_soon():\n    cert = make_cert(not_after=datetime.now() + timedelta(days=1))\n    r = client.get(f\"/certs/{cert.serial}\")\n    assert r.status_code == 200\n\ndef test_revoked():\n    r = client.get(\"/certs/REVOKED-1\")      # real vendor API\n    time.sleep(2)                           # wait for vendor\n    assert r.json()[\"revoked\"] is True",
+  "findings": [
+   {
+    "t": "Hits the real vendor API",
+    "d": "Flaky, slow and dependent on the network and vendor data. Override the HTTP client dependency with httpx.MockTransport."
+   },
+   {
+    "t": "Depends on the real clock",
+    "d": "`datetime.now()` (naive, local) plus a 1-day window breaks near midnight or across zones. Inject a fixed aware `now`."
+   },
+   {
+    "t": "Asserts only the status code",
+    "d": "test_expiring_soon never checks the expiry flag or days left: it passes even if the logic is wrong. Assert the body."
+   },
+   {
+    "t": "Overrides set globally and never cleared",
+    "d": "Set at import and leaked into every other test file. Use a fixture that sets and clears `dependency_overrides`."
+   },
+   {
+    "t": "`time.sleep` in tests",
+    "d": "The request already completed; sleeping only slows the suite. With a fake transport there's nothing to wait for."
+   },
+   {
+    "t": "Client created without `with`",
+    "d": "TestClient outside a `with` block doesn't run lifespan, so startup-created clients and engines don't exist. Use `with TestClient(app) as client` in a fixture."
+   }
+  ]
+ }
+]

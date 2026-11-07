@@ -1,0 +1,76 @@
+<p>How FastAPI runs your handlers, and how to share expensive clients safely. Read the Python async lesson first.</p>
+
+<h3><code>async def</code> or <code>def</code>?</h3>
+<ul class="points">
+<li><strong><code>async def</code></strong> handlers run directly on the event loop. Fast, but everything inside must be non-blocking (<code>await</code>-based).</li>
+<li><strong>plain <code>def</code></strong> handlers run in a thread pool (about 40 threads by default), so blocking code there doesn't freeze the loop.</li>
+</ul>
+<pre><code>@app.get("/a")
+async def a():
+    await asyncio.sleep(1)         # fine
+
+@app.get("/b")
+def b():
+    time.sleep(1)                  # fine: runs in a worker thread
+
+@app.get("/c")
+async def c():
+    time.sleep(1)                  # BUG: blocks every request on this worker</code></pre>
+<p>Rule of thumb: if you use a sync library (sync SQLAlchemy, <code>requests</code>, <code>sqlite3</code>), write plain <code>def</code>. If everything you call is async, write <code>async def</code>. Dependencies follow the same rule.</p>
+
+<h3>Two fixes for a blocking call in async code</h3>
+<pre><code># 1. Use an async library
+async def report():
+    r = await app.state.http.get(VENDOR_URL)
+
+# 2. Make the handler plain def (or push the call to a thread)
+def report():
+    r = httpx.get(VENDOR_URL)
+
+async def report():
+    r = await asyncio.to_thread(httpx.get, VENDOR_URL)</code></pre>
+<p>Trade-off: async scales to many concurrent waits on one thread; the thread pool is simpler and works with any library but caps at ~40 concurrent blocking calls per worker, after which requests queue.</p>
+
+<h3>Lifespan: create once, close once</h3>
+<pre><code>from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.http = httpx.AsyncClient(timeout=10)   # startup
+    yield
+    await app.state.http.aclose()                    # shutdown
+
+app = FastAPI(lifespan=lifespan)
+
+def get_http(request: Request) -&gt; httpx.AsyncClient:
+    return request.app.state.http</code></pre>
+<p>One client means a shared connection pool; creating <code>httpx.AsyncClient()</code> per request throws that away (and leaks if not closed). Same for the DB engine.</p>
+
+<h3>Always set timeouts</h3>
+<p>httpx defaults to 5 s; <code>requests</code> has <em>no</em> timeout by default and can hang forever. Every outbound call in a server needs one.</p>
+
+<h3>Background tasks</h3>
+<pre><code>from fastapi import BackgroundTasks
+
+@app.post("/signup", status_code=201)
+def signup(body: UserIn, tasks: BackgroundTasks):
+    user = create_user(body)
+    tasks.add_task(send_welcome_email, user.email)   # after the response is sent
+    return user</code></pre>
+<p>Fine for small fire-and-forget work. It runs in the same process, so it's lost if the process restarts; anything important belongs in a real queue (Celery, RQ, arq).</p>
+
+<h3>Streaming</h3>
+<p><code>StreamingResponse(generator())</code> sends a large or slow response piece by piece. Server-sent events and big CSV exports use it.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Laravel's queued jobs vs <code>dispatch()-&gt;afterResponse()</code> is the same split as a real queue vs <code>BackgroundTasks</code>. Service-provider singletons are the lifespan's job.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>An <code>async def</code> endpoint using sync SQLAlchemy <code>Session</code> blocks the loop on every query. Either plain <code>def</code> with <code>Session</code>, or <code>async def</code> with <code>AsyncSession</code> and an async driver. Mixing is the bug.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Make two endpoints, one <code>async def</code> with <code>time.sleep(3)</code> and a <code>/health</code>. Call the slow one, then <code>/health</code> immediately. Fix it both ways and repeat.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/async/" target="_blank" rel="noopener">FastAPI: concurrency and async / await</a></li>
+<li><a href="https://fastapi.tiangolo.com/advanced/events/" target="_blank" rel="noopener">FastAPI: lifespan events</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/background-tasks/" target="_blank" rel="noopener">FastAPI tutorial: background tasks</a></li>
+<li><a href="https://www.python-httpx.org/advanced/timeouts/" target="_blank" rel="noopener">HTTPX: timeouts</a></li>
+</ul></aside>

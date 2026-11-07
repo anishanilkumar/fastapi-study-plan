@@ -1,0 +1,53 @@
+<p>Iterators and generators let you process data one item at a time, so a 10 GB log file or an endless stream doesn't need to fit in memory.</p>
+
+<h3>Iterables and iterators</h3>
+<p>Anything you can <code>for</code> over is an <em>iterable</em> (list, dict, str, file, range). An <em>iterator</em> produces items one at a time and is used up once consumed.</p>
+<pre><code>it = iter([1, 2, 3])
+next(it)   # 1
+next(it)   # 2
+list(it)   # [3]
+list(it)   # []  ← exhausted</code></pre>
+
+<h3>Generators</h3>
+<p>A function containing <code>yield</code> returns a generator: it runs until <code>yield</code>, hands out a value, and pauses until asked for the next.</p>
+<pre><code>def read_lines(path):
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                yield line.rstrip("\n")
+
+for line in read_lines("big.log"):    # one line in memory at a time
+    if "ERROR" in line:
+        print(line)</code></pre>
+
+<h3>Generator expressions</h3>
+<p>Like a list comprehension in round brackets: lazy, no list built.</p>
+<pre><code>total = sum(len(line) for line in read_lines("big.log"))</code></pre>
+
+<h3>Pipelines</h3>
+<pre><code>def parse(lines):
+    for line in lines:
+        ts, level, msg = line.split(" ", 2)
+        yield {"ts": ts, "level": level, "msg": msg}
+
+errors = (r for r in parse(read_lines("app.log")) if r["level"] == "ERROR")
+for r in itertools.islice(errors, 10):   # first 10 only; rest never read
+    print(r)</code></pre>
+
+<h3>itertools</h3>
+<p><code>islice</code> (take n), <code>chain</code> (concatenate), <code>groupby</code> (consecutive groups; sort first), <code>batched</code> (3.12: chunks of n), <code>count</code>, <code>pairwise</code>. Worth a skim.</p>
+
+<aside class="trap"><span class="label">Trap</span><p>A generator can be iterated only once. <code>rows = (r for r in data)</code>, then <code>len(list(rows))</code> followed by <code>for r in rows</code> loops over nothing. If you need it twice, make a list.</p></aside>
+
+<h3>Where you'll meet them in FastAPI</h3>
+<p>Dependencies with <code>yield</code> (the DB session) are generators: setup before, cleanup after. <code>StreamingResponse</code> takes a generator to stream a big download. Lifespan is an async generator.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>PHP has generators with the same <code>yield</code> keyword and the same idea. Python just uses them far more, and its built-ins (<code>sum</code>, <code>any</code>, <code>zip</code>, <code>map</code>) all accept them.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write a generator <code>chunks(items, n)</code> that yields lists of n items (last one may be shorter). Then compare with <code>itertools.batched</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/classes.html#generators" target="_blank" rel="noopener">Python tutorial: generators</a></li>
+<li><a href="https://docs.python.org/3/howto/functional.html" target="_blank" rel="noopener">Python HOWTO: functional programming (iterators, generators)</a></li>
+<li><a href="https://docs.python.org/3/library/itertools.html" target="_blank" rel="noopener">Python docs: itertools</a></li>
+</ul></aside>

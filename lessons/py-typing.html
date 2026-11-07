@@ -1,0 +1,54 @@
+<p>Type hints don't change how Python runs; they are read by your editor, by type checkers like mypy, and crucially by FastAPI and Pydantic, which use them to parse and validate requests.</p>
+
+<h3>The basics</h3>
+<pre><code>def find_user(user_id: int, include_deleted: bool = False) -&gt; User | None:
+    ...
+
+names: list[str] = []
+scores: dict[str, int] = {}
+point: tuple[float, float] = (0.0, 0.0)
+row: tuple[int, ...]            # any length
+ids: set[int]</code></pre>
+<p>Read <code>User | None</code> as "a User, or None". Older code writes it <code>Optional[User]</code> (from <code>typing</code>); same meaning. <code>Union[int, str]</code> is <code>int | str</code>.</p>
+
+<h3>More you'll see</h3>
+<pre><code>from typing import Any, Literal, Annotated, TypedDict
+from collections.abc import Callable, Iterable, Iterator
+
+Status = Literal["active", "revoked"]          # only these strings
+def apply(fn: Callable[[int], str], xs: Iterable[int]) -&gt; list[str]: ...
+def stream() -&gt; Iterator[bytes]: ...           # a generator
+
+class UserRow(TypedDict):                      # a dict with known keys
+    id: int
+    email: str
+
+Limit = Annotated[int, Query(ge=1, le=100)]    # FastAPI: type + metadata</code></pre>
+<p><code>Any</code> turns checking off for that value. <code>Annotated[T, extra]</code> is "type T, plus extra info for whoever reads it"; FastAPI reads the extra to know it's a query parameter with limits.</p>
+
+<h3>Generics (3.12 syntax)</h3>
+<pre><code>def first[T](items: list[T]) -&gt; T | None:
+    return items[0] if items else None</code></pre>
+
+<h3>Hints are not enforced at runtime</h3>
+<pre><code>def double(x: int) -&gt; int:
+    return x * 2
+
+double("ab")    # 'abab', no error</code></pre>
+<p>Plain Python ignores hints. Errors are caught by a checker (<code>mypy</code>, <code>pyright</code>) before running, or by Pydantic at the API edge, which does enforce and convert.</p>
+
+<h3>Why this matters for FastAPI</h3>
+<pre><code>@app.get("/devices/{device_id}")
+def get_device(device_id: int, verbose: bool = False) -&gt; DeviceOut:
+    ...</code></pre>
+<p>From these hints alone FastAPI knows: <code>device_id</code> comes from the path and must parse as int (else 422), <code>verbose</code> is an optional query param (<code>?verbose=true</code>), and the response is filtered through <code>DeviceOut</code>. Reading hints fluently is reading the API.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Similar to PHP's typed parameters (<code>?User</code> is <code>User | None</code>), but PHP enforces them at runtime and Python doesn't. Generic types like <code>list[str]</code> are what PHPStan's <code>@param array&lt;string&gt;</code> docblocks try to say.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Add hints to a small function you wrote earlier, install mypy in your venv, and run <code>mypy file.py</code>. Then call it with a wrong type and see mypy catch what Python doesn't.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/python-types/" target="_blank" rel="noopener">FastAPI: Python types intro (start here)</a></li>
+<li><a href="https://docs.python.org/3/library/typing.html" target="_blank" rel="noopener">Python docs: typing</a></li>
+<li><a href="https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html" target="_blank" rel="noopener">mypy: type hints cheat sheet</a></li>
+</ul></aside>

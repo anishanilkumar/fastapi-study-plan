@@ -1,0 +1,71 @@
+<p>pytest is the standard test runner. Tests are plain functions with plain <code>assert</code>; fixtures provide what they need.</p>
+
+<h3>A test</h3>
+<pre><code># test_certs.py   (files and functions start with test_)
+from certs import is_expired
+
+def test_expired_cert():
+    now = datetime(2026, 11, 10, tzinfo=timezone.utc)
+    assert is_expired(datetime(2026, 11, 9, tzinfo=timezone.utc), now)
+
+def test_naive_rejected():
+    with pytest.raises(ValueError, match="aware"):
+        is_expired(datetime(2026, 11, 9), now=datetime.now(timezone.utc))</code></pre>
+<pre><code>pytest -q               # run all
+pytest -k expired -x    # by name, stop at first failure
+pytest -vv              # verbose, full diffs</code></pre>
+<p>When an <code>assert</code> fails, pytest shows both sides of the comparison. No <code>assertEquals</code> needed.</p>
+
+<h3>parametrize</h3>
+<pre><code>@pytest.mark.parametrize("value, expected", [
+    ("", False),
+    ("0", True),
+    (None, False),
+])
+def test_truthy(value, expected):
+    assert bool(value) is expected</code></pre>
+
+<h3>Fixtures</h3>
+<pre><code>@pytest.fixture
+def owner(db):                    # fixtures can use other fixtures
+    o = Owner(name="Asha")
+    db.add(o); db.commit()
+    return o
+
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite://")       # in-memory
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield session                         # teardown after yield
+
+def test_add_device(db, owner):
+    db.add(Device(serial="A-1", owner_id=owner.id)); db.commit()
+    assert db.scalar(select(func.count()).select_from(Device)) == 1</code></pre>
+<p>A test asks for a fixture by naming it as a parameter. Put shared fixtures in <code>conftest.py</code>; pytest finds them automatically. <code>scope="session"</code> makes one shared instance for the whole run.</p>
+
+<h3>Built-in fixtures</h3>
+<ul class="points">
+<li><code>tmp_path</code>: a fresh temporary directory (a <code>Path</code>).</li>
+<li><code>monkeypatch</code>: set env vars or attributes for one test, undone after: <code>monkeypatch.setenv("API_KEY", "x")</code>, <code>monkeypatch.setattr(module, "now", lambda: FIXED)</code>.</li>
+<li><code>caplog</code>, <code>capsys</code>: capture log records and printed output.</li>
+</ul>
+
+<h3>Good tests</h3>
+<ul class="points">
+<li>One behaviour per test, named for it: <code>test_duplicate_serial_returns_409</code>.</li>
+<li>Arrange, act, assert.</li>
+<li>Test the edges: empty, None, boundary values, the error path.</li>
+<li>No dependence on the clock, timezone, network, random order or other tests.</li>
+</ul>
+
+<aside class="php"><span class="label">From PHP</span><p>PHPUnit → pytest. <code>setUp()</code> → fixtures. Data providers → <code>parametrize</code>. <code>expectException</code> → <code>with pytest.raises(...)</code>. Mocks: <code>monkeypatch</code> or <code>unittest.mock</code>.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Test <code>days_left(not_after, now)</code> with parametrize: expired yesterday, expires in exactly 0 days, 30 days, and a naive input that should raise.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.pytest.org/en/stable/getting-started.html" target="_blank" rel="noopener">pytest: get started</a></li>
+<li><a href="https://docs.pytest.org/en/stable/how-to/fixtures.html" target="_blank" rel="noopener">pytest: how to use fixtures</a></li>
+<li><a href="https://docs.pytest.org/en/stable/how-to/parametrize.html" target="_blank" rel="noopener">pytest: parametrizing tests</a></li>
+<li><a href="https://docs.pytest.org/en/stable/how-to/monkeypatch.html" target="_blank" rel="noopener">pytest: monkeypatch</a></li>
+</ul></aside>

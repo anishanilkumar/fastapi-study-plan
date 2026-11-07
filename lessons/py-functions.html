@@ -1,0 +1,84 @@
+<p>Functions are where Python's argument handling shines, and where its most famous trap lives.</p>
+
+<h3>Defining and calling</h3>
+<pre><code>def greet(name: str, greeting: str = "Hello") -&gt; str:
+    """One-line docstring: what it does."""
+    return f"{greeting}, {name}"
+
+greet("Asha")
+greet("Asha", "Hi")
+greet(greeting="Hi", name="Asha")    # keyword arguments, any order</code></pre>
+
+<h3>Keyword-only and positional-only</h3>
+<pre><code>def send(to, body, *, retries=3, timeout=10.0):
+    ...
+send("a@x.de", "hi", retries=1)      # retries must be named
+send("a@x.de", "hi", 1)              # TypeError</code></pre>
+<p>Everything after a bare <code>*</code> must be passed by name. Use it for flags and options so call sites stay readable. (A <code>/</code> marks the ones before it positional-only; you'll see it in library signatures.)</p>
+
+<h3><code>*args</code> and <code>**kwargs</code></h3>
+<pre><code>def log(msg, *args, **kwargs):
+    print(msg, args, kwargs)
+
+log("x", 1, 2, level="info")   # x (1, 2) {'level': 'info'}</code></pre>
+<p><code>*args</code> collects extra positional arguments into a tuple, <code>**kwargs</code> extra keyword arguments into a dict. Common in wrappers and decorators that pass everything through.</p>
+
+<h3>The mutable default trap</h3>
+<p>Default values are evaluated <strong>once</strong>, when the <code>def</code> runs, not on each call. A mutable default is shared by every call.</p>
+<pre><code>def add_tag(tag, tags=[]):        # BUG
+    tags.append(tag)
+    return tags
+
+add_tag("a")   # ['a']
+add_tag("b")   # ['a', 'b']  ← same list as before
+
+def add_tag(tag, tags=None):      # fix
+    if tags is None:
+        tags = []
+    tags.append(tag)
+    return tags</code></pre>
+<p>Same for <code>def f(now=datetime.now())</code>: the time is frozen at import. In a server that runs for weeks, that's a bug an interviewer will expect you to spot.</p>
+
+<h3>Functions are values</h3>
+<pre><code>handlers = {"csv": parse_csv, "json": parse_json}
+handlers[fmt](data)
+
+square = lambda x: x * x            # one-expression anonymous function
+sorted(words, key=len)</code></pre>
+
+<h3>Scope and closures</h3>
+<p>A function can read variables from the enclosing scope (no <code>use</code> needed, unlike PHP closures). To <em>assign</em> to one, declare <code>nonlocal</code> (or <code>global</code> for module level, which is almost always a smell).</p>
+<pre><code>def counter():
+    n = 0
+    def inc():
+        nonlocal n
+        n += 1
+        return n
+    return inc</code></pre>
+
+<h3>Decorators</h3>
+<p>A decorator is a function that takes a function and returns a replacement. <code>@app.get("/")</code> in FastAPI is a decorator: it registers your function as a route.</p>
+<pre><code>import functools, time
+
+def timed(fn):
+    @functools.wraps(fn)            # keep the name and docstring
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            print(fn.__name__, time.perf_counter() - start)
+    return wrapper
+
+@timed
+def slow(): ...</code></pre>
+
+<aside class="php"><span class="label">From PHP</span><p>Named arguments work like PHP 8's. Python closures capture by reference automatically, so the PHP <code>function() use (&amp;$x)</code> dance is just reading <code>x</code> (plus <code>nonlocal</code> to rebind it).</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write <code>retry(times)</code>, a decorator <em>factory</em>: <code>@retry(3)</code> re-calls the function up to 3 times if it raises, then re-raises. It needs three nested functions; that's normal.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/controlflow.html#defining-functions" target="_blank" rel="noopener">Python tutorial: defining functions</a></li>
+<li><a href="https://docs.python.org/3/tutorial/controlflow.html#default-argument-values" target="_blank" rel="noopener">Python tutorial: default argument values (the warning box)</a></li>
+<li><a href="https://docs.python.org/3/glossary.html#term-decorator" target="_blank" rel="noopener">Python glossary: decorator</a></li>
+</ul></aside>

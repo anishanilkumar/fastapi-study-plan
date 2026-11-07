@@ -1,0 +1,69 @@
+<p>Python reports problems with exceptions, everywhere. Reading code well means knowing what can raise, what's caught, and what gets cleaned up.</p>
+
+<h3>try / except / else / finally</h3>
+<pre><code>try:
+    n = int(raw)
+except ValueError:
+    n = 0                        # only what you expect, nothing else
+except (TypeError, KeyError) as e:
+    log.warning("bad input: %s", e)
+    raise                        # re-raise the same exception
+else:
+    print("parsed", n)           # runs only if nothing was raised
+finally:
+    cleanup()                    # runs always, even on return or raise</code></pre>
+
+<h3>Raising</h3>
+<pre><code>if amount &lt; 0:
+    raise ValueError(f"amount must be positive, got {amount}")
+
+class DeviceNotFound(Exception):
+    """Raised when a serial isn't registered."""
+
+try:
+    resp = client.get(url)
+except httpx.HTTPError as e:
+    raise UpstreamError("vendor API failed") from e   # keeps the cause</code></pre>
+<p>Custom exceptions subclass <code>Exception</code>. Name them for what went wrong, not where.</p>
+
+<h3>Why bare except is bad</h3>
+<pre><code>try:
+    process(job)
+except:            # or: except Exception: pass
+    pass</code></pre>
+<p>This swallows every error: typos (<code>NameError</code>), bugs (<code>AttributeError</code>), and with bare <code>except:</code> even Ctrl-C and shutdown (<code>KeyboardInterrupt</code>, <code>SystemExit</code>). The job silently does nothing and nobody knows. If you truly must catch everything at a boundary, catch <code>Exception</code> and log it with the traceback: <code>log.exception("job failed")</code>.</p>
+
+<h3>Context managers: <code>with</code></h3>
+<p>A <code>with</code> block guarantees cleanup, like a built-in <code>finally</code>.</p>
+<pre><code>with open("data.csv", encoding="utf-8") as f:
+    rows = f.readlines()
+# file is closed here, even if readlines raised
+
+with Session(engine) as session:
+    ...                      # session closed at the end
+
+with httpx.Client() as client, open("out.json", "w") as out:
+    ...                      # several at once</code></pre>
+<p>You can write your own with <code>contextlib.contextmanager</code>: code before <code>yield</code> is setup, after it is teardown. FastAPI's <code>Depends</code> with <code>yield</code> uses the same idea.</p>
+<pre><code>from contextlib import contextmanager
+
+@contextmanager
+def timer(label):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        print(label, time.perf_counter() - start)</code></pre>
+
+<h3>EAFP</h3>
+<p>Python style is "easier to ask forgiveness than permission": try it and handle the exception, rather than checking first. It also avoids races, e.g. insert and catch <code>IntegrityError</code> instead of "check, then insert".</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Like PHP's <code>try/catch/finally</code>, with <code>except</code> for <code>catch</code>. Python has no warnings-vs-exceptions split: <code>d["missing"]</code>, <code>int("x")</code>, <code>open("nope")</code> all raise, where PHP might return <code>null</code>/<code>false</code> with a notice.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write <code>load_config(path)</code> that returns a dict from a JSON file, returns <code>{}</code> if the file doesn't exist, but lets invalid JSON raise. Which two exception types are involved?</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/errors.html" target="_blank" rel="noopener">Python tutorial: errors and exceptions</a></li>
+<li><a href="https://docs.python.org/3/library/exceptions.html#exception-hierarchy" target="_blank" rel="noopener">Python docs: the exception hierarchy</a></li>
+<li><a href="https://docs.python.org/3/library/contextlib.html" target="_blank" rel="noopener">Python docs: contextlib</a></li>
+</ul></aside>

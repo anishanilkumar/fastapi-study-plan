@@ -1,0 +1,64 @@
+<p>The status code is part of the API's contract. Interviewers notice wrong ones, and leaking internals in error bodies.</p>
+
+<h3>Raising HTTP errors</h3>
+<pre><code>from fastapi import HTTPException, status
+
+@app.get("/devices/{device_id}")
+def get_device(device_id: int, db: DB, user: CurrentUser) -&gt; DeviceOut:
+    device = db.get(Device, device_id)
+    if device is None or device.owner_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "device not found")
+    return device</code></pre>
+<p>Raising (not returning) stops the handler; FastAPI sends <code>{"detail": "device not found"}</code>.</p>
+
+<h3>Which code</h3>
+<table><thead><tr><th>Code</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>200 / 201 / 204</td><td>OK / created (POST that made something) / no content (DELETE)</td></tr>
+<tr><td>400</td><td>Bad request your validation couldn't express as a schema</td></tr>
+<tr><td>401</td><td>Not authenticated: missing or invalid credentials. Send <code>WWW-Authenticate</code>.</td></tr>
+<tr><td>403</td><td>Authenticated, but not allowed</td></tr>
+<tr><td>404</td><td>Not found, <em>or</em> exists but belongs to someone else (don't reveal it exists)</td></tr>
+<tr><td>409</td><td>Conflict with current state: duplicate serial, version mismatch</td></tr>
+<tr><td>422</td><td>Body/params failed validation (FastAPI sends this for you)</td></tr>
+<tr><td>429</td><td>Rate limited</td></tr>
+<tr><td>500</td><td>Your bug. Never raise it on purpose.</td></tr>
+<tr><td>502 / 503 / 504</td><td>Upstream failed / you're unavailable / upstream timed out</td></tr>
+</tbody></table>
+
+<h3>Setting success codes</h3>
+<pre><code>@app.post("/devices", status_code=201)
+def create_device(body: DeviceIn) -&gt; DeviceOut: ...
+
+@app.delete("/devices/{device_id}", status_code=204)
+def delete_device(device_id: int) -&gt; None: ...</code></pre>
+
+<h3>Upstream failures</h3>
+<pre><code>try:
+    r = await client.get(VENDOR, timeout=5)
+    r.raise_for_status()
+except httpx.TimeoutException:
+    raise HTTPException(504, "vendor timed out")
+except httpx.HTTPError:
+    log.exception("vendor call failed")
+    raise HTTPException(502, "vendor unavailable")</code></pre>
+<p>Log the details server-side; give the client a short, safe message. Never put tracebacks, SQL or secrets in <code>detail</code>.</p>
+
+<h3>Custom exception handlers</h3>
+<pre><code>class DeviceNotFound(Exception): ...
+
+@app.exception_handler(DeviceNotFound)
+async def not_found(request, exc):
+    return JSONResponse(status_code=404, content={"detail": "device not found"})</code></pre>
+<p>Lets your service layer raise domain exceptions without importing FastAPI.</p>
+
+<aside class="trap"><span class="label">Trap</span><p><code>return HTTPException(404)</code> instead of <code>raise</code> sends a 200 with a weird body. And catching <code>Exception</code> around a block that raises <code>HTTPException</code> swallows your own 404.</p></aside>
+
+<aside class="php"><span class="label">From PHP</span><p><code>abort(404)</code> / <code>throw new NotFoundHttpException()</code> → <code>raise HTTPException(404)</code>. Laravel's exception handler <code>render()</code> → <code>@app.exception_handler</code>.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>For each, name the code: wrong password; valid token but someone else's device; duplicate serial on create; vendor API takes 30 s; body missing a required field; listing with <code>limit=1000</code> when max is 100.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/handling-errors/" target="_blank" rel="noopener">FastAPI tutorial: handling errors</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/response-status-code/" target="_blank" rel="noopener">FastAPI tutorial: response status code</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status" target="_blank" rel="noopener">MDN: HTTP status codes</a></li>
+</ul></aside>

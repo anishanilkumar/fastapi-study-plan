@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e14">
+<meta name="robots" content="noindex, nofollow">
+<title>Python Study Plan</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Crect width=%2720%27 height=%2720%27 fill=%27%230a0e14%27/%3E%3Crect x=%275%27 y=%275%27 width=%2710%27 height=%2710%27 fill=%27none%27 stroke=%27%233dd6f5%27 stroke-width=%272%27/%3E%3Crect x=%278%27 y=%278%27 width=%274%27 height=%274%27 fill=%27%233dd6f5%27/%3E%3C/svg%3E">
+<style>
+/* The "instrument" style: a dark UI built like a machined instrument, not a
+   glowing screen. Two accents with jobs (arc blue = live, gold = warning or
+   warm), 2px engraved rules, corner brackets instead of boxed cards, no
+   shadows or glow, and motion only when something changed. Phone scale: it
+   is read at arm's length. Self-checks carry a gold label because they are
+   the "do this before moving on" warm signal, not live data. */
+
+@font-face { font-family: "Archivo"; src: url("/fonts/archivo.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Plex Mono"; src: url("/fonts/plexmono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Plex Mono"; src: url("/fonts/plexmono-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+
+:root {
+  --ground: #0a0e14;
+  --panel: #111823;
+  --panel-lit: #16202e;
+  --arc: #3dd6f5;
+  --arc-dim: #1d7f96;
+  --gold: #e8a33d;
+  --alert: #ff4d4d;
+  --engrave: #2a3543;
+  --ink: #e8f1f8;
+  --ink-dim: #7c8fa3;
+  --slate: #55647a;
+  --slate-dim: #3a4657;
+
+  /* Semantic aliases: components use these, never the raw hues. */
+  --synced: var(--arc);
+  --unsent: var(--gold);
+
+  --face-data: "Archivo", system-ui, sans-serif;
+  --face-mono: "Plex Mono", ui-monospace, "Roboto Mono", monospace;
+
+  --t-major: clamp(1.75rem, 8vw, 2.75rem);
+  --t-readout: clamp(1.375rem, 5.5vw, 1.875rem);
+  --t-headline: 1.25rem;
+  --t-body: 1rem;
+  --t-label: 0.8125rem;
+  --t-min: 0.75rem;
+  --track-label: 0.16em;
+
+  --rule: 2px;
+  --gap: 1rem;
+  --pad: 1.25rem;
+  --bracket: 1rem;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  color-scheme: dark;
+}
+
+/* Server unreachable: swap the tokens wholesale, so no component needs an
+   offline branch. The ticks stay visible; the status line says where they live. */
+:root[data-connection="offline"] {
+  --arc: var(--slate);
+  --arc-dim: var(--slate-dim);
+  --gold: #8a7350;
+  --ink: #b9c4d1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--face-data);
+  font-size: var(--t-body);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3 { font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; text-wrap: balance; }
+a { color: var(--arc); text-underline-offset: 3px; }
+:focus-visible { outline: var(--rule) solid var(--arc); outline-offset: 2px; }
+
+/* Inline code: a lit panel chip, mono, no rounding beyond 2px. */
+code { font-family: var(--face-mono); font-size: 0.875em; background: var(--panel-lit); padding: 0 0.3em; border-radius: 2px; color: var(--ink); }
+
+/* ---- Type roles ---- */
+.label { font-family: var(--face-mono); font-size: var(--t-label); font-weight: 500; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--arc-dim); }
+.stamp { font-family: var(--face-mono); font-size: var(--t-min); letter-spacing: 0.08em; color: var(--ink-dim); text-transform: uppercase; }
+.wordmark { font-family: var(--face-mono); font-weight: 500; font-size: var(--t-label); letter-spacing: 0.3em; text-transform: uppercase; color: var(--ink); }
+.readout { font-size: var(--t-readout); font-weight: 500; line-height: 1.05; }
+
+/* ---- Instrument: corner brackets rather than a box ---- */
+.instrument { position: relative; background: var(--panel); padding: var(--pad); }
+.instrument::before, .instrument::after {
+  content: ""; position: absolute; width: var(--bracket); height: var(--bracket);
+  border: var(--rule) solid var(--engrave); pointer-events: none;
+}
+.instrument::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+.instrument::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+/* ---- Page ---- */
+.page {
+  max-width: 54rem; margin: 0 auto;
+  padding: max(env(safe-area-inset-top), var(--gap)) var(--gap) calc(env(safe-area-inset-bottom) + 4rem);
+  display: flex; flex-direction: column; gap: var(--gap);
+}
+/* Flex children default to min-width:auto, which let the table push the
+   page wider than a phone. */
+.page > * { min-width: 0; }
+.mast { display: grid; gap: 0.75rem; padding: 1.5rem 0 0.5rem; }
+.mast h1 { font-size: var(--t-major); letter-spacing: -0.03em; }
+.lede { color: var(--ink-dim); max-width: 60ch; }
+
+/* ---- Progress strip: sticky, so the count is always in reach ---- */
+.strip { position: relative; top: 0; z-index: 2; display: grid; gap: 0.75rem; padding-top: calc(var(--pad) + env(safe-area-inset-top)); }
+.strip-row { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; align-items: flex-end; justify-content: space-between; }
+.strip-row > div { display: grid; gap: 0.25rem; }
+.readout small { font-size: 0.55em; color: var(--ink-dim); font-weight: 500; }
+
+/* One lit segment per item, like index ticks on a dial: progress you can
+   count, not a smooth bar that hides how many are left. */
+.ticks { display: flex; gap: 2px; height: 0.625rem; }
+.ticks > i { flex: 1; background: var(--engrave); transition: background 220ms var(--ease); }
+.ticks > i.on { background: var(--arc); }
+
+.status { display: flex; align-items: center; gap: 0.5rem; min-height: 1.25rem; }
+.dot { flex: none; width: 8px; height: 8px; background: var(--synced); }
+.status[data-state="syncing"] .dot { animation: blink 0.9s steps(2) infinite; }
+.status[data-state="unsent"] .dot { background: var(--unsent); }
+.status[data-state="unsent"] .stamp { color: var(--unsent); }
+.status[data-state="local"] .dot { background: var(--slate); }
+@keyframes blink { 50% { opacity: 0.2; } }
+
+/* ---- Callout and table ---- */
+.callout { background: var(--panel); border-left: 6px solid var(--arc); padding: var(--pad); display: grid; gap: 0.75rem; }
+.callout p, .instrument p { max-width: 65ch; }
+.section-head { display: grid; gap: 0.375rem; margin-bottom: 1rem; }
+.section-head h2 { font-size: var(--t-headline); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 0.625rem 0.75rem 0.625rem 0; vertical-align: top; }
+td { border-top: var(--rule) solid var(--engrave); overflow-wrap: anywhere; }
+th { padding-bottom: 0.5rem; }
+
+/* ---- Day ---- */
+.day-head { display: flex; gap: 0.75rem; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.day-head > div { display: grid; gap: 0.375rem; }
+.day-head h2 { font-size: var(--t-headline); }
+.count[data-full="true"] { color: var(--arc); }
+.group-label { padding: 1.25rem 0 0.25rem; }
+.group-label.check-label { color: var(--gold); }
+
+ul { list-style: none; }
+.item + .item { border-top: var(--rule) solid var(--engrave); }
+.item label { display: grid; grid-template-columns: 1.25rem 1fr; gap: 0.875rem; padding: 0.875rem 0; min-height: 64px; cursor: pointer; }
+
+/* Tick box: an engraved square; done fills an inset arc square. No glyph.
+   appearance:none keeps it a real checkbox for keyboard and screen readers. */
+.item input {
+  appearance: none; -webkit-appearance: none; margin: 0.125rem 0 0;
+  width: 1.25rem; height: 1.25rem; border: var(--rule) solid var(--arc-dim); border-radius: 0;
+  padding: 3px; background-clip: content-box; cursor: pointer;
+  transition: background-color 200ms var(--ease);
+}
+.item input:checked { background-color: var(--arc); border-color: var(--arc); }
+.item .copy { display: grid; gap: 0.25rem; }
+.item .t { font-weight: 600; font-size: 1.0625rem; line-height: 1.3; transition: color 200ms var(--ease); }
+.item label:hover .t { color: var(--arc); }
+.item .why { color: var(--ink-dim); max-width: 62ch; }
+.item .src { font-size: 0.875rem; }
+.item .src a { display: inline-block; padding: 0.25rem 0; }
+.item input:checked ~ .copy .t { color: var(--ink-dim); }
+.item.check .t::before { content: "Self-check  "; font-family: var(--face-mono); font-size: var(--t-min); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); white-space: pre; }
+
+.foot { padding-top: 1rem; }
+.strip-row .right { text-align: right; }
+.item .src { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.read-link { font-family: var(--face-mono); font-size: var(--t-min); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; }
+.read-link:hover { color: var(--ink); }
+
+/* Sticky only on the plan, where ticking is the job. While reading a lesson
+   the strip would take a fifth of a phone screen from the text. */
+body[data-view="plan"] .strip { position: sticky; }
+
+/* ---- Tabs: mono labels on a 2px engraved rule; the current one is lit. ---- */
+.tabs { display: flex; gap: 0.25rem; border-bottom: var(--rule) solid var(--engrave); }
+.tabs a {
+  display: inline-flex; align-items: center; min-height: 48px; padding: 0 1rem;
+  font-family: var(--face-mono); font-size: var(--t-label); font-weight: 500; letter-spacing: var(--track-label); text-transform: uppercase;
+  color: var(--ink-dim); text-decoration: none; margin-bottom: calc(-1 * var(--rule));
+  border-bottom: var(--rule) solid transparent; transition: color 160ms var(--ease);
+}
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--arc); border-bottom-color: var(--arc); }
+#view { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+#view > * { min-width: 0; }
+
+/* ---- Syllabus ---- */
+.syl-head { padding-top: 0.5rem; margin: 0; }
+.tag-extra { color: var(--gold); }
+.lessons { list-style: none; }
+.lessons > li + li { border-top: var(--rule) solid var(--engrave); }
+.lessons a {
+  display: grid; grid-template-columns: 0.75rem 1.75rem 1fr auto; gap: 0.75rem; align-items: baseline;
+  min-height: 56px; padding: 1rem 0; color: var(--ink); text-decoration: none;
+}
+.lessons .ltitle { font-weight: 600; font-size: 1.0625rem; line-height: 1.3; transition: color 160ms var(--ease); }
+.lessons a:hover .ltitle { color: var(--arc); }
+.lessons .meta { text-align: right; white-space: nowrap; }
+/* Read marker: the tick box's square, small and not interactive here. */
+.lessons .mark { width: 0.75rem; height: 0.75rem; border: var(--rule) solid var(--arc-dim); align-self: center; }
+.lessons a[data-read="true"] .mark { background: var(--arc); border-color: var(--arc); }
+.lessons a[data-read="true"] .ltitle { color: var(--ink-dim); }
+@media (max-width: 520px) {
+  .lessons a { grid-template-columns: 0.75rem 1.5rem 1fr; }
+  .lessons .meta { grid-column: 3; text-align: left; }
+}
+
+/* ---- Lesson ---- */
+.back { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-family: var(--face-mono); font-size: var(--t-label); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); text-decoration: none; }
+.back:hover { color: var(--arc); }
+.lesson-head { display: grid; gap: 0.5rem; padding-bottom: 1.25rem; margin-bottom: 1.25rem; border-bottom: var(--rule) solid var(--engrave); }
+.lesson-head h2 { font-size: var(--t-major); letter-spacing: -0.03em; }
+.read-done { margin-top: 1.5rem; border-top: var(--rule) solid var(--engrave); }
+
+/* Reading text: a 68ch column, body at 1.0625rem with generous leading,
+   because this is the one part of the page meant to be read at length. */
+.reading { display: grid; gap: 1rem; font-size: 1.0625rem; line-height: 1.6; }
+.reading > * { max-width: 68ch; }
+.reading h3 { font-size: var(--t-headline); margin-top: 1rem; }
+.reading strong { font-weight: 600; color: var(--ink); }
+.reading em { color: var(--ink); }
+.reading pre {
+  max-width: none; overflow-x: auto; background: var(--ground); border-left: var(--rule) solid var(--arc-dim);
+  padding: 0.875rem 1rem; font-family: var(--face-mono); font-size: 0.875rem; line-height: 1.55; tab-size: 4;
+}
+.reading pre code { background: none; padding: 0; font-size: inherit; color: var(--ink); }
+.reading table { display: block; overflow-x: auto; max-width: none; }
+.reading td code, .reading th { white-space: nowrap; }
+.reading ul.points, .reading ol.points { display: grid; gap: 0.5rem; padding-left: 1.5rem; }
+.reading ul.points { list-style: none; }
+.reading ul.points li { position: relative; }
+.reading ul.points li::before { content: ""; position: absolute; left: -1.125rem; top: 0.7em; width: 0.5rem; height: var(--rule); background: var(--arc-dim); }
+.reading ol.points { list-style: decimal; }
+.reading ol.points li::marker { font-family: var(--face-mono); color: var(--arc-dim); }
+/* Asides are callouts: a thick left rule in the colour of their job.
+   PHP bridge = arc (live, the thing to connect to); trap = gold (warning);
+   try-it = ink; further reading = engraved, the quietest. */
+.reading aside { display: grid; gap: 0.5rem; background: var(--panel-lit); border-left: 6px solid var(--engrave); padding: 1rem 1.125rem; }
+.reading aside.php { border-left-color: var(--arc); }
+.reading aside.trap { border-left-color: var(--gold); }
+.reading aside.trap .label { color: var(--gold); }
+.reading aside.try { border-left-color: var(--ink-dim); }
+.reading aside.try .label { color: var(--ink); }
+.reading aside.more ul { display: grid; gap: 0.25rem; }
+.reading aside.more a { display: inline-block; padding: 0.25rem 0; }
+
+/* Loading: a page-shaped placeholder in slate, not a spinner. */
+.placeholder { display: grid; gap: 0.75rem; }
+.placeholder i { display: block; height: 1rem; background: var(--slate-dim); opacity: 0.5; }
+.placeholder i.short { width: 60%; }
+.empty { display: grid; gap: 0.75rem; justify-items: start; color: var(--ink-dim); }
+.empty .label { color: var(--slate); }
+.btn {
+  display: inline-flex; align-items: center; min-height: 48px; padding: 0 1.25rem; border: var(--rule) solid var(--engrave); border-radius: 2px;
+  background: transparent; color: var(--ink); font-family: var(--face-mono); font-size: var(--t-label); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+}
+.btn:hover { background: var(--engrave); }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.pager a { display: grid; gap: 0.25rem; align-content: start; min-height: 64px; padding: 1rem 0; border-top: var(--rule) solid var(--engrave); color: var(--ink); text-decoration: none; font-weight: 600; }
+.pager a:hover { color: var(--arc); }
+.pager a.next { text-align: right; }
+
+/* ==== The game layer. Same language as the rest: numbers that move, ticks
+   that light, brackets. No confetti, glow or bounce; a reward is a readout
+   changing and one mechanical blink. ==== */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.strip-row { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; align-items: end; }
+.strip-row .stamp { display: block; margin-top: 0.125rem; }
+@media (max-width: 640px) { .strip-row { grid-template-columns: 1fr 1fr; gap: 1rem; } .strip-row .right { text-align: left; } }
+.today { display: flex !important; align-items: center; gap: 0.75rem; }
+.today > div { display: grid; gap: 0.25rem; }
+.dial { width: 3rem; height: 3rem; flex: none; }
+.dial line { stroke: var(--engrave); stroke-width: 2.5; stroke-linecap: butt; transition: stroke 220ms var(--ease); }
+.dial line.on { stroke: var(--arc-dim); }
+.dial.full line.on { stroke: var(--arc); }
+@media (max-width: 480px) { .tabs a { flex: 1 1 auto; justify-content: center; padding: 0 0.25rem; letter-spacing: 0.08em; } }
+.tabs a span { margin-left: 0.5rem; color: var(--slate); letter-spacing: 0.04em; }
+.tabs a[aria-current="page"] span { color: var(--arc-dim); }
+
+/* Next up: the one action to take. Arc callout, the page's only primary button. */
+.next { gap: 0.625rem; }
+.next h2 { font-size: var(--t-headline); }
+.next .btn { justify-self: start; margin-top: 0.25rem; text-decoration: none; }
+.btn-primary { background: var(--arc); border-color: var(--arc); color: var(--ground); }
+.btn-primary:hover { background: var(--ink); border-color: var(--ink); }
+a.btn { text-decoration: none; }
+
+/* A plan row reached from "Go to it" lights once, then settles. */
+.item.flash { animation: flash 1.2s steps(2) 2; }
+@keyframes flash { 50% { background: var(--panel-lit); } }
+
+/* ---- Check ---- */
+.quiz .q { border: 0; display: grid; gap: 0.75rem; padding: 1rem 0; }
+.quiz .q + .q { border-top: var(--rule) solid var(--engrave); }
+.quiz legend { font-weight: 600; font-size: 1.0625rem; line-height: 1.35; padding: 0 0 0.75rem; }
+.quiz legend .stamp { margin-right: 0.5rem; }
+.opts { display: grid; gap: 0.5rem; }
+.opt {
+  text-align: left; min-height: 48px; padding: 0.625rem 1rem; background: transparent; border: var(--rule) solid var(--engrave); border-radius: 2px;
+  font-size: 1rem; line-height: 1.4; cursor: pointer; transition: background 160ms var(--ease), border-color 160ms var(--ease);
+}
+.opt:hover:not(:disabled) { background: var(--panel-lit); border-color: var(--arc-dim); }
+.opt:disabled { cursor: default; }
+.opt[data-state="right"] { border-color: var(--arc); color: var(--ink); animation: blink-once 0.4s steps(2) 1; }
+.opt[data-state="wrong"] { border-color: var(--gold); color: var(--ink-dim); }
+.opt[data-state="dim"] { opacity: 0.45; }
+@keyframes blink-once { 50% { background: var(--panel-lit); } }
+.verdict { background: var(--panel-lit); border-left: 6px solid var(--arc); padding: 0.75rem 1rem; color: var(--ink-dim); }
+.verdict[data-ok="false"] { border-left-color: var(--gold); }
+.verdict[data-ok="false"] .label { color: var(--gold); }
+.verdict[data-ok="true"] .label { color: var(--arc); }
+.result { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; padding-top: 1rem; border-top: var(--rule) solid var(--engrave); }
+.qscore[data-pass="true"] { color: var(--arc); }
+
+/* ---- Record ---- */
+.section-head .rank-name { font-size: var(--t-major); letter-spacing: -0.03em; }
+.ladder, .badges, .rules { list-style: none; }
+.ladder li { display: grid; grid-template-columns: 0.75rem 1fr auto; gap: 0.75rem; align-items: center; min-height: 44px; }
+.ladder li + li, .rules li + li { border-top: var(--rule) solid var(--engrave); }
+.ladder .mark, .badges .mark { width: 0.75rem; height: 0.75rem; border: var(--rule) solid var(--arc-dim); }
+.ladder [data-state="past"] .mark { background: var(--arc-dim); border-color: var(--arc-dim); }
+.ladder [data-state="now"] .mark { background: var(--arc); border-color: var(--arc); }
+.ladder [data-state="now"] .ltitle { color: var(--arc); font-weight: 600; }
+.ladder [data-state="ahead"] { opacity: 0.5; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1rem 1.5rem; }
+.stats div { display: grid; gap: 0.25rem; }
+.stats dd { margin: 0; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.75rem; }
+.badges li { display: grid; grid-template-columns: 0.75rem 1fr; column-gap: 0.75rem; row-gap: 0.125rem; align-items: center; padding: 0.75rem; background: var(--panel-lit); }
+.badges .ltitle { font-weight: 600; }
+.badges .why { grid-column: 2; font-size: 0.875rem; color: var(--ink-dim); }
+.badges [data-on="true"] .mark { background: var(--arc); border-color: var(--arc); }
+.badges [data-on="false"] { opacity: 0.34; }
+.rules li { display: flex; justify-content: space-between; gap: 1rem; min-height: 44px; align-items: center; }
+.rules .stamp { color: var(--arc); }
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 1rem); z-index: 5;
+  transform: translateX(-50%); width: max-content; max-width: calc(100vw - 2rem);
+  display: grid; gap: 0.125rem; padding: 0.875rem 1.25rem; background: var(--panel-lit);
+  border-left: 6px solid var(--arc); visibility: hidden; opacity: 0;
+}
+.toast > span:last-child { font-weight: 600; }
+.toast[data-kind="rank"] .label, .toast[data-kind="badge"] .label { color: var(--gold); }
+.toast[data-kind="rank"], .toast[data-kind="badge"] { border-left-color: var(--gold); }
+.toast.show { visibility: visible; opacity: 1; animation: blink-in 0.36s steps(3) 1; }
+@keyframes blink-in { 0% { opacity: 0; } 33% { opacity: 1; } 66% { opacity: 0.3; } 100% { opacity: 1; } }
+
+/* ---- Drills ---- */
+.drill-timer { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+#clock { min-width: 4ch; }
+#clock[data-state="low"] { color: var(--gold); }
+#clock[data-state="over"] { color: var(--gold); animation: blink-once 0.8s steps(2) 3; }
+.notes { display: grid; gap: 0.5rem; margin: 1.25rem 0; }
+.notes textarea {
+  width: 100%; min-height: 8rem; padding: 0.75rem; resize: vertical; background: var(--ground); color: var(--ink);
+  border: var(--rule) solid var(--engrave); border-radius: 0; font-family: var(--face-mono); font-size: 0.875rem; line-height: 1.5;
+}
+.notes textarea::placeholder { color: var(--slate); }
+.notes textarea:focus { border-color: var(--arc-dim); outline: none; }
+.key-head { margin-top: 1.5rem; }
+.worst { font-family: var(--face-mono); font-size: var(--t-min); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-right: 0.375rem; }
+@media (max-width: 480px) { .tabs a span { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function () {
+  // Days run basics first: the language itself, then the traps, then FastAPI
+  // from its first route up, then async, then the database and tests.
+  // Ids are what the server stores, so an item kept from an earlier version
+  // keeps its id and its tick.
+  var PLAN = [
+    { id: "sat", n: 0, title: "Python, from the basics", groups: [
+      { label: "Morning · the language", items: [
+        { id: "b-setup", lesson: "py-setup", t: "Run Python and keep projects apart with a virtualenv", why: "<code>python3 -m venv .venv</code>, <code>source .venv/bin/activate</code>, <code>pip install httpx</code>. A venv is a per-project <code>vendor/</code>; <code>uv</code> does the same faster. Try lines in the REPL (<code>python3</code>) as you read.", src: ["Python tutorial: virtual environments", "https://docs.python.org/3/tutorial/venv.html"] },
+        { id: "b-syntax", lesson: "py-syntax", t: "Indentation is the syntax", why: "No braces, no semicolons, no <code>$</code>. Blocks start with <code>:</code> and are indented 4 spaces. <code>if / elif / else</code>, <code>for x in items:</code>, <code>while</code>, <code>range(5)</code>.", src: ["Python tutorial: control flow", "https://docs.python.org/3/tutorial/controlflow.html"] },
+        { id: "b-types", lesson: "py-types", t: "The core types: <code>int</code>, <code>float</code>, <code>str</code>, <code>bool</code>, <code>None</code>", why: "Strings are immutable. Build them with f-strings: <code>f\"{name} has {n} items\"</code>. <code>None</code> is PHP's <code>null</code>; <code>True</code>/<code>False</code> are capitalised.", src: ["Python tutorial: an informal introduction", "https://docs.python.org/3/tutorial/introduction.html"] },
+        { id: "b-collections", lesson: "py-collections", t: "PHP's array splits in two: <code>list</code> and <code>dict</code>", why: "<code>[1, 2, 3]</code> is a list (ordered, by position). <code>{\"a\": 1}</code> is a dict (by key). Also <code>tuple</code> (fixed, immutable) and <code>set</code> (unique). <code>d[\"missing\"]</code> raises <code>KeyError</code>; <code>d.get(\"missing\")</code> returns <code>None</code>.", src: ["Python tutorial: data structures", "https://docs.python.org/3/tutorial/datastructures.html"] },
+        { id: "b-loops", lesson: "py-loops", t: "Loops the Python way: <code>enumerate</code>, <code>zip</code>, slicing, comprehensions", why: "<code>for i, x in enumerate(xs)</code> instead of a counter. <code>xs[1:3]</code>, <code>xs[-1]</code>. <code>[u.name for u in users if u.active]</code> replaces most <code>array_map</code> / <code>array_filter</code>." },
+        { id: "b-functions", lesson: "py-functions", t: "Functions: positional, keyword, defaults, <code>*args</code>, <code>**kwargs</code>", why: "<code>def send(to, body, *, retries=3)</code>: everything after <code>*</code> must be passed by name. Call with <code>send(\"a\", \"hi\", retries=1)</code>. Functions are values; you can pass them around.", src: ["Python tutorial: defining functions", "https://docs.python.org/3/tutorial/controlflow.html#defining-functions"] },
+        { id: "b-modules", lesson: "py-modules", t: "Modules, packages and imports", why: "Every <code>.py</code> file is a module; a folder of them is a package. <code>from app.models import User</code> is <code>use App\\Models\\User</code>. <code>if __name__ == \"__main__\":</code> runs only when the file is run directly.", src: ["Python tutorial: modules", "https://docs.python.org/3/tutorial/modules.html"] },
+        { id: "b-classes", lesson: "py-classes", t: "Classes, <code>self</code>, and <code>@dataclass</code>", why: "<code>__init__</code> is the constructor; <code>self</code> is <code>$this</code>, written out as the first parameter. No <code>private</code>: a leading <code>_</code> means \"internal\". <code>@dataclass</code> writes the constructor for plain data classes.", src: ["Python tutorial: classes", "https://docs.python.org/3/tutorial/classes.html"] }
+      ]},
+      { label: "Afternoon · what trips people up", items: [
+        { id: "sat-process", lesson: "py-runtime", t: "Python servers are long-running processes", why: "Module-level variables, lists and sessions live across requests and are shared between them. PHP-FPM throws them away after each request. Many bugs come from this one difference." },
+        { id: "sat-mutable", lesson: "py-functions", t: "Mutable default arguments (<code>def f(tags=[])</code>)", why: "The default is created once, when the function is defined, and shared by every call. Fix: default to <code>None</code> and create the list inside.", src: ["Python tutorial: default argument values", "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"] },
+        { id: "sat-truthy", lesson: "py-types", t: "Truthiness: <code>\"\"</code>, <code>0</code>, <code>[]</code>, <code>{}</code>, <code>None</code> are all false", why: "<code>if not token:</code> treats an empty string and None the same. Know when you mean <code>is None</code>. Watch for checks that fail open when config is empty." },
+        { id: "sat-is", lesson: "py-types", t: "<code>is</code> vs <code>==</code>", why: "<code>is</code> checks identity. Use it only for <code>None</code>, <code>True</code>, <code>False</code>. Everything else uses <code>==</code>." },
+        { id: "sat-except", lesson: "py-errors", t: "<code>try / except / finally</code>, and why bare <code>except: pass</code> is bad", why: "Catch the specific exception you expect. A bare except swallows every error, even typos and shutdown signals, so bugs disappear silently.", src: ["Python tutorial: errors and exceptions", "https://docs.python.org/3/tutorial/errors.html"] },
+        { id: "sat-with", lesson: "py-errors", t: "<code>with</code> blocks (context managers)", why: "<code>with open(...)</code> and <code>with Session(engine) as s:</code> close the resource even when an error happens. Like a guaranteed <code>finally</code>." },
+        { id: "sat-datetime", lesson: "py-stdlib", t: "Naive vs aware <code>datetime</code>", why: "Always use <code>datetime.now(timezone.utc)</code>. Comparing a naive and an aware datetime raises <code>TypeError</code>. Naive times on a server are in whatever zone its clock uses, often hours off.", src: ["Python docs: aware and naive objects", "https://docs.python.org/3/library/datetime.html#aware-and-naive-objects"] },
+        { id: "sat-hmac", lesson: "py-stdlib", t: "<code>hmac.compare_digest</code> for secrets", why: "Same as PHP <code>hash_equals()</code>. Plain <code>==</code> can leak timing information. A unit test can't prove constant time, so rely on the standard library.", src: ["Python docs: hmac.compare_digest", "https://docs.python.org/3/library/hmac.html#hmac.compare_digest"] },
+        { id: "sat-types", lesson: "py-typing", t: "Reading type hints", why: "<code>str | None</code>, <code>list[str]</code>, <code>dict[str, int]</code>. FastAPI and Pydantic use them to parse and validate requests, so you need to read them fluently." }
+      ]}
+    ], checks: [
+      { id: "b-c1", t: "I can make a venv, install a package, and run a script that uses it" },
+      { id: "b-c2", t: "I can turn a list of user dicts into the names of the active ones with one comprehension" },
+      { id: "sat-c1", t: "I can explain why <code>def f(tags=[])</code> shares one list between calls" },
+      { id: "sat-c2", t: "I can say how <code>if not token:</code> and <code>if token is None:</code> differ for an empty string" },
+      { id: "sat-c3", t: "I can write a UTC-aware \"is this cert expired?\" check and say why naive breaks" }
+    ]},
+    { id: "sun", n: 1, title: "FastAPI from the first route, then async", groups: [
+      { label: "Morning · FastAPI from zero", items: [
+        { id: "sun-first", lesson: "fa-first", t: "First app: <code>app = FastAPI()</code> and one <code>@app.get</code> route", why: "Run it with <code>fastapi dev main.py</code> and open <code>/docs</code>: FastAPI writes the interactive API docs from your type hints. Go through the tutorial pages in order.", src: ["FastAPI tutorial: first steps", "https://fastapi.tiangolo.com/tutorial/first-steps/"] },
+        { id: "sun-params", lesson: "fa-params", t: "Path, query and body parameters", why: "Name in the path: path param. Simple type: query param. Pydantic model: body. A <code>list[str]</code> needs <code>Query()</code> or FastAPI reads it as the body.", src: ["FastAPI tutorial: query parameters", "https://fastapi.tiangolo.com/tutorial/query-params/"] },
+        { id: "sun-pydantic", lesson: "fa-pydantic", t: "Pydantic models", why: "Validate input with types and <code>Field(...)</code> limits. Use <code>response_model</code> so fields like <code>password_hash</code> never leak in responses.", src: ["FastAPI tutorial: request body", "https://fastapi.tiangolo.com/tutorial/body/"] },
+        { id: "sun-errors", lesson: "fa-errors", t: "<code>HTTPException</code> and status codes", why: "Know when to return 401, 403, 404, 409, 422 and 502. A bad body gets 422 from Pydantic before your code runs. Interviewers notice a wrong status code.", src: ["FastAPI tutorial: handling errors", "https://fastapi.tiangolo.com/tutorial/handling-errors/"] },
+        { id: "sun-depends", lesson: "fa-depends", t: "<code>Depends()</code>", why: "FastAPI's dependency injection, like Laravel/Symfony DI. Used for auth checks, the current user, and the database session.", src: ["FastAPI tutorial: dependencies", "https://fastapi.tiangolo.com/tutorial/dependencies/"] },
+        { id: "sun-build", lesson: "fa-first", t: "Build one: a small notes API", why: "<code>GET /notes</code>, <code>POST /notes</code>, <code>DELETE /notes/{id}</code>, a Pydantic model, a dict in memory, 404 for a missing id. Try every route from <code>/docs</code>. Then read <code>app.py</code> behind this page: the same pieces with SQLite." }
+      ]},
+      { label: "Afternoon · async", items: [
+        { id: "sun-loop", lesson: "py-async", t: "The event loop: one thread, switches only at <code>await</code>", why: "Read this page first. It is the clearest explanation of async in Python.", src: ["FastAPI: concurrency and async / await", "https://fastapi.tiangolo.com/async/"] },
+        { id: "sun-blocking", lesson: "py-async", t: "Blocking vs non-blocking calls", why: "Blocking: <code>time.sleep</code>, <code>requests</code>, sync database drivers. Non-blocking: <code>asyncio.sleep</code>, <code>httpx.AsyncClient</code>, async drivers. <code>await requests.get(...)</code> is a TypeError." },
+        { id: "sun-gather", lesson: "py-async", t: "<code>asyncio.gather</code> and <code>create_task</code>", why: "How to run several awaits at the same time, and why <code>time.sleep</code> inside them makes them run one after another.", src: ["Python docs: coroutines and tasks", "https://docs.python.org/3/library/asyncio-task.html"] },
+        { id: "sun-defasync", lesson: "fa-async", t: "<code>async def</code> vs <code>def</code> in FastAPI", why: "<code>async def</code> runs on the event loop. Plain <code>def</code> runs in a threadpool (about 40 threads). If a handler must call blocking code, plain <code>def</code> is the safe choice." },
+        { id: "sun-lifespan", lesson: "fa-async", t: "Lifespan: startup and shutdown", why: "Create shared things (an <code>httpx.AsyncClient</code>, the DB engine) once at startup and close them at shutdown.", src: ["FastAPI: lifespan events", "https://fastapi.tiangolo.com/advanced/events/"] }
+      ]}
+    ], checks: [
+      { id: "sun-c0", t: "I can write a FastAPI route with a path param, a query param and a body without looking it up" },
+      { id: "sun-c1", t: "I can explain why one blocking call slows down unrelated endpoints" },
+      { id: "sun-c2", t: "I can give both fixes (async client, or plain <code>def</code>) and the trade-off" },
+      { id: "sun-c3", t: "I know how FastAPI decides between path, query and body" }
+    ]},
+    { id: "mon", n: 2, title: "SQLAlchemy and pytest", groups: [
+      { label: "Morning · the database", items: [
+        { id: "mon-session", lesson: "db-sessions", t: "One session per request, via <code>Depends()</code> with <code>yield</code>", why: "Never a module-level <code>db = Session(engine)</code>: it is shared by every request and every thread.", src: ["FastAPI: dependencies with yield", "https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/"] },
+        { id: "mon-tx", lesson: "db-sessions", t: "<code>commit</code>, <code>rollback</code>, and the failed-transaction state", why: "After an error, the session must be rolled back. If not, every later use fails with \"transaction has been rolled back due to a previous exception\".", src: ["SQLAlchemy: session basics", "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"] },
+        { id: "mon-unique", lesson: "db-sessions", t: "Unique constraint + catch <code>IntegrityError</code> (return 409)", why: "\"Check if it exists, then insert\" has a race: two requests both pass the check. Let the database enforce it." },
+        { id: "mon-bind", lesson: "db-sqlalchemy", t: "Bound parameters, never f-strings in SQL", why: "<code>select(Device).where(Device.serial == serial)</code> or <code>text(\"... WHERE serial = :serial\")</code>. Same idea as PDO prepared statements.", src: ["SQLAlchemy 2.0: ORM quick start", "https://docs.sqlalchemy.org/en/20/orm/quickstart.html"] },
+        { id: "mon-nplus1", lesson: "db-sessions", t: "N+1 queries and pagination", why: "Loading related rows in a loop runs one query per row. Use <code>selectinload</code>. List endpoints need a limit." },
+        { id: "mon-tenant", lesson: "db-sessions", t: "Ownership checks (IDOR)", why: "Filter by owner or tenant inside the query, not after loading. Your PHP experience transfers directly here." }
+      ]},
+      { label: "Afternoon · tests", items: [
+        { id: "mon-pytest", lesson: "test-pytest", t: "pytest basics", why: "Plain <code>assert</code>, fixtures, <code>@pytest.mark.parametrize</code>, <code>monkeypatch</code>.", src: ["pytest: get started", "https://docs.pytest.org/en/stable/getting-started.html"] },
+        { id: "mon-client", lesson: "test-fastapi", t: "FastAPI <code>TestClient</code> and <code>dependency_overrides</code>", why: "Call endpoints in tests and swap the real database or auth for a test one.", src: ["FastAPI: testing", "https://fastapi.tiangolo.com/tutorial/testing/"] },
+        { id: "mon-determ", lesson: "test-fastapi", t: "Deterministic tests", why: "Pass <code>now</code> in as a parameter. Fake upstreams at the transport (<code>httpx.MockTransport</code>). Don't depend on the machine's timezone or the network. Say what a test can't prove." }
+      ]}
+    ], checks: [
+      { id: "mon-c1", t: "I can explain why <code>db = Session(engine)</code> at module level breaks under load" },
+      { id: "mon-c2", t: "I can write a test that registers the same serial twice and expects 409" },
+      { id: "mon-c3", t: "I can say what a given test cannot prove" }
+    ]},
+    { id: "eve", n: 2, part: "evening", title: "Practice and rest", groups: [
+      { items: [
+        { id: "eve-practice", lesson: "iv-review", t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has six to start with." },
+        { id: "eve-deepdive", t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
+        { id: "eve-rest", t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
+      ]}
+    ], checks: [] },
+    { id: "tue", n: 3, part: "morning", title: "The day itself", groups: [
+      { items: [
+        { id: "tue-tabs", t: "Open the docs tabs", why: "FastAPI, SQLAlchemy, pytest and the Python standard library. If docs are allowed, use them; looking things up well is part of the job." },
+        { id: "tue-script", lesson: "iv-review", t: "Review your code-review routine", why: "Read the whole snippet first. Name the worst bug first, with a concrete example. Give the fix, then the test, then what the test can't prove. Then rank the other issues." },
+        { id: "tue-unsure", lesson: "iv-review", t: "Know what to say when you're unsure", why: "\"In PHP I'd do X. I'd check the docs for the exact Python syntax, but the fix is Y.\" That shows judgement, which is what they score." }
+      ]}
+    ], checks: [] }
+  ];
+
+  var MAP = [
+    ["array (list-like)", "list"],
+    ["array (keyed)", "dict"],
+    ["null", "None"],
+    ["$this", "self"],
+    ["composer + vendor/", "pip / uv + .venv"],
+    ["namespace / use", "package / import"],
+    ["hash_equals()", "hmac.compare_digest()"],
+    ["PDO prepared statements", "SQLAlchemy bound parameters"],
+    ["Guzzle", "httpx (has an async client)"],
+    ["Laravel / Symfony DI", "FastAPI Depends()"],
+    ["Doctrine EntityManager", "SQLAlchemy Session"],
+    ["Form request validation", "Pydantic models"],
+    ["PHPUnit", "pytest"],
+    ["DateTimeImmutable with timezone", "datetime with tzinfo (timezone.utc)"]
+  ];
+
+  // ---- Config, injected by the server from config.json (see
+  // config.example.json). Opened as a plain file, it's null: all defaults.
+  var CONFIG = /*STUDY_CONFIG*/null || {};
+  var TARGET = CONFIG.target ? { label: CONFIG.target.label, at: new Date(CONFIG.target.at) } : null;
+  var START = CONFIG.start ? new Date(CONFIG.start + "T12:00:00") : null;
+  var TITLE = CONFIG.title || "Python and FastAPI, from the basics";
+  function planDate(n) { var t = new Date(START); t.setDate(t.getDate() + n); return t; }
+  function dayLabel(d) {
+    var base = START ? planDate(d.n).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "Day " + (d.n + 1);
+    return base + (d.part ? ", " + d.part : "");
+  }
+  function shortDay(id) {
+    var d = PLAN.filter(function (x) { return x.id === id; })[0]; if (!d) return "";
+    return (START ? planDate(d.n).toLocaleDateString("en-GB", { weekday: "short" }) : "Day " + (d.n + 1)) + (d.part === "evening" ? " eve" : "");
+  }
+  function targetText() {
+    return TARGET.at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + " " +
+      TARGET.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+  // Per-item text overrides, e.g. your own project for the deep-dive.
+  PLAN.forEach(function (d) {
+    dayItems(d).forEach(function (it) {
+      var o = (CONFIG.overrides || {})[it.id];
+      if (o) { if (o.t) it.t = o.t; if (o.why) it.why = o.why; }
+    });
+  });
+
+  // The syllabus: every lesson, in reading order. Each lesson's text lives in
+  // /lessons/<id>.html; "day" says where the 3-day plan uses it (null: extra).
+  var PARTS = [
+    { n: 1, title: "Python", blurb: "The language, from running a script to async.", lessons: [
+      { id: "py-setup", title: "Setting up: Python, virtualenvs, the REPL", min: 15, day: "sat" },
+      { id: "py-syntax", title: "Syntax and control flow", min: 15, day: "sat" },
+      { id: "py-types", title: "Numbers, strings, booleans and None", min: 20, day: "sat" },
+      { id: "py-collections", title: "Lists, tuples, dicts and sets", min: 25, day: "sat" },
+      { id: "py-loops", title: "Iterating well: comprehensions, enumerate, zip", min: 20, day: "sat" },
+      { id: "py-functions", title: "Functions, defaults and decorators", min: 25, day: "sat" },
+      { id: "py-modules", title: "Modules, packages and imports", min: 15, day: "sat" },
+      { id: "py-errors", title: "Exceptions and context managers", min: 20, day: "sat" },
+      { id: "py-classes", title: "Classes and dataclasses", min: 25, day: "sat" },
+      { id: "py-typing", title: "Type hints", min: 20, day: "sat" },
+      { id: "py-iter", title: "Iterators and generators", min: 15, day: null },
+      { id: "py-stdlib", title: "The standard library a backend uses", min: 25, day: "sat" },
+      { id: "py-runtime", title: "Servers are long-running processes", min: 10, day: "sat" },
+      { id: "py-async", title: "Async and the event loop", min: 30, day: "sun" }
+    ]},
+    { n: 2, title: "FastAPI", blurb: "Building an API, from the first route to production.", lessons: [
+      { id: "fa-first", title: "Your first FastAPI app", min: 15, day: "sun" },
+      { id: "fa-params", title: "Path, query, body and headers", min: 20, day: "sun" },
+      { id: "fa-pydantic", title: "Pydantic models and response models", min: 25, day: "sun" },
+      { id: "fa-errors", title: "Status codes and errors", min: 15, day: "sun" },
+      { id: "fa-depends", title: "Dependencies", min: 20, day: "sun" },
+      { id: "fa-async", title: "def vs async def, lifespan, background work", min: 20, day: "sun" },
+      { id: "fa-security", title: "Authentication and security", min: 25, day: null },
+      { id: "fa-structure", title: "Structure, settings and deployment", min: 15, day: null }
+    ]},
+    { n: 3, title: "Data and tests", blurb: "SQLAlchemy, transactions, pytest.", lessons: [
+      { id: "db-sqlalchemy", title: "SQLAlchemy 2.0 basics", min: 25, day: "mon" },
+      { id: "db-sessions", title: "Sessions, transactions and integrity", min: 20, day: "mon" },
+      { id: "test-pytest", title: "pytest", min: 20, day: "mon" },
+      { id: "test-fastapi", title: "Testing FastAPI apps", min: 20, day: "mon" }
+    ]},
+    { n: 4, title: "The interview", blurb: "Putting it together for a live code review.", lessons: [
+      { id: "iv-review", title: "The code-review routine", min: 15, day: "eve" }
+    ]}
+  ];
+  var LESSONS = [], BY_ID = {};
+  PARTS.forEach(function (p) { p.lessons.forEach(function (l) { l.part = p; LESSONS.push(l); BY_ID[l.id] = l; }); });
+
+  // ---- The game. Every number here is derived from what's ticked and
+  // scored, so XP can't drift from reality: untick something and it goes back.
+  var XP = { tick: 10, read: 25, correct: 15, perfect: 20, cleared: 10, finding: 10, worst: 20 };
+  var GOAL = 300;                      // XP a day: about a third of the plan
+  var RANKS = [
+    [0, "Novice"], [150, "Scripter"], [400, "Pythonista"], [800, "Router"],
+    [1300, "Async adept"], [1900, "Reviewer"], [2500, "Interview-ready"]
+  ];
+  var DRILL_ID = /^drill-([a-z0-9]+)-(\d+)$/;
+  var BADGES = [
+    { id: "first-tick", t: "First tick", d: "Tick a plan item", ok: function (s) { return s.planDone >= 1; } },
+    { id: "first-read", t: "First lesson", d: "Read a lesson", ok: function (s) { return s.read >= 1; } },
+    { id: "first-clean", t: "Clean check", d: "Score full marks on a check", ok: function (s) { return s.perfect >= 1; } },
+    { id: "five-clean", t: "Five clean", d: "Full marks on five checks", ok: function (s) { return s.perfect >= 5; } },
+    { id: "second-chance", t: "Second chance", d: "Get a missed question right on review", ok: function (s) { return s.cleared >= 1; } },
+    { id: "first-drill", t: "First drill", d: "Find a bug in a drill", ok: function (s) { return s.drillsTried >= 1; } },
+    { id: "worst-first", t: "Worst first", d: "Find the worst bug in three drills", ok: function (s) { return s.worst >= 3; } },
+    { id: "goal", t: "Daily goal", d: "Earn " + GOAL + " XP in one day", ok: function (s) { return s.bestDay >= GOAL; } },
+    { id: "streak-3", t: "Three days running", d: "Earn XP three days in a row", ok: function (s) { return s.longest >= 3; } },
+    { id: "day-sat", t: "Day 1 done", d: "Every day-1 item ticked", ok: function (s) { return s.days.sat; } },
+    { id: "day-sun", t: "Day 2 done", d: "Every day-2 item ticked", ok: function (s) { return s.days.sun; } },
+    { id: "day-mon", t: "Day 3 done", d: "Every day-3 item ticked", ok: function (s) { return s.days.mon; } },
+    { id: "part-1", t: "Python, read", d: "All 14 Python lessons", ok: function (s) { return s.parts[1]; } },
+    { id: "part-2", t: "FastAPI, read", d: "All 8 FastAPI lessons", ok: function (s) { return s.parts[2]; } },
+    { id: "all-checks", t: "Every check passed", d: "Pass all " + LESSONS.length + " checks", ok: function (s) { return s.passed >= LESSONS.length; } },
+    { id: "ready", t: "Interview-ready", d: "Reach the top rank", ok: function (s) { return s.xp >= RANKS[RANKS.length - 1][0]; } }
+  ];
+
+  var LS = "study-plan";
+  var state = { done: {}, quiz: {}, log: {}, review: {}, cleared: 0 };
+  var dirty = false, seq = 0, timer = null, inflight = false;
+  var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
+  var drillTimer = { id: null, end: 0, handle: null };
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function codeish(s) { return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>"); }
+  function dayItems(d) { var all = []; d.groups.forEach(function (g) { all = all.concat(g.items); }); return all.concat(d.checks); }
+  function allItems() { var a = []; PLAN.forEach(function (d) { a = a.concat(dayItems(d)); }); return a; }
+  function allIds() { return allItems().map(function (i) { return i.id; }); }
+  function hhmm(d) { return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+  function readId(id) { return "read-" + id; }
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function num(n) { return n.toLocaleString("en-GB"); }
+  function dayKey(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  function today() { return dayKey(new Date()); }
+  function tomorrow() { var d = new Date(); d.setDate(d.getDate() + 1); return dayKey(d); }
+  function passed(lessonId) { var q = state.quiz[lessonId]; return !!q && q.best >= q.of - 1; }
+  function dueReviews() { var t = today(); return Object.keys(state.review).filter(function (k) { return state.review[k] <= t; }).sort(); }
+
+  // ---- Score: one pass over the state gives everything the UI shows. ----
+  function score() {
+    var s = { planDone: 0, read: 0, correct: 0, perfect: 0, passed: 0, found: 0, worst: 0, days: {}, parts: {} };
+    allIds().forEach(function (id) { if (state.done[id]) s.planDone++; });
+    LESSONS.forEach(function (l) {
+      if (state.done[readId(l.id)]) s.read++;
+      var q = state.quiz[l.id];
+      if (q) { s.correct += q.best; if (q.best === q.of) s.perfect++; if (q.best >= q.of - 1) s.passed++; }
+    });
+    var tried = {};
+    Object.keys(state.done).forEach(function (k) {
+      var m = DRILL_ID.exec(k); if (!m) return;
+      s.found++; tried[m[1]] = true; if (m[2] === "0") s.worst++;
+    });
+    s.drillsTried = Object.keys(tried).length;
+    s.cleared = state.cleared || 0;
+    s.xp = s.planDone * XP.tick + s.read * XP.read + s.correct * XP.correct + s.perfect * XP.perfect +
+      s.cleared * XP.cleared + s.found * XP.finding + s.worst * XP.worst;
+    s.max = allIds().length * XP.tick + LESSONS.length * (XP.read + 3 * XP.correct + XP.perfect) +
+      (drills ? drills.reduce(function (a, d) { return a + d.findings.length * XP.finding + XP.worst; }, 0) : 0);
+    PLAN.forEach(function (d) { s.days[d.id] = dayItems(d).every(function (i) { return state.done[i.id]; }); });
+    PARTS.forEach(function (p) { s.parts[p.n] = p.lessons.every(function (l) { return state.done[readId(l.id)]; }); });
+    var r = 0; RANKS.forEach(function (x, i) { if (s.xp >= x[0]) r = i; });
+    s.rank = r;
+    s.today = Math.max(0, state.log[today()] || 0);
+    // Streak: consecutive days with XP, ending today, or yesterday if today
+    // hasn't started yet (a streak isn't lost until the day is over).
+    var d = new Date(), streak = 0;
+    if (!(state.log[dayKey(d)] > 0)) d.setDate(d.getDate() - 1);
+    while (state.log[dayKey(d)] > 0) { streak++; d.setDate(d.getDate() - 1); }
+    s.streak = streak;
+    var days = Object.keys(state.log).filter(function (k) { return state.log[k] > 0; }).sort(), longest = 0, run = 0, prev = null;
+    days.forEach(function (k) {
+      var t = new Date(k + "T12:00:00");
+      run = prev && Math.round((t - prev) / 86400000) === 1 ? run + 1 : 1;
+      longest = Math.max(longest, run); prev = t;
+    });
+    s.longest = longest;
+    s.bestDay = Math.max.apply(null, Object.keys(state.log).map(function (k) { return state.log[k]; }).concat([0]));
+    s.due = dueReviews().length;
+    s.pending = Object.keys(state.review).length;
+    s.badges = BADGES.filter(function (b) { return b.ok(s); }).map(function (b) { return b.id; });
+    return s;
+  }
+
+  // Wrap every change: measure before and after, log the XP difference to
+  // today, and announce what moved. Unticking takes XP back, honestly.
+  function change(mutate, why) {
+    var before = score();
+    mutate();
+    var after = score(), delta = after.xp - before.xp;
+    if (delta) state.log[today()] = (state.log[today()] || 0) + delta;
+    var final = delta ? score() : after;      // the log feeds goal/streak badges
+    if (delta > 0 && why) toast("+" + delta + " XP", why);
+    if (final.rank > before.rank) toast("Rank up", RANKS[final.rank][1], "rank");
+    final.badges.forEach(function (id) {
+      if (before.badges.indexOf(id) < 0) { var b = BADGES.filter(function (x) { return x.id === id; })[0]; toast("Badge", b.t, "badge"); }
+    });
+    if (before.today < GOAL && final.today >= GOAL) toast("Daily goal met", num(final.today) + " XP today", "rank");
+    updateCounts();
+    queueSave();
+  }
+
+  // ---- Toasts: a bracketed panel at the bottom, one at a time. It blinks
+  // in with steps(), the mechanical way, and leaves after 2.4 s. ----
+  var toasts = [], toastBusy = false;
+  function toast(head, body, kind) { toasts.push([head, body, kind || ""]); if (!toastBusy) nextToast(); }
+  function nextToast() {
+    var t = toasts.shift(), el = document.getElementById("toast");
+    if (!t || !el) { toastBusy = false; return; }
+    toastBusy = true;
+    el.dataset.kind = t[2];
+    el.innerHTML = '<span class="label">' + esc(t[0]) + "</span><span>" + esc(t[1]) + "</span>";
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    setTimeout(function () { el.classList.remove("show"); setTimeout(nextToast, 200); }, 2400);
+  }
+
+  // ---- Local copy: always written first, so progress survives a dead server. ----
+  function readLocal() {
+    try { return JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) { return null; }
+  }
+  function writeLocal() {
+    try {
+      localStorage.setItem(LS, JSON.stringify({ done: state.done, quiz: state.quiz, log: state.log, review: state.review, cleared: state.cleared, dirty: dirty }));
+      return true;
+    } catch (e) { return false; }
+  }
+  function adopt(v) {
+    state.done = v.done || {}; state.quiz = v.quiz || {}; state.log = v.log || {};
+    state.review = v.review || {}; state.cleared = v.cleared || 0;
+  }
+  function payload() { return { done: state.done, quiz: state.quiz, log: state.log, review: state.review, cleared: state.cleared }; }
+
+  // ---- Render: a fixed shell (masthead, instrument strip, tabs), then one view. ----
+  function itemHtml(it, isCheck, noLink) {
+    var on = !!state.done[it.id];
+    var src = it.src ? '<a href="' + esc(it.src[1]) + '" target="_blank" rel="noopener">' + esc(it.src[0]) + "</a>" : "";
+    var les = it.lesson && !noLink && BY_ID[it.lesson] ? '<a class="read-link" href="#/lesson/' + it.lesson + '">Read: ' + esc(BY_ID[it.lesson].title) + " ›</a>" : "";
+    return '<li class="item' + (isCheck ? " check" : "") + '" data-item="' + it.id + '"><label>' +
+      '<input type="checkbox" data-id="' + it.id + '"' + (on ? " checked" : "") + '>' +
+      '<span class="copy"><span class="t">' + it.t + "</span>" +
+      (it.why ? '<span class="why">' + it.why + "</span>" : "") +
+      (les || src ? '<span class="src">' + les + src + "</span>" : "") + "</span></label></li>";
+  }
+
+  // Today's goal as a dial: 30 index ticks, lit as XP comes in.
+  function dialSvg() {
+    var h = '<svg class="dial" viewBox="0 0 48 48" aria-hidden="true">';
+    for (var i = 0; i < 30; i++) {
+      var a = (i / 30) * Math.PI * 2 - Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
+      h += '<line x1="' + (24 + 17 * c).toFixed(2) + '" y1="' + (24 + 17 * s).toFixed(2) + '" x2="' + (24 + 22 * c).toFixed(2) + '" y2="' + (24 + 22 * s).toFixed(2) + '"/>';
+    }
+    return h + "</svg>";
+  }
+
+  function renderShell() {
+    document.title = TITLE;
+    var h = "";
+    h += '<header class="mast"><span class="wordmark">Study plan</span>' +
+      "<h1>" + esc(TITLE) + "</h1>" +
+      '<p class="lede">Python and FastAPI for PHP developers, in three days.' +
+      (TARGET ? " Counting down to " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") +
+      " Tick the plan, read the lessons, pass each lesson's check, and practise on the drills. Everything earns XP.</p></header>";
+    h += '<div class="strip instrument" aria-live="polite"><div class="strip-row">' +
+      '<div><span class="label">Rank</span><span class="readout" id="rank"></span><span class="stamp" id="xp"></span></div>' +
+      '<div class="today"><div><span class="label">Today</span><span class="readout" id="today"></span><span class="stamp" id="goal"></span></div>' + dialSvg() + "</div>" +
+      '<div><span class="label">Streak</span><span class="readout" id="streak"></span><span class="stamp" id="best"></span></div>' +
+      (TARGET ? '<div class="right"><span class="label">To ' + esc(TARGET.label.toLowerCase()) + '</span><span class="readout" id="countdown"></span><span class="stamp">' + esc(targetText()) + "</span></div>" : "") +
+      "</div>" +
+      '<div class="ticks" id="ticks" aria-hidden="true"></div>' +
+      '<div class="status" id="status" data-state="syncing"><span class="dot"></span><span class="stamp" id="status-text">Connecting</span></div></div>';
+    h += '<nav class="tabs" aria-label="Views">' +
+      '<a href="#/plan" data-tab="plan">Plan <span id="tab-plan"></span></a>' +
+      '<a href="#/syllabus" data-tab="syllabus">Syllabus <span id="tab-syl"></span></a>' +
+      '<a href="#/drills" data-tab="drills">Drills <span id="tab-drl"></span></a>' +
+      '<a href="#/record" data-tab="record">Record <span id="tab-rec"></span></a></nav>';
+    h += '<div id="view"></div>';
+    document.getElementById("root").innerHTML = '<main class="page">' + h + '</main><div class="toast instrument" id="toast" role="status" aria-live="polite"></div>';
+    var ticks = "";
+    for (var i = 0; i < 20; i++) ticks += "<i></i>";
+    document.getElementById("ticks").innerHTML = ticks;
+    updateCountdown();
+  }
+
+  // The single next thing to do. Due reviews first (they're short and they
+  // fix what you got wrong), then in plan order: read the lesson behind the
+  // next unticked item, pass its check, tick the item.
+  function nextAction() {
+    var due = dueReviews().length;
+    if (due) return { kind: "review", n: due };
+    var items = allItems();
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (state.done[it.id]) continue;
+      var l = it.lesson && BY_ID[it.lesson];
+      if (l && !state.done[readId(l.id)]) return { kind: "read", lesson: l, item: it };
+      if (l && !passed(l.id)) return { kind: "check", lesson: l, item: it };
+      return { kind: "tick", item: it };
+    }
+    var extra = LESSONS.filter(function (l) { return !state.done[readId(l.id)] || !passed(l.id); })[0];
+    if (extra) return { kind: state.done[readId(extra.id)] ? "check" : "read", lesson: extra };
+    return null;
+  }
+
+  function nextHtml() {
+    var a = nextAction();
+    if (!a) return '<section class="callout next"><span class="label">Next up</span><h2>Everything done</h2><p class="why">Plan ticked, every lesson read, every check passed. Try the drills again against the clock, then rest.</p></section>';
+    var title, meta, href, btn;
+    if (a.kind === "review") {
+      title = "Review " + a.n + " missed question" + (a.n === 1 ? "" : "s"); href = "#/review"; btn = "Review now";
+      meta = "+" + XP.cleared + " XP each one you get right";
+    } else if (a.kind === "read") {
+      title = "Read: " + esc(a.lesson.title); href = "#/lesson/" + a.lesson.id; btn = "Start reading";
+      meta = "Lesson " + (LESSONS.indexOf(a.lesson) + 1) + " · " + a.lesson.min + " min · +" + XP.read + " XP, then a check worth up to +" + (3 * XP.correct + XP.perfect);
+    } else if (a.kind === "check") {
+      title = "Check: " + esc(a.lesson.title); href = "#/lesson/" + a.lesson.id + "/check"; btn = "Take the check";
+      meta = "3 questions · up to +" + (3 * XP.correct + XP.perfect) + " XP";
+    } else {
+      title = a.item.t; href = "#/plan/" + a.item.id; btn = "Go to it";
+      meta = "Plan item · +" + XP.tick + " XP";
+    }
+    return '<section class="callout next"><span class="label">Next up</span><h2>' + title + '</h2><span class="stamp">' + meta + '</span><a class="btn btn-primary" href="' + href + '">' + btn + " ›</a></section>";
+  }
+
+  function planHtml() {
+    var h = nextHtml();
+    h += '<section class="callout"><span class="label">The one big mental shift</span>' +
+      "<p>PHP starts fresh for every request and throws everything away at the end. A Python server is one long-running process that handles thousands of requests. Anything at module level (a variable, a list, a database session) lives across requests and is shared between them.</p>" +
+      "<p>When you review a snippet, ask: what here is shared that PHP would have thrown away? And what here waits without <code>await</code>?</p></section>";
+    h += '<section class="instrument"><div class="section-head"><span class="label">Translation</span><h2>Your PHP, in Python terms</h2></div><div class="table-wrap"><table><thead><tr><th class="label">PHP</th><th class="label">Python</th></tr></thead><tbody>';
+    MAP.forEach(function (r) { h += "<tr><td><code>" + esc(r[0]) + "</code></td><td><code>" + esc(r[1]) + "</code></td></tr>"; });
+    h += "</tbody></table></div></section>";
+    PLAN.forEach(function (d) {
+      var title = d.id === "tue" && TARGET ? "The day itself: " + TARGET.label.toLowerCase() + " at " + TARGET.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : d.title;
+      h += '<section class="instrument" id="' + d.id + '"><div class="day-head"><div><span class="label">' + esc(dayLabel(d)) + "</span><h2>" + esc(title) + '</h2></div><span class="stamp count" id="count-' + d.id + '"></span></div>';
+      d.groups.forEach(function (g) {
+        if (g.label) h += '<div class="label group-label">' + esc(g.label) + "</div>";
+        h += "<ul>" + g.items.map(function (i) { return itemHtml(i, false); }).join("") + "</ul>";
+      });
+      if (d.checks.length) {
+        h += '<div class="label group-label check-label">Before you move on</div><ul>' + d.checks.map(function (i) { return itemHtml(i, true); }).join("") + "</ul>";
+      }
+      h += "</section>";
+    });
+    h += '<p class="stamp foot">When you finish a day, ask an AI assistant or a friend for concept-first questions on those topics, and answer out loud.</p>';
+    return h;
+  }
+
+  function syllabusHtml() {
+    var total = LESSONS.reduce(function (a, l) { return a + l.min; }, 0);
+    var h = '<section class="section-head syl-head"><span class="label">Syllabus · ' + LESSONS.length + " lessons · about " + Math.round(total / 60 * 2) / 2 + " h of reading</span>" +
+      '<p class="lede">Read in order: each lesson assumes the ones before it. Every lesson ends with a three-question check and links to the official docs. Lessons marked <span class="tag-extra">Extra</span> aren\'t in the 3-day plan.</p></section>';
+    PARTS.forEach(function (p) {
+      h += '<section class="instrument"><div class="day-head"><div><span class="label">Part ' + p.n + "</span><h2>" + esc(p.title) + '</h2><p class="why">' + esc(p.blurb) + '</p></div><span class="stamp count" id="pcount-' + p.n + '"></span></div><ol class="lessons">';
+      p.lessons.forEach(function (l) {
+        var i = LESSONS.indexOf(l) + 1;
+        h += '<li><a href="#/lesson/' + l.id + '" data-lesson="' + l.id + '"><span class="mark" aria-hidden="true"></span>' +
+          '<span class="num stamp">' + pad2(i) + '</span><span class="ltitle">' + esc(l.title) + "</span>" +
+          '<span class="stamp meta"><span class="qscore" data-q="' + l.id + '"></span>' + l.min + " min · " + (l.day ? esc(shortDay(l.day)) : '<span class="tag-extra">Extra</span>') + "</span></a></li>";
+      });
+      h += "</ol></section>";
+    });
+    return h;
+  }
+
+  function recordHtml() {
+    var s = score(), r = s.rank, nextR = RANKS[r + 1];
+    var h = '<section class="instrument"><div class="section-head"><span class="label">Rank ' + (r + 1) + " of " + RANKS.length + "</span><h2 class=\"rank-name\">" + esc(RANKS[r][1]) + "</h2>" +
+      '<span class="stamp">' + num(s.xp) + " XP" + (nextR ? " · " + num(nextR[0] - s.xp) + " to " + esc(nextR[1]) : " · top rank") + " · " + num(s.max) + " XP possible</span></div>" +
+      '<ol class="ladder">' + RANKS.map(function (x, i) {
+        return '<li data-state="' + (i < r ? "past" : i === r ? "now" : "ahead") + '"><span class="mark"></span><span class="ltitle">' + esc(x[1]) + '</span><span class="stamp">' + num(x[0]) + " XP</span></li>";
+      }).join("") + "</ol></section>";
+    var stats = [
+      ["Plan items", s.planDone + " / " + allIds().length],
+      ["Lessons read", s.read + " / " + LESSONS.length],
+      ["Checks passed", s.passed + " / " + LESSONS.length],
+      ["Full marks", String(s.perfect)],
+      ["Bugs found", String(s.found)],
+      ["To review", s.pending ? s.due + " due · " + s.pending : "0"],
+      ["Streak", s.streak + " d"],
+      ["Best day", num(s.bestDay) + " XP"]
+    ];
+    h += '<section class="instrument"><div class="section-head"><span class="label">Stats</span></div><dl class="stats">' +
+      stats.map(function (x) { return '<div><dt class="label">' + x[0] + '</dt><dd class="readout">' + x[1] + "</dd></div>"; }).join("") + "</dl>" +
+      (s.due ? '<a class="btn" href="#/review">Review ' + s.due + " due ›</a>" : "") + "</section>";
+    h += '<section class="instrument"><div class="section-head"><span class="label">Badges · ' + s.badges.length + " of " + BADGES.length + '</span></div><ul class="badges">' +
+      BADGES.map(function (b) {
+        var on = s.badges.indexOf(b.id) >= 0;
+        return '<li data-on="' + on + '"><span class="mark" aria-hidden="true"></span><span class="ltitle">' + esc(b.t) + '</span><span class="why">' + esc(b.d) + "</span>" + (on ? "" : '<span class="visually-hidden">(locked)</span>') + "</li>";
+      }).join("") + "</ul></section>";
+    var rule = function (a, b) { return "<li><span>" + a + '</span><span class="stamp">' + b + "</span></li>"; };
+    h += '<section class="instrument"><div class="section-head"><span class="label">How XP works</span></div><ul class="rules">' +
+      rule("Tick a plan item", "+" + XP.tick) + rule("Read a lesson", "+" + XP.read) +
+      rule("Each correct answer in a check (best attempt counts)", "+" + XP.correct) + rule("Full marks on a check", "+" + XP.perfect) +
+      rule("A missed question, answered right on review", "+" + XP.cleared) +
+      rule("Each bug you found in a drill", "+" + XP.finding) + rule("Finding a drill's worst bug", "+" + XP.worst) +
+      rule("Unticking takes the XP back", "−") + "</ul></section>";
+    return h;
+  }
+
+  function lessonHtml(l) {
+    var i = LESSONS.indexOf(l), prev = LESSONS[i - 1], next = LESSONS[i + 1];
+    var covers = [];
+    PLAN.forEach(function (d) { dayItems(d).forEach(function (it) { if (it.lesson === l.id) covers.push(it); }); });
+    var h = '<a class="back" href="#/syllabus">‹ Syllabus</a>';
+    h += '<article class="instrument lesson"><header class="lesson-head"><span class="label">Part ' + l.part.n + " · " + esc(l.part.title) + " · Lesson " + (i + 1) + " of " + LESSONS.length + "</span>" +
+      "<h2>" + esc(l.title) + '</h2><span class="stamp">' + l.min + " min reading · " + (l.day ? "Plan: " + esc(shortDay(l.day)) : "Extra, not in the plan") + " · +" + XP.read + " XP</span></header>" +
+      '<div class="reading" id="reading" aria-busy="true"><div class="placeholder"><i></i><i></i><i></i><i class="short"></i></div></div>' +
+      '<ul class="read-done">' + itemHtml({ id: readId(l.id), t: "I've read this" }, false, true) + "</ul></article>";
+    h += '<section class="instrument quiz" id="check"><div class="day-head"><div><span class="label">Check · 3 questions</span><h2>What stuck?</h2></div><span class="stamp" id="qbest"></span></div><div id="quiz"></div></section>';
+    if (covers.length) {
+      h += '<section class="instrument"><div class="section-head"><span class="label">In the plan</span><h2>Items this lesson covers</h2></div><ul>' +
+        covers.map(function (it) { return itemHtml(it, false, true); }).join("") + "</ul></section>";
+    }
+    h += '<nav class="pager">' +
+      (prev ? '<a href="#/lesson/' + prev.id + '"><span class="stamp">‹ Previous</span><span>' + esc(prev.title) + "</span></a>" : "<span></span>") +
+      (next ? '<a class="next" href="#/lesson/' + next.id + '"><span class="stamp">Next ›</span><span>' + esc(next.title) + "</span></a>" : "<span></span>") + "</nav>";
+    return h;
+  }
+
+  function loadLesson(l) {
+    var box = document.getElementById("reading");
+    function show(html) { box.innerHTML = html; box.removeAttribute("aria-busy"); }
+    if (lessonCache[l.id]) { show(lessonCache[l.id]); return; }
+    fetch("/lessons/" + l.id + ".html").then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function (html) {
+      lessonCache[l.id] = html;
+      if (route === "lesson/" + l.id) show(html);
+    }).catch(function () {
+      if (route !== "lesson/" + l.id) return;
+      show('<div class="empty"><span class="label">Reading unavailable</span><p>The lesson text comes from the server, which can\'t be reached, and this lesson isn\'t in the offline cache yet.</p><button class="btn" type="button" id="retry-lesson">Try again</button></div>');
+      document.getElementById("retry-lesson").onclick = function () { box.setAttribute("aria-busy", "true"); loadLesson(l); };
+    });
+  }
+
+  // ---- Questions: shared by lesson checks and the review list ----
+  // Options are shuffled with a seed from the lesson and question, so the
+  // order is stable between visits but the right answer isn't always B.
+  function shuffled(n, seed) {
+    var h = 2166136261; for (var i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    var idx = []; for (var j = 0; j < n; j++) idx.push(j);
+    for (var k = n - 1; k > 0; k--) { h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; var r = h % (k + 1); var t = idx[k]; idx[k] = idx[r]; idx[r] = t; }
+    return idx;
+  }
+  function questionHtml(q, key, picked, head) {
+    var order = shuffled(q[1].length, key.replace(".", ":")), h = "";
+    h += '<fieldset class="q" data-done="' + (picked != null) + '"><legend>' + head + " " + codeish(q[0]) + '</legend><div class="opts">';
+    order.forEach(function (oi) {
+      var st = picked == null ? "" : oi === q[2] ? "right" : oi === picked ? "wrong" : "dim";
+      h += '<button type="button" class="opt" data-key="' + key + '" data-o="' + oi + '"' + (st ? ' data-state="' + st + '"' : "") + (picked != null ? " disabled" : "") + ">" + codeish(q[1][oi]) + "</button>";
+    });
+    h += "</div>";
+    if (picked != null) h += '<p class="verdict" data-ok="' + (picked === q[2]) + '"><span class="label">' + (picked === q[2] ? "Right" : "Not quite") + "</span> " + codeish(q[3]) + "</p>";
+    return h + "</fieldset>";
+  }
+
+  function loadJson(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }); }
+  function loadQuizzes() { return quizzes ? Promise.resolve(quizzes) : loadJson("/quizzes.json").then(function (q) { return (quizzes = q); }); }
+  function loadDrills() { return drills ? Promise.resolve(drills) : loadJson("/drills.json").then(function (d) { drills = d; updateCounts(); return d; }); }
+
+  function renderQuiz(l) {
+    var box = document.getElementById("quiz"); if (!box) return;
+    var best = state.quiz[l.id];
+    document.getElementById("qbest").textContent = best ? "Best " + best.best + " / " + best.of : "Not taken";
+    loadQuizzes().then(function (all) {
+      if (route !== "lesson/" + l.id || !document.getElementById("quiz")) return;
+      var qs = all[l.id] || [], run = quizRuns[l.id] || (quizRuns[l.id] = qs.map(function () { return null; }));
+      var h = qs.map(function (q, qi) { return questionHtml(q, l.id + "." + qi, run[qi], '<span class="stamp">' + (qi + 1) + " / " + qs.length + "</span>"); }).join("");
+      if (qs.length && run.every(function (x) { return x !== null; })) {
+        var got = run.filter(function (x, i) { return x === qs[i][2]; }).length;
+        h += '<div class="result"><span class="readout">' + got + " <small>/ " + qs.length + "</small></span><span class=\"stamp\">" +
+          (got === qs.length ? "Full marks" : got >= qs.length - 1 ? "Passed. Full marks earns +" + XP.perfect : "Not passed yet: " + (qs.length - 1) + " needed. Reread the traps and try again") +
+          (got < qs.length ? " · misses come back for review tomorrow" : "") +
+          '</span><button type="button" class="btn" id="quiz-retry">Try again</button></div>';
+      }
+      box.innerHTML = h;
+      box.onclick = function (ev) {
+        var b = ev.target.closest(".opt"); if (b) answer(l, qs, +b.dataset.key.split(".")[1], +b.dataset.o);
+        if (ev.target.id === "quiz-retry") { quizRuns[l.id] = null; renderQuiz(l); document.getElementById("check").scrollIntoView({ block: "start" }); }
+      };
+    }).catch(function () {
+      if (route === "lesson/" + l.id) box.innerHTML = '<div class="empty"><span class="label">Check unavailable</span><p>The questions come from the server, which can\'t be reached.</p></div>';
+    });
+  }
+
+  function answer(l, qs, qi, oi) {
+    var run = quizRuns[l.id]; if (run[qi] !== null) return;
+    run[qi] = oi;
+    // A miss goes on the review list for tomorrow: spaced, not crammed.
+    if (oi !== qs[qi][2]) change(function () { state.review[l.id + "." + qi] = tomorrow(); });
+    if (run.every(function (x) { return x !== null; })) {
+      var got = run.filter(function (x, i) { return x === qs[i][2]; }).length, prev = state.quiz[l.id];
+      if (!prev || got > prev.best) {
+        change(function () {
+          state.quiz[l.id] = { best: got, of: qs.length };
+          // Passing a check is proof of reading, so it ticks "read" too.
+          if (got >= qs.length - 1) state.done[readId(l.id)] = true;
+        }, got === qs.length ? "Full marks · " + l.title : "Check · " + l.title);
+        var cb = document.querySelector('input[data-id="' + readId(l.id) + '"]'); if (cb) cb.checked = !!state.done[readId(l.id)];
+      }
+    }
+    renderQuiz(l);
+  }
+
+  // ---- Review: yesterday's misses. Right clears it; wrong brings it back
+  // tomorrow. ----
+  function reviewHtml() {
+    return '<a class="back" href="#/plan">‹ Plan</a><section class="instrument quiz"><div class="day-head"><div><span class="label">Review</span><h2>Questions you missed</h2></div><span class="stamp" id="rv-count"></span></div><div id="review"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div></section>';
+  }
+  function renderReview() {
+    var box = document.getElementById("review"); if (!box) return;
+    loadQuizzes().then(function (all) {
+      if (route !== "review") return;
+      // Keep questions answered this visit on screen, with their verdicts.
+      var keys = dueReviews().concat(Object.keys(reviewRun).filter(function (k) { return dueReviews().indexOf(k) < 0; })).sort();
+      keys = keys.filter(function (k) { var p = k.split("."); return all[p[0]] && all[p[0]][+p[1]]; });
+      var left = dueReviews().length, later = Object.keys(state.review).length - left;
+      document.getElementById("rv-count").textContent = left + " due" + (later ? " · " + later + " later" : "");
+      if (!keys.length) {
+        box.innerHTML = '<div class="empty"><span class="label">Nothing due</span><p>' + (later ? later + " question" + (later === 1 ? " comes" : "s come") + " back tomorrow." : "Questions you miss in a check land here the next day.") + '</p><a class="btn" href="#/plan">Back to the plan</a></div>';
+        return;
+      }
+      box.innerHTML = keys.map(function (k) {
+        var p = k.split("."), l = BY_ID[p[0]];
+        return questionHtml(all[p[0]][+p[1]], k, reviewRun[k], '<span class="stamp">' + esc(l ? l.title : p[0]) + "</span>");
+      }).join("");
+      box.onclick = function (ev) {
+        var b = ev.target.closest(".opt"); if (!b) return;
+        var k = b.dataset.key, p = k.split("."), q = all[p[0]][+p[1]], oi = +b.dataset.o;
+        if (reviewRun[k] != null) return;
+        reviewRun[k] = oi;
+        if (oi === q[2]) change(function () { delete state.review[k]; state.cleared = (state.cleared || 0) + 1; }, "Cleared · " + (BY_ID[p[0]] || {}).title);
+        else change(function () { state.review[k] = tomorrow(); });
+        renderReview();
+      };
+    }).catch(function () {
+      box.innerHTML = '<div class="empty"><span class="label">Review unavailable</span><p>The questions come from the server, which can\'t be reached.</p></div>';
+    });
+  }
+
+  // ---- Drills: timed code reviews with a ranked answer key ----
+  function drillsHtml() {
+    return '<section class="section-head syl-head"><span class="label">Drills · timed code reviews</span>' +
+      '<p class="lede">Each drill is a short snippet with several planted bugs. Start the timer, write down every problem you see, worst first, then reveal the answer key and tick what you found. Finding the worst bug is worth the most.</p></section><div id="drill-list"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div>';
+  }
+  function renderDrillList() {
+    loadDrills().then(function (ds) {
+      var box = document.getElementById("drill-list"); if (!box || route !== "drills") return;
+      box.innerHTML = '<section class="instrument"><ol class="lessons">' + ds.map(function (d, i) {
+        var found = d.findings.filter(function (f, n) { return state.done["drill-" + d.id + "-" + n]; }).length;
+        return '<li><a href="#/drill/' + d.id + '" data-read="' + (found > 0) + '"><span class="mark" aria-hidden="true"></span><span class="num stamp">' + pad2(i + 1) + '</span><span class="ltitle">' + esc(d.title) + '</span><span class="stamp meta">' + (found ? found + "/" + d.findings.length + " found · " : "") + d.minutes + " min</span></a></li>";
+      }).join("") + "</ol></section>";
+    }).catch(function () {
+      var box = document.getElementById("drill-list"); if (box) box.innerHTML = '<div class="empty"><span class="label">Drills unavailable</span><p>They come from the server, which can\'t be reached.</p></div>';
+    });
+  }
+  function drillHtml(id) {
+    return '<a class="back" href="#/drills">‹ Drills</a><div id="drill"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div>';
+  }
+  function renderDrill(id) {
+    loadDrills().then(function (ds) {
+      var d = ds.filter(function (x) { return x.id === id; })[0], box = document.getElementById("drill");
+      if (!box || route !== "drill/" + id) return;
+      if (!d) { location.hash = "#/drills"; return; }
+      var revealed = d.findings.some(function (f, n) { return state.done["drill-" + d.id + "-" + n]; }) || box.dataset.revealed === "true";
+      var h = '<article class="instrument lesson"><header class="lesson-head"><span class="label">Drill · ' + d.minutes + " minutes · " + d.findings.length + " planted problems</span><h2>" + esc(d.title) + '</h2><p class="why">' + codeish(d.context) + "</p></header>" +
+        '<div class="drill-timer"><span class="readout" id="clock">' + d.minutes + ':00</span><button type="button" class="btn" id="clock-btn">Start timer</button></div>' +
+        '<div class="reading"><pre><code>' + esc(d.code) + "</code></pre></div>" +
+        '<label class="notes"><span class="label">Your findings, worst first</span><textarea id="notes" rows="6" placeholder="1. …"></textarea></label>';
+      if (!revealed) h += '<button type="button" class="btn btn-primary" id="reveal">Reveal the answer key</button>';
+      else {
+        h += '<div class="section-head key-head"><span class="label">Answer key · tick what you found</span></div><ul>' +
+          d.findings.map(function (f, n) {
+            return itemHtml({ id: "drill-" + d.id + "-" + n, t: (n === 0 ? '<span class="worst">Worst</span> ' : "") + codeish(f.t), why: codeish(f.d) }, false, true);
+          }).join("") + "</ul>";
+      }
+      h += "</article>";
+      box.innerHTML = h;
+      var notes = document.getElementById("notes");
+      try { notes.value = localStorage.getItem("study-plan-notes-" + d.id) || ""; } catch (e) {}
+      notes.oninput = function () { try { localStorage.setItem("study-plan-notes-" + d.id, notes.value); } catch (e) {} };
+      var reveal = document.getElementById("reveal");
+      if (reveal) reveal.onclick = function () { stopClock(); box.dataset.revealed = "true"; renderDrill(id); };
+      document.getElementById("clock-btn").onclick = function () { drillTimer.id === d.id && drillTimer.handle ? stopClock() : startClock(d); };
+      paintClock(d);
+    });
+  }
+  // The timer is the one thing that moves on its own, and only while running.
+  function startClock(d) {
+    stopClock();
+    drillTimer = { id: d.id, end: Date.now() + d.minutes * 60000, handle: setInterval(function () { paintClock(d); }, 1000) };
+    paintClock(d);
+  }
+  function stopClock() { if (drillTimer.handle) clearInterval(drillTimer.handle); drillTimer.handle = null; }
+  function paintClock(d) {
+    var el = document.getElementById("clock"), btn = document.getElementById("clock-btn");
+    if (!el) { stopClock(); return; }
+    var running = drillTimer.id === d.id && drillTimer.handle;
+    if (!running) { btn.textContent = "Start timer"; return; }
+    var ms = Math.max(0, drillTimer.end - Date.now()), m = Math.floor(ms / 60000), s = Math.floor(ms % 60000 / 1000);
+    el.textContent = m + ":" + pad2(s);
+    el.dataset.state = ms === 0 ? "over" : ms < 60000 ? "low" : "";
+    btn.textContent = "Stop";
+    if (ms === 0) { stopClock(); btn.textContent = "Time · restart"; toast("Time", "Rank what you found, then reveal the key"); }
+  }
+
+  // ---- Routing ----
+  //   #/plan  #/plan/<item>  #/syllabus  #/lesson/<id>[/check]  #/drills  #/drill/<id>  #/review  #/record
+  function renderView() {
+    var hash = location.hash.replace(/^#\/?/, "") || "plan";
+    var m = /^lesson\/([a-z0-9-]+)(\/check)?$/.exec(hash), focus = /^plan\/([a-z0-9-]+)$/.exec(hash), dr = /^drill\/([a-z0-9]+)$/.exec(hash);
+    if (m && !BY_ID[m[1]]) { m = null; hash = "syllabus"; }
+    if (focus) hash = "plan";
+    if (!m && !dr && ["plan", "syllabus", "record", "drills", "review"].indexOf(hash) < 0) hash = "plan";
+    if (route === "plan") planScroll = window.scrollY;
+    if (route && route.indexOf("drill/") === 0) stopClock();
+    route = m ? "lesson/" + m[1] : dr ? "drill/" + dr[1] : hash;
+    document.body.dataset.view = m || dr || hash === "review" ? "detail" : hash;
+    var view = document.getElementById("view");
+    var tab = m ? "syllabus" : dr ? "drills" : hash === "review" ? "plan" : hash;
+    view.innerHTML = m ? lessonHtml(BY_ID[m[1]]) : dr ? drillHtml(dr[1]) :
+      hash === "syllabus" ? syllabusHtml() : hash === "record" ? recordHtml() : hash === "drills" ? drillsHtml() : hash === "review" ? reviewHtml() : planHtml();
+    Array.prototype.forEach.call(document.querySelectorAll(".tabs a"), function (a) {
+      if (a.dataset.tab === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    updateCounts();
+    if (m) {
+      loadLesson(BY_ID[m[1]]); renderQuiz(BY_ID[m[1]]);
+      if (m[2]) document.getElementById("check").scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
+    } else if (dr) { renderDrill(dr[1]); window.scrollTo(0, 0); }
+    else if (hash === "drills") { renderDrillList(); window.scrollTo(0, 0); }
+    else if (hash === "review") { reviewRun = {}; renderReview(); window.scrollTo(0, 0); }
+    else if (focus) {
+      var row = document.querySelector('[data-item="' + focus[1] + '"]');
+      if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600); }
+    } else window.scrollTo(0, hash === "plan" ? planScroll : 0);
+  }
+
+  function setText(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
+  function updateCounts() {
+    var s = score(), r = s.rank, nextR = RANKS[r + 1];
+    setText("rank", RANKS[r][1]);
+    setText("xp", num(s.xp) + " XP" + (nextR ? " · next at " + num(nextR[0]) : " · top rank"));
+    document.getElementById("today").innerHTML = num(s.today) + " <small>XP</small>";
+    setText("goal", s.today >= GOAL ? "Goal met" : "Goal " + GOAL);
+    var lit = Math.min(30, Math.floor(30 * s.today / GOAL));
+    Array.prototype.forEach.call(document.querySelectorAll(".dial line"), function (ln, i) { ln.classList.toggle("on", i < lit); });
+    document.querySelector(".dial").classList.toggle("full", s.today >= GOAL);
+    document.getElementById("streak").innerHTML = s.streak + " <small>d</small>";
+    setText("best", "Longest " + s.longest + " d");
+    // 20 segments of progress through the current rank.
+    var lo = RANKS[r][0], hi = nextR ? nextR[0] : s.max, frac = nextR ? (s.xp - lo) / (hi - lo) : 1;
+    Array.prototype.forEach.call(document.querySelectorAll("#ticks i"), function (el, i) { el.className = i < Math.floor(frac * 20) ? "on" : ""; });
+    setText("tab-plan", s.planDone + "/" + allIds().length);
+    setText("tab-syl", s.read + "/" + LESSONS.length);
+    setText("tab-drl", drills ? s.drillsTried + "/" + drills.length : "");
+    setText("tab-rec", s.badges.length + "/" + BADGES.length);
+    PLAN.forEach(function (d) {
+      var el = document.getElementById("count-" + d.id); if (!el) return;
+      var all = dayItems(d), k = all.filter(function (i) { return state.done[i.id]; }).length;
+      el.textContent = k === all.length ? "Done" : k + " / " + all.length;
+      el.dataset.full = String(k === all.length);
+    });
+    PARTS.forEach(function (p) {
+      var el = document.getElementById("pcount-" + p.n); if (!el) return;
+      var k = p.lessons.filter(function (l) { return state.done[readId(l.id)]; }).length;
+      el.textContent = k === p.lessons.length ? "Read" : k + " / " + p.lessons.length + " read";
+      el.dataset.full = String(k === p.lessons.length);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-lesson]"), function (a) {
+      a.dataset.read = String(!!state.done[readId(a.dataset.lesson)]);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".qscore"), function (el) {
+      var q = state.quiz[el.dataset.q];
+      el.textContent = q ? q.best + "/" + q.of + " · " : "";
+      el.dataset.pass = String(passed(el.dataset.q));
+    });
+  }
+
+  function updateCountdown() {
+    var el = document.getElementById("countdown"); if (!el || !TARGET) return;
+    var ms = TARGET.at.getTime() - Date.now();
+    if (ms <= 0) { el.textContent = "Passed"; return; }
+    var hrs = Math.floor(ms / 3600000), d = Math.floor(hrs / 24);
+    el.innerHTML = (d > 0 ? d + " <small>d</small> " : "") + (hrs % 24) + " <small>h</small>";
+  }
+
+  // ---- Status: the dot carries the state, the stamp says it plainly. ----
+  function setStatus(kind, text) {
+    var s = document.getElementById("status");
+    s.dataset.state = kind;
+    document.getElementById("status-text").textContent = text;
+    // Grey out the accents only when the server is out of reach.
+    if (kind === "local") document.documentElement.dataset.connection = "offline";
+    else delete document.documentElement.dataset.connection;
+  }
+
+  // ---- Server sync ----
+  function api(method, body) {
+    return fetch("/state", {
+      method: method, cache: "no-store",
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
+      return r.json();
+    });
+  }
+
+  function unreachable(err) {
+    var kept = writeLocal();
+    if (err && err.status) setStatus("unsent", "Server refused the save (" + err.status + ") · " + (kept ? "kept in this browser" : "not saved"));
+    else setStatus("local", kept ? "Server unreachable · progress kept in this browser" : "Server unreachable · progress will reset on reload");
+  }
+
+  function push() {
+    if (inflight) return;
+    inflight = true;
+    var mine = seq;
+    setStatus("syncing", "Saving");
+    api("PUT", payload()).then(function () {
+      inflight = false;
+      if (mine !== seq) { push(); return; }   // changed again while saving
+      dirty = false; writeLocal();
+      setStatus("ok", "Saved on server · " + hhmm(new Date()));
+    }).catch(function (e) { inflight = false; unreachable(e); });
+  }
+
+  function queueSave() {
+    dirty = true; seq++;
+    writeLocal();
+    setStatus("unsent", "Unsent");
+    clearTimeout(timer); timer = setTimeout(push, 600);
+  }
+
+  document.addEventListener("change", function (ev) {
+    var t = ev.target; if (!t || !t.dataset || !t.dataset.id) return;
+    var id = t.dataset.id, on = t.checked;
+    var label = id.indexOf("read-") === 0 ? "Read · " + (BY_ID[id.slice(5)] || {}).title : DRILL_ID.test(id) ? "Found it" : "Ticked";
+    change(function () { if (on) state.done[id] = true; else delete state.done[id]; }, label);
+    // The same id can show twice (a lesson's plan items); keep both in step.
+    Array.prototype.forEach.call(document.querySelectorAll('input[data-id="' + id + '"]'), function (cb) { cb.checked = on; });
+  });
+
+  // Retry unsent changes when the network or the tab comes back, and every 30 s.
+  function retry() { if (dirty) push(); }
+  window.addEventListener("online", retry);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { retry(); updateCounts(); } });
+  setInterval(retry, 30000);
+  setInterval(updateCountdown, 60000);
+
+  // ---- Load: local copy first (instant), then the server's. ----
+  var local = readLocal();
+  if (local) { adopt(local); dirty = !!local.dirty; }
+  renderShell();
+  renderView();
+  window.addEventListener("hashchange", renderView);
+  loadDrills().catch(function () {});
+  api("GET").then(function (srv) {
+    if (dirty) { push(); return; }              // local has changes the server never got
+    adopt(srv);
+    writeLocal();
+    // Update in place rather than re-rendering, so a lesson being read
+    // isn't reloaded and the scroll position stays put.
+    Array.prototype.forEach.call(document.querySelectorAll("input[data-id]"), function (cb) { cb.checked = !!state.done[cb.dataset.id]; });
+    updateCounts();
+    var at = srv.updated_at ? " · last change " + hhmm(new Date(srv.updated_at)) : "";
+    setStatus("ok", "Synced with server" + at);
+  }).catch(unreachable);
+
+  // Offline: cache the page, lessons and questions. Served over http(s) only.
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("/sw.js").catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>

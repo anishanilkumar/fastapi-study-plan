@@ -1,0 +1,72 @@
+<p><code>Depends()</code> is FastAPI's dependency injection: a function whose result is passed into your handler. It's how you share the database session, the current user and permission checks without globals.</p>
+
+<h3>A simple dependency</h3>
+<pre><code>from typing import Annotated
+from fastapi import Depends
+
+def pagination(limit: int = 20, offset: int = 0) -&gt; dict:
+    return {"limit": min(limit, 100), "offset": offset}
+
+@app.get("/devices")
+def list_devices(page: Annotated[dict, Depends(pagination)]):
+    ...</code></pre>
+<p>FastAPI calls <code>pagination</code> per request, filling <em>its</em> parameters from the request too, and passes the result in.</p>
+
+<h3>With yield: setup and teardown</h3>
+<pre><code>def get_db():
+    with Session(engine) as session:
+        yield session            # handler runs here
+    # session closed after the response
+
+DB = Annotated[Session, Depends(get_db)]   # reusable alias
+
+@app.get("/devices/{device_id}")
+def get_device(device_id: int, db: DB): ...</code></pre>
+<p>One fresh session per request, always closed. This is the pattern; a module-level session is the bug.</p>
+
+<h3>Chained dependencies: the current user</h3>
+<pre><code>bearer = HTTPBearer()
+
+def current_user(
+    creds: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+    db: DB,
+) -&gt; User:
+    user = lookup_token(db, creds.credentials)
+    if user is None:
+        raise HTTPException(401, "invalid token",
+                            headers={"WWW-Authenticate": "Bearer"})
+    return user
+
+CurrentUser = Annotated[User, Depends(current_user)]
+
+def require_admin(user: CurrentUser) -&gt; User:
+    if not user.is_admin:
+        raise HTTPException(403, "admins only")
+    return user
+
+@app.delete("/devices/{device_id}", status_code=204)
+def delete_device(device_id: int, db: DB, admin: Annotated[User, Depends(require_admin)]):
+    ...</code></pre>
+<p>Within one request, a dependency used several times (<code>get_db</code> here, by both <code>current_user</code> and the handler) runs once and is shared.</p>
+
+<h3>Router-wide dependencies</h3>
+<pre><code>router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])</code></pre>
+<p>Every route on the router gets the check, so a new route can't forget it.</p>
+
+<h3>Overriding in tests</h3>
+<pre><code>app.dependency_overrides[get_db] = lambda: test_session
+app.dependency_overrides[current_user] = lambda: User(id=1, is_admin=False)</code></pre>
+<p>This is why things come through <code>Depends</code> rather than being imported: tests can swap them.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Like Laravel/Symfony constructor injection and middleware rolled together, but per function. <code>auth()-&gt;user()</code> becomes a <code>CurrentUser</code> parameter; route middleware <code>can:admin</code> becomes <code>dependencies=[Depends(require_admin)]</code>.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Forgetting the auth dependency on one endpoint is a common review finding. Prefer router-level dependencies, and scope queries by the user (<code>where(Device.owner_id == user.id)</code>), not just "is logged in".</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Add a fake <code>current_user</code> to your notes API (reads an <code>X-User</code> header, 401 if missing) and make notes per-user. Then write the test override for it.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/dependencies/" target="_blank" rel="noopener">FastAPI tutorial: dependencies</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/dependencies/sub-dependencies/" target="_blank" rel="noopener">FastAPI tutorial: sub-dependencies</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/" target="_blank" rel="noopener">FastAPI tutorial: dependencies with yield</a></li>
+<li><a href="https://fastapi.tiangolo.com/advanced/testing-dependencies/" target="_blank" rel="noopener">FastAPI: testing dependencies with overrides</a></li>
+</ul></aside>

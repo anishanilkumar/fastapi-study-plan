@@ -1,0 +1,53 @@
+<p>How code is split across files and how Python finds it. This matters as soon as a FastAPI app grows past one file.</p>
+
+<h3>Modules</h3>
+<p>Every <code>.py</code> file is a module. Importing runs the file once and caches it; later imports get the same module object.</p>
+<pre><code># utils.py
+def slugify(s): ...
+
+# main.py
+import utils
+utils.slugify("Hi there")
+
+from utils import slugify          # import one name
+from utils import slugify as slug  # rename
+import datetime as dt</code></pre>
+<p>Avoid <code>from x import *</code>: readers can't tell where names came from.</p>
+
+<h3>Packages</h3>
+<p>A folder of modules is a package. An <code>__init__.py</code> file marks it (and can be empty). Typical FastAPI layout:</p>
+<pre><code>app/
+  __init__.py
+  main.py          # app = FastAPI(), includes routers
+  db.py            # engine, get_db()
+  models.py        # SQLAlchemy models
+  schemas.py       # Pydantic models
+  routers/
+    __init__.py
+    devices.py
+tests/
+  test_devices.py
+pyproject.toml</code></pre>
+<pre><code>from app.db import get_db                 # absolute import (preferred)
+from .schemas import DeviceIn             # relative, inside the package</code></pre>
+
+<h3>Where Python looks</h3>
+<p>Imports are resolved through <code>sys.path</code>: the directory of the script you ran (or the current directory with <code>-m</code>), then the venv's site-packages. Run apps as modules from the project root (<code>python -m app.main</code>, <code>uvicorn app.main:app</code>) so <code>app</code> is importable.</p>
+
+<aside class="trap"><span class="label">Trap</span><p>Naming your own file <code>json.py</code>, <code>random.py</code> or <code>fastapi.py</code> shadows the real library: <code>import json</code> imports yours. Also avoid circular imports (a imports b imports a); move shared code into a third module.</p></aside>
+
+<h3>Module-level code runs once</h3>
+<p>Anything at the top level of a module runs at import time, once per process. That's where constants, the <code>app</code> object and the engine live. It's also why module-level <em>mutable state</em> is shared by every request in a server (see the lesson on long-running processes).</p>
+
+<h3>Installing and pinning</h3>
+<p>Add dependencies to <code>pyproject.toml</code>, install into the venv, and use a lock file (<code>uv lock</code>, or <code>pip freeze &gt; requirements.txt</code>) so deploys get the same versions.</p>
+
+<aside class="php"><span class="label">From PHP</span><p><code>namespace App\Models; use App\Models\User;</code> is the folder <code>app/models.py</code> and <code>from app.models import User</code>. There's no autoloader: the import statement does the loading, and the file path <em>is</em> the namespace.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Make a package <code>shop/</code> with <code>prices.py</code> (a <code>with_vat(amount)</code> function) and <code>main.py</code> that imports it. Run it with <code>python -m shop.main</code> from the parent folder, then try <code>python shop/main.py</code> and read the error.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/modules.html" target="_blank" rel="noopener">Python tutorial: modules and packages</a></li>
+<li><a href="https://packaging.python.org/en/latest/guides/writing-pyproject-toml/" target="_blank" rel="noopener">Packaging guide: writing pyproject.toml</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/bigger-applications/" target="_blank" rel="noopener">FastAPI: bigger applications, multiple files</a></li>
+</ul></aside>

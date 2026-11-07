@@ -1,0 +1,71 @@
+<p>Most database bugs in API code are about the session's lifetime, transactions, and doing in Python what the database should do.</p>
+
+<h3>One session per request</h3>
+<pre><code># BUG: one session shared by every request and every thread
+db = Session(engine)
+
+@app.get("/devices")
+def list_devices():
+    return db.scalars(select(Device)).all()</code></pre>
+<p>A <code>Session</code> isn't thread-safe and holds a transaction and an identity map. Shared, it mixes requests' changes, serves stale objects, and after one error breaks for everyone.</p>
+<pre><code># fix
+def get_db():
+    with Session(engine) as session:
+        yield session
+
+DB = Annotated[Session, Depends(get_db)]</code></pre>
+
+<h3>Transactions and the failed state</h3>
+<p>A session opens a transaction on first use. <code>commit()</code> ends it; on an exception you must <code>rollback()</code>. If not, every later use raises "This Session's transaction has been rolled back due to a previous exception during flush" (PendingRollbackError).</p>
+<pre><code>with Session(engine) as session, session.begin():   # commits, or rolls back on error
+    session.add(a)
+    session.add(b)</code></pre>
+<p>With a per-request session closed in <code>get_db</code>, a failed request's session is thrown away, which is another reason not to share one.</p>
+
+<h3>Uniqueness: let the database enforce it</h3>
+<pre><code># BUG: race. Two requests both see "not exists", both insert.
+if db.scalar(select(Device).where(Device.serial == body.serial)):
+    raise HTTPException(409, "serial already registered")
+db.add(Device(**body.model_dump())); db.commit()
+
+# fix: unique constraint + catch the error
+from sqlalchemy.exc import IntegrityError
+db.add(Device(**body.model_dump()))
+try:
+    db.commit()
+except IntegrityError:
+    db.rollback()
+    raise HTTPException(409, "serial already registered")</code></pre>
+<p>The pre-check can stay for a friendly message, but the constraint is what guarantees it.</p>
+
+<h3>Lost updates</h3>
+<p>Read-modify-write (<code>acct.balance = acct.balance - amount</code>) loses updates under concurrency. Do it in SQL (<code>update(Account).values(balance=Account.balance - amount)</code>), lock the row (<code>select(...).with_for_update()</code>), or use a version column.</p>
+
+<h3>N+1 queries</h3>
+<pre><code>owners = db.scalars(select(Owner)).all()           # 1 query
+for o in owners:
+    print(len(o.devices))                          # +1 query per owner (lazy load)
+
+from sqlalchemy.orm import selectinload
+owners = db.scalars(select(Owner).options(selectinload(Owner.devices))).all()   # 2 queries total</code></pre>
+<p>Also: every list endpoint needs a limit. <code>select(Device)</code> with no limit is a time bomb.</p>
+
+<h3>Ownership in the query</h3>
+<pre><code># BUG: loads anyone's device, filters in Python (or not at all)
+device = db.get(Device, device_id)
+
+# fix
+device = db.scalar(select(Device).where(Device.id == device_id,
+                                        Device.owner_id == user.id))</code></pre>
+<p>Filtering after loading also breaks pagination and counts. For multi-tenant apps, every query gets the tenant filter.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>The same rules as Doctrine (one EntityManager per request, closed after an exception) and Eloquent (<code>with()</code> for N+1, <code>lockForUpdate()</code>, unique indexes over <code>exists()</code> checks). The difference: PHP got a fresh EntityManager per request for free.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write <code>POST /devices</code> with a unique serial. Make it fail on a duplicate without catching the error, then call another endpoint on the same (deliberately shared) session to see PendingRollbackError. Then fix both properly.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html" target="_blank" rel="noopener">SQLAlchemy: session basics</a></li>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/session_transaction.html" target="_blank" rel="noopener">SQLAlchemy: transactions and connection management</a></li>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html" target="_blank" rel="noopener">SQLAlchemy: relationship loading techniques</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/" target="_blank" rel="noopener">FastAPI: dependencies with yield</a></li>
+</ul></aside>

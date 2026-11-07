@@ -1,0 +1,54 @@
+<p>The basic values, and the two comparisons that trip up PHP developers: truthiness and <code>is</code>.</p>
+
+<h3>Numbers</h3>
+<p><code>int</code> has no size limit (<code>2 ** 100</code> just works). <code>float</code> is a 64-bit double with the usual rounding (<code>0.1 + 0.2 != 0.3</code>); use <code>decimal.Decimal</code> for money. Convert with <code>int("42")</code>, <code>float("3.5")</code>; a bad string raises <code>ValueError</code> instead of quietly becoming 0.</p>
+
+<h3>Strings</h3>
+<p>Strings are Unicode and immutable: every method returns a new string.</p>
+<pre><code>name = "Asha"
+f"Hello {name}, you have {3 * 2} items"   # f-string, like "{$name}"
+f"{price:.2f}  {count:&gt;5}  {ratio:.0%}"   # formatting inside the braces
+f"{user=}"                                # debugging: prints user='...'
+
+"a,b,c".split(",")        # ['a', 'b', 'c']   (explode)
+", ".join(["a", "b"])     # 'a, b'           (implode, called on the separator)
+"  hi  ".strip()          # 'hi'             (trim)
+"report.pdf".endswith(".pdf")
+"abc"[0], "abc"[-1]       # 'a', 'c'
+len("héllo")              # 5 characters, not bytes</code></pre>
+<p>Triple quotes make multi-line strings. <code>b"..."</code> is <code>bytes</code>, a separate type: <code>"é".encode()</code> gives bytes, <code>.decode()</code> goes back. Network and crypto APIs often want bytes.</p>
+
+<h3>bool and None</h3>
+<p><code>True</code> and <code>False</code>. <code>None</code> is the single "no value" object, Python's <code>null</code>. A function with no <code>return</code> returns <code>None</code>.</p>
+
+<h3>Truthiness</h3>
+<p>In an <code>if</code>, these are all false: <code>False</code>, <code>None</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>[]</code>, <code>{}</code>, <code>set()</code>, <code>()</code>. Everything else is true (including <code>"0"</code>, unlike PHP).</p>
+<pre><code>if not items:            # idiomatic "is the list empty?"
+    return []
+
+token = os.environ.get("API_TOKEN")
+if token is None:        # "was it set at all?"
+    raise RuntimeError("API_TOKEN missing")
+if not token:            # also catches an empty string
+    ...</code></pre>
+
+<aside class="trap"><span class="label">Trap</span><p>A check like <code>if not expected_token or provided == expected_token: allow()</code> <em>fails open</em>: when config is empty, everyone gets in. When reviewing, ask what each check does with <code>None</code>, <code>""</code> and <code>0</code>.</p></aside>
+
+<h3><code>is</code> vs <code>==</code></h3>
+<p><code>==</code> asks "equal value?". <code>is</code> asks "the very same object?". Use <code>is</code> only for singletons: <code>x is None</code>, <code>x is not None</code>. For numbers and strings, <code>is</code> sometimes appears to work because of caching, then breaks with other values; always use <code>==</code>.</p>
+<pre><code>a = [1, 2]; b = [1, 2]
+a == b     # True
+a is b     # False: two lists</code></pre>
+
+<h3>Checking types</h3>
+<p><code>type(x)</code> gives the type; <code>isinstance(x, (int, float))</code> is the right way to check. Python never converts types for you in comparisons or arithmetic: <code>"3" + 4</code> raises <code>TypeError</code>.</p>
+
+<aside class="php"><span class="label">From PHP</span><p>No type juggling. <code>"abc" == 0</code> is false, <code>"10" &lt; "9"</code> compares as strings (true!), and <code>"0"</code> is truthy. Convert explicitly with <code>int()</code> at the edge, which is exactly what FastAPI does for you from type hints.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>In the REPL, evaluate <code>bool()</code> on ten values you think are false. Then write <code>describe(x)</code> returning <code>"missing"</code> for <code>None</code>, <code>"empty"</code> for <code>""</code>, else the value, and test it with <code>None</code>, <code>""</code>, <code>"0"</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/tutorial/introduction.html" target="_blank" rel="noopener">Python tutorial: an informal introduction</a></li>
+<li><a href="https://docs.python.org/3/library/stdtypes.html#truth-value-testing" target="_blank" rel="noopener">Python docs: truth value testing</a></li>
+<li><a href="https://docs.python.org/3/library/stdtypes.html#string-methods" target="_blank" rel="noopener">Python docs: string methods</a></li>
+</ul></aside>

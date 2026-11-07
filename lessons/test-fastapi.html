@@ -1,0 +1,72 @@
+<p>Testing endpoints end to end, with the database and auth swapped for test versions, and upstream APIs faked.</p>
+
+<h3>TestClient</h3>
+<pre><code>from fastapi.testclient import TestClient
+from app.main import app
+
+def test_create_device():
+    with TestClient(app) as client:          # "with" also runs lifespan
+        r = client.post("/devices", json={"serial": "A-1", "model": "X"})
+        assert r.status_code == 201
+        assert r.json()["serial"] == "A-1"</code></pre>
+<p>Calls go straight into the app in-process; no server needed. Write plain (sync) tests even for <code>async def</code> endpoints.</p>
+
+<h3>Overriding dependencies</h3>
+<pre><code># conftest.py
+@pytest.fixture
+def session():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        yield s
+
+@pytest.fixture
+def client(session):
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[current_user] = lambda: User(id=1, is_admin=False)
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()          # don't leak into other tests</code></pre>
+
+<h3>The 409 test</h3>
+<pre><code>def test_duplicate_serial_returns_409(client):
+    body = {"serial": "A-1", "model": "X"}
+    assert client.post("/devices", json=body).status_code == 201
+    r = client.post("/devices", json=body)
+    assert r.status_code == 409
+    assert len(client.get("/devices").json()) == 1   # still exactly one</code></pre>
+<p>What it can't prove: that two <em>concurrent</em> requests are handled right. Sequential calls never hit the race; only the unique constraint does that. Saying so is the kind of judgement interviewers look for.</p>
+
+<h3>Faking upstream APIs</h3>
+<pre><code>def handler(request: httpx.Request) -&gt; httpx.Response:
+    if request.url.path == "/certs/A-1":
+        return httpx.Response(200, json={"status": "valid"})
+    return httpx.Response(404)
+
+transport = httpx.MockTransport(handler)
+fake = httpx.AsyncClient(transport=transport, base_url="https://vendor.test")
+app.dependency_overrides[get_http] = lambda: fake</code></pre>
+<p>Faking at the transport tests your real client code (URLs, headers, error handling), not a mock of it. Also test the failure paths: <code>httpx.Response(500)</code>, or raise <code>httpx.ConnectTimeout</code> in the handler and assert you return 502/504.</p>
+
+<h3>Determinism</h3>
+<ul class="points">
+<li><strong>Time</strong>: pass <code>now</code> in, or override a <code>get_now</code> dependency. Never assert against the real clock.</li>
+<li><strong>Timezone</strong>: use aware UTC datetimes so the machine's TZ doesn't matter.</li>
+<li><strong>Network</strong>: none. MockTransport, overrides.</li>
+<li><strong>Order</strong>: each test builds its own data; clear overrides.</li>
+<li><strong>Randomness</strong>: inject or seed it.</li>
+</ul>
+
+<h3>What a test can't prove</h3>
+<p>Constant-time comparison, absence of races, behaviour under real load, that the real vendor still behaves like your fake. Name the limits; propose the complement (a constraint, a load test, a contract test).</p>
+
+<aside class="php"><span class="label">From PHP</span><p>Laravel's <code>$this-&gt;postJson()</code> → <code>client.post(json=...)</code>. <code>Http::fake()</code> → <code>httpx.MockTransport</code>. Container bindings in tests → <code>dependency_overrides</code>. <code>Carbon::setTestNow()</code> → inject <code>now</code>.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>For your notes API: a client fixture with an overridden user, tests for create/list/delete/404, and one test proving user 2 can't delete user 1's note.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://fastapi.tiangolo.com/tutorial/testing/" target="_blank" rel="noopener">FastAPI tutorial: testing</a></li>
+<li><a href="https://fastapi.tiangolo.com/advanced/testing-dependencies/" target="_blank" rel="noopener">FastAPI: testing dependencies with overrides</a></li>
+<li><a href="https://www.python-httpx.org/advanced/transports/#mock-transports" target="_blank" rel="noopener">HTTPX: mock transports</a></li>
+</ul></aside>

@@ -1,0 +1,70 @@
+<p>The standard library parts a web backend touches every day. Most interview bugs around time and secrets live here.</p>
+
+<h3>datetime: always aware</h3>
+<p>A <em>naive</em> datetime has no timezone; an <em>aware</em> one does. Mixing them raises <code>TypeError</code>, and a naive "now" on a server is whatever local zone its clock uses, often hours away from UTC.</p>
+<pre><code>from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+now = datetime.now(timezone.utc)             # aware, UTC: use this
+datetime.now()                               # naive local time: avoid
+datetime.utcnow()                            # naive, deprecated: avoid
+
+expires = now + timedelta(days=30)
+local = now.astimezone(ZoneInfo("Europe/Paris"))    # for display only
+now.isoformat()                              # '2026-11-07T10:00:00+00:00'
+datetime.fromisoformat("2026-01-13T13:00:00+00:00")</code></pre>
+<pre><code>def is_expired(not_after: datetime, now: datetime | None = None) -&gt; bool:
+    now = now or datetime.now(timezone.utc)
+    if not_after.tzinfo is None:
+        raise ValueError("not_after must be timezone-aware")
+    return not_after &lt;= now</code></pre>
+<p>Store and compare in UTC; convert to a zone only to show it. Passing <code>now</code> in makes the function testable.</p>
+
+<h3>secrets and hmac</h3>
+<pre><code>import secrets, hmac, hashlib
+
+token = secrets.token_urlsafe(32)            # unguessable token (not random.random!)
+hmac.compare_digest(provided, expected)      # constant-time comparison
+sig = hmac.new(key, body, hashlib.sha256).hexdigest()</code></pre>
+<p>Use <code>secrets</code> for anything security-related; <code>random</code> is predictable. Compare secrets with <code>compare_digest</code>, not <code>==</code>, which can stop at the first differing byte and leak timing. Passwords need a slow hash (argon2, bcrypt) from a library, never <code>sha256</code>.</p>
+
+<h3>pathlib</h3>
+<pre><code>from pathlib import Path
+base = Path(__file__).parent
+cfg = base / "config" / "app.toml"     # join with /
+cfg.exists(), cfg.suffix, cfg.stem
+text = cfg.read_text(encoding="utf-8")
+for p in base.glob("*.py"): ...</code></pre>
+<aside class="trap"><span class="label">Trap</span><p>Building a path from user input (<code>UPLOADS / filename</code>) allows <code>../../etc/passwd</code>. Resolve and check: <code>p = (UPLOADS / name).resolve(); p.is_relative_to(UPLOADS.resolve())</code>.</p></aside>
+
+<h3>json</h3>
+<pre><code>import json
+data = json.loads(text)                 # str → dict/list
+text = json.dumps(data, indent=2)       # dict → str
+json.dumps({"at": now})                 # TypeError: datetime isn't JSON
+json.dumps({"at": now.isoformat()})     # fine</code></pre>
+
+<h3>logging</h3>
+<pre><code>import logging
+log = logging.getLogger(__name__)       # one per module
+
+log.info("device %s registered", serial)    # lazy formatting, not f-string
+try:
+    ...
+except UpstreamError:
+    log.exception("vendor call failed")     # logs the traceback too</code></pre>
+<p>Never log secrets, tokens or full request bodies. <code>print</code> is for scripts; servers use <code>logging</code>.</p>
+
+<h3>Also worth knowing</h3>
+<p><code>collections</code> (<code>Counter</code>, <code>defaultdict</code>, <code>deque</code>), <code>functools</code> (<code>lru_cache</code>, <code>partial</code>), <code>os.environ</code> for config, <code>uuid.uuid4()</code>, <code>enum.Enum</code> / <code>StrEnum</code>, <code>decimal.Decimal</code> for money.</p>
+
+<aside class="php"><span class="label">From PHP</span><p><code>hash_equals</code> → <code>hmac.compare_digest</code>. <code>random_bytes</code>/<code>bin2hex</code> → <code>secrets.token_hex</code>. <code>password_hash</code> → a library (pwdlib/argon2, bcrypt). <code>new DateTimeImmutable('now', new DateTimeZone('UTC'))</code> → <code>datetime.now(timezone.utc)</code>; Python datetimes are already immutable.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write <code>days_left(not_after, now)</code> returning whole days until expiry, and test it with a naive datetime to see the <code>TypeError</code>. Then generate a token, store its SHA-256, and verify a submitted token with <code>compare_digest</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.python.org/3/library/datetime.html#aware-and-naive-objects" target="_blank" rel="noopener">Python docs: aware and naive objects</a></li>
+<li><a href="https://docs.python.org/3/library/secrets.html" target="_blank" rel="noopener">Python docs: secrets</a></li>
+<li><a href="https://docs.python.org/3/library/pathlib.html" target="_blank" rel="noopener">Python docs: pathlib</a></li>
+<li><a href="https://docs.python.org/3/howto/logging.html" target="_blank" rel="noopener">Python HOWTO: logging</a></li>
+</ul></aside>

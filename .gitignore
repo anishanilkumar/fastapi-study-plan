@@ -1,0 +1,10 @@
+# Your own details and progress: never committed.
+config.json
+.deploy.env
+*.db
+*.db-shm
+*.db-wal
+
+.venv/
+__pycache__/
+.pytest_cache/
