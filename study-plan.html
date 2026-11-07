@@ -361,6 +361,9 @@ a.btn { text-decoration: none; }
 .toast.show { visibility: visible; opacity: 1; animation: blink-in 0.36s steps(3) 1; }
 @keyframes blink-in { 0% { opacity: 0; } 33% { opacity: 1; } 66% { opacity: 0.3; } 100% { opacity: 1; } }
 
+.demo-note { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; background: var(--panel); border-left: 6px solid var(--gold); padding: 0.75rem 1rem; color: var(--ink-dim); max-width: 60ch; }
+.demo-note .label { color: var(--gold); }
+
 /* ---- Drills ---- */
 .drill-timer { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 #clock { min-width: 4ch; }
@@ -500,6 +503,9 @@ a.btn { text-decoration: none; }
   var TARGET = CONFIG.target ? { label: CONFIG.target.label, at: new Date(CONFIG.target.at) } : null;
   var START = CONFIG.start ? new Date(CONFIG.start + "T12:00:00") : null;
   var TITLE = CONFIG.title || "Python and FastAPI, from the basics";
+  // Demo mode: no server state at all. Each visitor's progress lives in
+  // their own browser, and the page never tries to save it anywhere else.
+  var DEMO = !!CONFIG.demo;
   function planDate(n) { var t = new Date(START); t.setDate(t.getDate() + n); return t; }
   function dayLabel(d) {
     var base = START ? planDate(d.n).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "Day " + (d.n + 1);
@@ -591,7 +597,7 @@ a.btn { text-decoration: none; }
     { id: "ready", t: "Interview-ready", d: "Reach the top rank", ok: function (s) { return s.xp >= RANKS[RANKS.length - 1][0]; } }
   ];
 
-  var LS = "study-plan";
+  var LS = DEMO ? "study-plan-demo" : "study-plan";
   var state = { done: {}, quiz: {}, log: {}, review: {}, cleared: 0 };
   var dirty = false, seq = 0, timer = null, inflight = false;
   var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
@@ -734,7 +740,9 @@ a.btn { text-decoration: none; }
       "<h1>" + esc(TITLE) + "</h1>" +
       '<p class="lede">Python and FastAPI for PHP developers, in three days.' +
       (TARGET ? " Counting down to " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") +
-      " Tick the plan, read the lessons, pass each lesson's check, and practise on the drills. Everything earns XP.</p></header>";
+      " Tick the plan, read the lessons, pass each lesson's check, and practise on the drills. Everything earns XP.</p>" +
+      (DEMO ? '<p class="demo-note"><span class="label">Demo</span> Your progress stays in this browser; nothing is sent to the server. <a href="https://github.com/anishanilkumar/fastapi-study-plan">Run your own copy</a> to keep it.</p>' : "") +
+      "</header>";
     h += '<div class="strip instrument" aria-live="polite"><div class="strip-row">' +
       '<div><span class="label">Rank</span><span class="readout" id="rank"></span><span class="stamp" id="xp"></span></div>' +
       '<div class="today"><div><span class="label">Today</span><span class="readout" id="today"></span><span class="stamp" id="goal"></span></div>' + dialSvg() + "</div>" +
@@ -1203,6 +1211,7 @@ a.btn { text-decoration: none; }
   }
 
   function queueSave() {
+    if (DEMO) { writeLocal(); setStatus("ok", "Saved in this browser · " + hhmm(new Date())); return; }
     dirty = true; seq++;
     writeLocal();
     setStatus("unsent", "Unsent");
@@ -1219,7 +1228,7 @@ a.btn { text-decoration: none; }
   });
 
   // Retry unsent changes when the network or the tab comes back, and every 30 s.
-  function retry() { if (dirty) push(); }
+  function retry() { if (dirty && !DEMO) push(); }
   window.addEventListener("online", retry);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { retry(); updateCounts(); } });
   setInterval(retry, 30000);
@@ -1232,7 +1241,8 @@ a.btn { text-decoration: none; }
   renderView();
   window.addEventListener("hashchange", renderView);
   loadDrills().catch(function () {});
-  api("GET").then(function (srv) {
+  if (DEMO) setStatus("ok", "Demo · progress stays in this browser");
+  else api("GET").then(function (srv) {
     if (dirty) { push(); return; }              // local has changes the server never got
     adopt(srv);
     writeLocal();

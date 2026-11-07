@@ -17,6 +17,10 @@ learner's progress in SQLite.
     review   missed questions and when they're due again: {"py-types.1": "2026-11-08"}
     cleared  how many missed questions were later answered right
 
+STUDY_DEMO=1 runs a public demo: no database at all, the page keeps each
+visitor's progress in their own browser, and PUT /state is refused. So
+visitors never see or change each other's ticks, and there's nothing to reset.
+
 One row holds the whole state as JSON. The page sends everything on each save,
 so there is nothing to merge and the last write wins, which is what a single
 learner wants. There is no login: run it on localhost, or put your own auth
@@ -34,7 +38,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -155,6 +159,10 @@ def connect() -> Iterator[sqlite3.Connection]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.config = load_config()
+    app.state.demo = os.environ.get("STUDY_DEMO") == "1"
+    if app.state.demo:
+        yield               # no database in demo mode
+        return
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
         conn.execute("PRAGMA journal_mode=WAL")  # persistent, so once is enough
@@ -182,7 +190,7 @@ NO_CACHE = {"Cache-Control": "no-cache"}  # revalidate each visit, so a deploy s
 
 @app.get("/", include_in_schema=False)
 def page() -> HTMLResponse:
-    cfg = app.state.config.model_dump_json()
+    cfg = json.dumps({**app.state.config.model_dump(mode="json"), "demo": app.state.demo})
     # "<" escaped so a title containing "</script>" can't end the script early.
     html = PAGE.read_text(encoding="utf-8").replace("/*STUDY_CONFIG*/null", cfg.replace("<", "\\u003c"), 1)
     return HTMLResponse(html, headers=NO_CACHE)
@@ -207,6 +215,8 @@ def service_worker() -> FileResponse:
 # instead of stalling the event loop.
 @app.get("/state", response_model=StateOut)
 def get_state() -> StateOut:
+    if app.state.demo:
+        return StateOut()
     with connect() as conn:
         row = conn.execute("SELECT done, progress, updated_at FROM state WHERE id = 1").fetchone()
     if row is None:
@@ -216,6 +226,8 @@ def get_state() -> StateOut:
 
 @app.put("/state", response_model=StateOut)
 def put_state(body: State) -> StateOut:
+    if app.state.demo:
+        raise HTTPException(403, "demo: progress stays in your browser")
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     progress = Progress(quiz=body.quiz, log=body.log, review=body.review, cleared=body.cleared)
     with connect() as conn:  # commits on success, rolls back on error

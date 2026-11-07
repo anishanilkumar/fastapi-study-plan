@@ -56,7 +56,14 @@ Copy `config.example.json` to `config.json` (gitignored) and edit it:
 
 Restart after editing; an invalid config stops the app at startup with the
 reason. Environment variables: `STUDY_DB` (SQLite path), `STUDY_CONFIG`
-(config path), `STUDY_HOST` and `STUDY_PORT` (default `127.0.0.1:8781`).
+(config path), `STUDY_HOST` and `STUDY_PORT` (default `127.0.0.1:8781`),
+`STUDY_DEMO` (see below).
+
+### Public demo mode
+
+`STUDY_DEMO=1` turns an instance into a public demo: no database at all,
+each visitor's progress stays in their own browser, and `PUT /state` is
+refused. Visitors never see each other's ticks and there's nothing to reset.
 
 ## Security
 

@@ -72,7 +72,7 @@ def test_config_is_injected_and_escaped(tmp_path, monkeypatch):
     with TestClient(study.app) as c:
         html = c.get("/").text
     assert "\\u003c/script>\\u003cb>x" in html and "</script><b>x" not in html
-    assert '"label":"Exam"' in html
+    assert '"label": "Exam"' in html
 
 
 def test_naive_target_is_rejected(tmp_path):
@@ -99,3 +99,14 @@ def test_drills_are_well_formed():
     assert len({d["id"] for d in drills}) == len(drills)
     for d in drills:
         assert re.fullmatch(r"[a-z0-9]+", d["id"]) and d["code"] and len(d["findings"]) >= 3
+
+
+def test_demo_mode_keeps_nothing(tmp_path, monkeypatch):
+    monkeypatch.setenv("STUDY_DEMO", "1")
+    monkeypatch.setattr(study, "DB_PATH", tmp_path / "t.db")
+    monkeypatch.setattr(study, "CONFIG_PATH", tmp_path / "none.json")
+    with TestClient(study.app) as c:
+        assert '"demo": true' in c.get("/").text
+        assert c.put("/state", json={"done": {"sat-is": True}}).status_code == 403
+        assert c.get("/state").json()["done"] == {}
+    assert not (tmp_path / "t.db").exists()      # no database created
