@@ -17,7 +17,8 @@ def client(tmp_path, monkeypatch):
 
 
 def test_empty_then_roundtrip(client):
-    assert client.get("/state").json() == {"done": {}, "quiz": {}, "log": {}, "review": {}, "cleared": 0, "updated_at": None}
+    assert client.get("/state").json() == {"done": {}, "quiz": {}, "log": {}, "review": {}, "cleared": 0,
+                                           "blocks": {}, "later": [], "notes": {}, "marks": {}, "updated_at": None}
     r = client.put("/state", json={"done": {"sat-is": True, "b-setup": False}})
     assert r.status_code == 200
     got = client.get("/state").json()
@@ -32,12 +33,27 @@ def test_rejects_bad_input(client):
     assert client.put("/state", json={"quiz": {"x": {"best": 9, "of": 0}}}).status_code == 422
     assert client.put("/state", json={"review": {"py-types": "2026-11-08"}}).status_code == 422
     assert client.put("/state", json={"cleared": -1}).status_code == 422
+    assert client.put("/state", json={"blocks": {"2026-11-07": 49}}).status_code == 422
+    assert client.put("/state", json={"later": [{"t": "", "at": "2026-11-07"}]}).status_code == 422
+    assert client.put("/state", json={"notes": {"Bad Id": "x"}}).status_code == 422
+    assert client.put("/state", json={"marks": {"py-types": ["x" * 1001]}}).status_code == 422
+
+
+def test_put_keeps_fields_it_leaves_out(client):
+    # An older page sends only the fields it knows; notes must survive it.
+    client.put("/state", json={"done": {"sat-is": True}, "notes": {"py-types": "mine"}, "marks": {"py-types": ["a"]}})
+    client.put("/state", json={"done": {"sat-is": True, "sat-none": True}, "quiz": {}, "log": {}, "review": {}, "cleared": 0})
+    got = client.get("/state").json()
+    assert got["done"] == {"sat-is": True, "sat-none": True}
+    assert got["notes"] == {"py-types": "mine"} and got["marks"] == {"py-types": ["a"]}
 
 
 def test_full_state_roundtrip(client):
     body = {"done": {"sat-is": True, "read-py-types": True, "drill-login-0": True},
             "quiz": {"py-types": {"best": 2, "of": 3}}, "log": {"2026-11-07": 140},
-            "review": {"py-types.1": "2026-11-08"}, "cleared": 3}
+            "review": {"py-types.1": "2026-11-08"}, "cleared": 3,
+            "blocks": {"2026-11-07": 2}, "later": [{"t": "Laravel queues?", "at": "2026-11-07"}],
+            "notes": {"py-types": "is vs ==: identity"}, "marks": {"py-types": ["None is a singleton"]}}
     assert client.put("/state", json=body).status_code == 200
     got = client.get("/state").json()
     del got["updated_at"]

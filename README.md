@@ -19,6 +19,13 @@ teaches) serving one page:
   and a ranked answer key.
 - **Record**: XP, ranks, a daily goal, a streak and badges. All of it is
   computed from what you've actually done, so unticking takes XP back.
+- **Focus mode**: hides everything except the next thing to do, a 25-minute
+  (or 15-minute) block timer with a 5-minute break, and a box to park
+  stray thoughts so you can get back to the task. Built for people who
+  drift; each finished block is worth XP.
+- **Notes**: select text in any lesson to highlight it, write your own
+  notes under each lesson, and find all of it, plus whatever you parked,
+  in one searchable place.
 
 Progress is saved in SQLite on the server and in the browser, so it survives
 a lost connection, and a service worker caches the lessons for offline

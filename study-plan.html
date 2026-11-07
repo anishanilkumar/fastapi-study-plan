@@ -13,7 +13,11 @@
    warm), 2px engraved rules, corner brackets instead of boxed cards, no
    shadows or glow, and motion only when something changed. Phone scale: it
    is read at arm's length. Self-checks carry a gold label because they are
-   the "do this before moving on" warm signal, not live data. */
+   the "do this before moving on" warm signal, not live data.
+
+   Focus mode and the notebook were added for a learner who drifts: focus
+   mode hides everything but the one next action and a block timer, and
+   highlights are gold because they're the learner's own (warm, human) data. */
 
 @font-face { font-family: "Archivo"; src: url("/fonts/archivo.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Plex Mono"; src: url("/fonts/plexmono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
@@ -36,6 +40,9 @@
   /* Semantic aliases: components use these, never the raw hues. */
   --synced: var(--arc);
   --unsent: var(--gold);
+  /* A highlight's fill: gold at about 18% over the panel, as a solid colour
+     so marked code in a <pre> reads the same as marked prose. */
+  --mark: #3a2d17;
 
   --face-data: "Archivo", system-ui, sans-serif;
   --face-mono: "Plex Mono", ui-monospace, "Roboto Mono", monospace;
@@ -380,6 +387,66 @@ a.btn { text-decoration: none; }
 .worst { font-family: var(--face-mono); font-size: var(--t-min); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-right: 0.375rem; }
 @media (max-width: 480px) { .tabs a span { display: none; } }
 
+/* ==== Focus mode. Hidden, not dimmed: anything on screen is something to
+   look at. What stays is the next action, the timer and the park box. ==== */
+body[data-focus="on"] .mast, body[data-focus="on"] .strip, body[data-focus="on"] .tabs,
+body[data-focus="on"] .back, body[data-focus="on"] .pager, body[data-focus="on"] .focus-hide { display: none; }
+body[data-focus="on"][data-view="plan"] #view > :not(.next-box) { display: none; }
+.focus-only { display: none; }
+body[data-focus="on"] .focus-only { display: grid; }
+body[data-focus="on"] .page { padding-top: 0; }
+
+.focusbar { display: none; gap: 0.875rem; }
+body[data-timer="on"] .focusbar { display: grid; }
+body[data-focus="on"] .focusbar { display: grid; padding-top: calc(var(--pad) + env(safe-area-inset-top)); }
+/* Sticky on the plan only. While reading, it would cover a third of a phone
+   screen; the countdown is in the tab title there instead. */
+body[data-focus="on"][data-view="plan"] .focusbar { position: sticky; top: 0; z-index: 3; }
+.fb-row { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; align-items: center; justify-content: space-between; }
+.fb-clock { display: grid; gap: 0.25rem; }
+.fb-clock .readout { font-size: var(--t-major); font-weight: 600; letter-spacing: -0.02em; min-width: 5ch; }
+.fb-ctl { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.focusbar[data-mode="break"] .label, .focusbar[data-mode="break"] .readout { color: var(--gold); }
+.focusbar[data-mode="break"] .ticks > i.on { background: var(--gold); }
+/* Paused: the clock is frozen, so it dims; it must not look like it's running. */
+.focusbar[data-paused="true"] .readout { color: var(--ink-dim); }
+.btn-quiet { color: var(--ink-dim); border-color: transparent; }
+.btn-quiet:hover { color: var(--ink); }
+.park { display: none; gap: 0.5rem; }
+body[data-focus="on"] .park { display: flex; }
+.field {
+  flex: 1; min-width: 0; min-height: 48px; padding: 0 0.875rem; background: var(--ground); color: var(--ink);
+  border: var(--rule) solid var(--engrave); border-radius: 0; font: inherit;
+}
+.field::placeholder { color: var(--slate); }
+.field:focus { border-color: var(--arc-dim); outline: none; }
+.next-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem; }
+.next-actions .btn { margin: 0; }
+.next-item .item label { padding-bottom: 0.25rem; }
+
+/* ==== Highlights and the notebook ==== */
+.reading mark { background: var(--mark); color: var(--ink); border-bottom: var(--rule) solid var(--gold); cursor: pointer; }
+.reading pre mark { color: var(--ink); }
+.lesson-notes { margin: 1.5rem 0 0; }
+.lesson-notes .stamp { display: block; }
+.notes textarea[data-note] { min-height: 6rem; font-family: var(--face-data); font-size: 1rem; }
+/* The highlight button sits where a thumb is, above the system's own
+   selection menu, which phones put over the selection. */
+.selbar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 1rem); z-index: 6; transform: translateX(-50%); display: flex; gap: 0.5rem; }
+.selbar[hidden] { display: none; }
+.nb-later li, .marks li { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 0.75rem; align-items: center; }
+.nb-later li { min-height: 56px; padding: 0.5rem 0; }
+.nb-later li + li { border-top: var(--rule) solid var(--engrave); }
+.nb-later .stamp { grid-column: 1; }
+.nb-later .btn, .marks .btn { grid-row: 1 / span 2; grid-column: 2; min-height: 44px; padding: 0 0.875rem; }
+.marks { display: grid; gap: 0.5rem; margin: 0.75rem 0 0; }
+.marks li { background: var(--panel-lit); border-left: 6px solid var(--gold); padding: 0.5rem 0.5rem 0.5rem 1rem; }
+.marks q { quotes: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nb-lesson h2 a { color: var(--ink); text-decoration: none; }
+.nb-lesson h2 a:hover { color: var(--arc); }
+.nb-search { display: flex; margin-top: 0.75rem; max-width: 32rem; }
+.park-form { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
@@ -571,7 +638,7 @@ a.btn { text-decoration: none; }
 
   // ---- The game. Every number here is derived from what's ticked and
   // scored, so XP can't drift from reality: untick something and it goes back.
-  var XP = { tick: 10, read: 25, correct: 15, perfect: 20, cleared: 10, finding: 10, worst: 20 };
+  var XP = { tick: 10, read: 25, correct: 15, perfect: 20, cleared: 10, finding: 10, worst: 20, block: 30 };
   var GOAL = 300;                      // XP a day: about a third of the plan
   var RANKS = [
     [0, "Novice"], [150, "Scripter"], [400, "Pythonista"], [800, "Router"],
@@ -586,6 +653,8 @@ a.btn { text-decoration: none; }
     { id: "second-chance", t: "Second chance", d: "Get a missed question right on review", ok: function (s) { return s.cleared >= 1; } },
     { id: "first-drill", t: "First drill", d: "Find a bug in a drill", ok: function (s) { return s.drillsTried >= 1; } },
     { id: "worst-first", t: "Worst first", d: "Find the worst bug in three drills", ok: function (s) { return s.worst >= 3; } },
+    { id: "first-block", t: "First block", d: "Finish a focus block", ok: function (s) { return s.blocks >= 1; } },
+    { id: "deep-work", t: "Deep work", d: "Four focus blocks in one day", ok: function (s) { return s.bestBlocks >= 4; } },
     { id: "goal", t: "Daily goal", d: "Earn " + GOAL + " XP in one day", ok: function (s) { return s.bestDay >= GOAL; } },
     { id: "streak-3", t: "Three days running", d: "Earn XP three days in a row", ok: function (s) { return s.longest >= 3; } },
     { id: "day-sat", t: "Day 1 done", d: "Every day-1 item ticked", ok: function (s) { return s.days.sat; } },
@@ -598,7 +667,10 @@ a.btn { text-decoration: none; }
   ];
 
   var LS = DEMO ? "study-plan-demo" : "study-plan";
-  var state = { done: {}, quiz: {}, log: {}, review: {}, cleared: 0 };
+  // Everything the server stores. Notes and highlights earn no XP: they're
+  // for you, and XP for them would reward copying text instead of learning it.
+  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {} }; }
+  var state = blank();
   var dirty = false, seq = 0, timer = null, inflight = false;
   var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
   var drillTimer = { id: null, end: 0, handle: null };
@@ -634,8 +706,11 @@ a.btn { text-decoration: none; }
     });
     s.drillsTried = Object.keys(tried).length;
     s.cleared = state.cleared || 0;
+    s.blocks = 0; s.bestBlocks = 0;
+    Object.keys(state.blocks).forEach(function (k) { s.blocks += state.blocks[k]; s.bestBlocks = Math.max(s.bestBlocks, state.blocks[k]); });
+    s.blocksToday = state.blocks[today()] || 0;
     s.xp = s.planDone * XP.tick + s.read * XP.read + s.correct * XP.correct + s.perfect * XP.perfect +
-      s.cleared * XP.cleared + s.found * XP.finding + s.worst * XP.worst;
+      s.cleared * XP.cleared + s.found * XP.finding + s.worst * XP.worst + s.blocks * XP.block;
     s.max = allIds().length * XP.tick + LESSONS.length * (XP.read + 3 * XP.correct + XP.perfect) +
       (drills ? drills.reduce(function (a, d) { return a + d.findings.length * XP.finding + XP.worst; }, 0) : 0);
     PLAN.forEach(function (d) { s.days[d.id] = dayItems(d).every(function (i) { return state.done[i.id]; }); });
@@ -701,15 +776,16 @@ a.btn { text-decoration: none; }
   }
   function writeLocal() {
     try {
-      localStorage.setItem(LS, JSON.stringify({ done: state.done, quiz: state.quiz, log: state.log, review: state.review, cleared: state.cleared, dirty: dirty }));
+      var v = payload(); v.dirty = dirty;
+      localStorage.setItem(LS, JSON.stringify(v));
       return true;
     } catch (e) { return false; }
   }
   function adopt(v) {
-    state.done = v.done || {}; state.quiz = v.quiz || {}; state.log = v.log || {};
-    state.review = v.review || {}; state.cleared = v.cleared || 0;
+    var b = blank();
+    Object.keys(b).forEach(function (k) { state[k] = v[k] != null ? v[k] : b[k]; });
   }
-  function payload() { return { done: state.done, quiz: state.quiz, log: state.log, review: state.review, cleared: state.cleared }; }
+  function payload() { var v = {}; Object.keys(blank()).forEach(function (k) { v[k] = state[k]; }); return v; }
 
   // ---- Render: a fixed shell (masthead, instrument strip, tabs), then one view. ----
   function itemHtml(it, isCheck, noLink) {
@@ -743,6 +819,10 @@ a.btn { text-decoration: none; }
       " Tick the plan, read the lessons, pass each lesson's check, and practise on the drills. Everything earns XP.</p>" +
       (DEMO ? '<p class="demo-note"><span class="label">Demo</span> Your progress stays in this browser; nothing is sent to the server. <a href="https://github.com/anishanilkumar/fastapi-study-plan">Run your own copy</a> to keep it.</p>' : "") +
       "</header>";
+    h += '<div class="focusbar instrument" id="focusbar"><div class="fb-row"><div class="fb-clock"><span class="label" id="fb-label">Focus block</span>' +
+      '<span class="readout" id="fb-clock" role="timer"></span><span class="stamp" id="fb-sub"></span></div><div class="fb-ctl" id="fb-ctl"></div></div>' +
+      '<div class="ticks" id="fb-ticks" aria-hidden="true"></div>' +
+      '<form class="park" data-park><input class="field" name="t" maxlength="500" autocomplete="off" placeholder="A thought that isn\'t this task? Park it" aria-label="Park a thought for later"><button class="btn" type="submit">Park</button></form></div>';
     h += '<div class="strip instrument" aria-live="polite"><div class="strip-row">' +
       '<div><span class="label">Rank</span><span class="readout" id="rank"></span><span class="stamp" id="xp"></span></div>' +
       '<div class="today"><div><span class="label">Today</span><span class="readout" id="today"></span><span class="stamp" id="goal"></span></div>' + dialSvg() + "</div>" +
@@ -755,12 +835,15 @@ a.btn { text-decoration: none; }
       '<a href="#/plan" data-tab="plan">Plan <span id="tab-plan"></span></a>' +
       '<a href="#/syllabus" data-tab="syllabus">Syllabus <span id="tab-syl"></span></a>' +
       '<a href="#/drills" data-tab="drills">Drills <span id="tab-drl"></span></a>' +
+      '<a href="#/notes" data-tab="notes">Notes <span id="tab-notes"></span></a>' +
       '<a href="#/record" data-tab="record">Record <span id="tab-rec"></span></a></nav>';
     h += '<div id="view"></div>';
-    document.getElementById("root").innerHTML = '<main class="page">' + h + '</main><div class="toast instrument" id="toast" role="status" aria-live="polite"></div>';
+    document.getElementById("root").innerHTML = '<main class="page">' + h + '</main><div class="toast instrument" id="toast" role="status" aria-live="polite"></div>' +
+      '<div class="selbar" id="selbar" hidden><button type="button" class="btn btn-primary" id="selbar-btn"></button></div>';
     var ticks = "";
     for (var i = 0; i < 20; i++) ticks += "<i></i>";
     document.getElementById("ticks").innerHTML = ticks;
+    document.getElementById("fb-ticks").innerHTML = ticks;
     updateCountdown();
   }
 
@@ -786,7 +869,14 @@ a.btn { text-decoration: none; }
 
   function nextHtml() {
     var a = nextAction();
+    var enter = '<button type="button" class="btn focus-hide" data-act="focus-on">Focus mode</button>';
+    var calm = '<p class="why focus-only">One thing at a time. When it\'s done, the next one shows up here.</p>';
     if (!a) return '<section class="callout next"><span class="label">Next up</span><h2>Everything done</h2><p class="why">Plan ticked, every lesson read, every check passed. Try the drills again against the clock, then rest.</p></section>';
+    if (a.kind === "tick") {
+      // Tickable right here, so focus mode never has to show the whole plan.
+      return '<section class="callout next"><span class="label">Next up · plan item · +' + XP.tick + ' XP</span><ul class="next-item">' + itemHtml(a.item, false) + "</ul>" + calm +
+        '<div class="next-actions"><a class="btn focus-hide" href="#/plan/' + a.item.id + '">Show in plan ›</a>' + enter + "</div></section>";
+    }
     var title, meta, href, btn;
     if (a.kind === "review") {
       title = "Review " + a.n + " missed question" + (a.n === 1 ? "" : "s"); href = "#/review"; btn = "Review now";
@@ -801,11 +891,12 @@ a.btn { text-decoration: none; }
       title = a.item.t; href = "#/plan/" + a.item.id; btn = "Go to it";
       meta = "Plan item · +" + XP.tick + " XP";
     }
-    return '<section class="callout next"><span class="label">Next up</span><h2>' + title + '</h2><span class="stamp">' + meta + '</span><a class="btn btn-primary" href="' + href + '">' + btn + " ›</a></section>";
+    return '<section class="callout next"><span class="label">Next up</span><h2>' + title + '</h2><span class="stamp">' + meta + "</span>" + calm +
+      '<div class="next-actions"><a class="btn btn-primary" href="' + href + '">' + btn + " ›</a>" + enter + "</div></section>";
   }
 
   function planHtml() {
-    var h = nextHtml();
+    var h = '<div class="next-box" data-next></div>';
     h += '<section class="callout"><span class="label">The one big mental shift</span>' +
       "<p>PHP starts fresh for every request and throws everything away at the end. A Python server is one long-running process that handles thousands of requests. Anything at module level (a variable, a list, a database session) lives across requests and is shared between them.</p>" +
       "<p>When you review a snippet, ask: what here is shared that PHP would have thrown away? And what here waits without <code>await</code>?</p></section>";
@@ -858,6 +949,7 @@ a.btn { text-decoration: none; }
       ["Checks passed", s.passed + " / " + LESSONS.length],
       ["Full marks", String(s.perfect)],
       ["Bugs found", String(s.found)],
+      ["Focus blocks", s.blocks + (s.blocksToday ? " · " + s.blocksToday + " today" : "")],
       ["To review", s.pending ? s.due + " due · " + s.pending : "0"],
       ["Streak", s.streak + " d"],
       ["Best day", num(s.bestDay) + " XP"]
@@ -876,6 +968,7 @@ a.btn { text-decoration: none; }
       rule("Each correct answer in a check (best attempt counts)", "+" + XP.correct) + rule("Full marks on a check", "+" + XP.perfect) +
       rule("A missed question, answered right on review", "+" + XP.cleared) +
       rule("Each bug you found in a drill", "+" + XP.finding) + rule("Finding a drill's worst bug", "+" + XP.worst) +
+      rule("A finished focus block (in focus mode)", "+" + XP.block) +
       rule("Unticking takes the XP back", "−") + "</ul></section>";
     return h;
   }
@@ -888,6 +981,9 @@ a.btn { text-decoration: none; }
     h += '<article class="instrument lesson"><header class="lesson-head"><span class="label">Part ' + l.part.n + " · " + esc(l.part.title) + " · Lesson " + (i + 1) + " of " + LESSONS.length + "</span>" +
       "<h2>" + esc(l.title) + '</h2><span class="stamp">' + l.min + " min reading · " + (l.day ? "Plan: " + esc(shortDay(l.day)) : "Extra, not in the plan") + " · +" + XP.read + " XP</span></header>" +
       '<div class="reading" id="reading" aria-busy="true"><div class="placeholder"><i></i><i></i><i></i><i class="short"></i></div></div>' +
+      '<div class="lesson-notes"><label class="notes"><span class="label">Your notes</span>' +
+      '<textarea data-note="' + l.id + '" rows="4" placeholder="In your own words: what to remember, what to ask">' + esc(state.notes[l.id] || "") + "</textarea></label>" +
+      '<span class="stamp">Select any text above to highlight it · find it all later under Notes</span></div>' +
       '<ul class="read-done">' + itemHtml({ id: readId(l.id), t: "I've read this" }, false, true) + "</ul></article>";
     h += '<section class="instrument quiz" id="check"><div class="day-head"><div><span class="label">Check · 3 questions</span><h2>What stuck?</h2></div><span class="stamp" id="qbest"></span></div><div id="quiz"></div></section>';
     if (covers.length) {
@@ -902,14 +998,14 @@ a.btn { text-decoration: none; }
 
   function loadLesson(l) {
     var box = document.getElementById("reading");
-    function show(html) { box.innerHTML = html; box.removeAttribute("aria-busy"); }
-    if (lessonCache[l.id]) { show(lessonCache[l.id]); return; }
+    function show(html, text) { box.innerHTML = html; box.removeAttribute("aria-busy"); if (text) applyMarks(l.id); }
+    if (lessonCache[l.id]) { show(lessonCache[l.id], true); return; }
     fetch("/lessons/" + l.id + ".html").then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.text();
     }).then(function (html) {
       lessonCache[l.id] = html;
-      if (route === "lesson/" + l.id) show(html);
+      if (route === "lesson/" + l.id) show(html, true);
     }).catch(function () {
       if (route !== "lesson/" + l.id) return;
       show('<div class="empty"><span class="label">Reading unavailable</span><p>The lesson text comes from the server, which can\'t be reached, and this lesson isn\'t in the offline cache yet.</p><button class="btn" type="button" id="retry-lesson">Try again</button></div>');
@@ -1088,14 +1184,290 @@ a.btn { text-decoration: none; }
     if (ms === 0) { stopClock(); btn.textContent = "Time · restart"; toast("Time", "Rank what you found, then reveal the key"); }
   }
 
+  // ==== Focus mode and the block timer ====
+  // A block is 25 minutes (or 15 when starting is hard), then a 5-minute
+  // break. Each finished block is +XP.block. The timer lives in this browser
+  // only (a per-device convenience, like a kitchen timer), and survives a
+  // reload: it's kept as an end time, not a count of ticks.
+  var FKEY = LS + "-focus", BREAK_MIN = 5;
+  var fz = (function () { try { return JSON.parse(localStorage.getItem(FKEY) || "null"); } catch (e) { return null; } })() ||
+    { on: false, mode: "idle", len: 25, end: 0, left: 0 };
+  function saveFocus() { try { localStorage.setItem(FKEY, JSON.stringify(fz)); } catch (e) {} }
+  function fzLeft() { return fz.end ? Math.max(0, fz.end - Date.now()) : fz.left; }
+  function mmss(ms) { var t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ":" + pad2(t % 60); }
+  function fzSub(s) {
+    var n = s.blocksToday;
+    return (n ? n + " block" + (n === 1 ? "" : "s") + " today" : "No blocks yet today") + " · +" + XP.block + " XP each";
+  }
+
+  function setFocus(on, quiet) {
+    fz.on = !!on; saveFocus();
+    if (fz.on) document.body.dataset.focus = "on"; else delete document.body.dataset.focus;
+    if (!quiet) { paintFocus(true); window.scrollTo(0, 0); }
+  }
+
+  function startBlock(len) {
+    unlockSound();
+    fz.mode = "work"; fz.len = len; fz.end = Date.now() + len * 60000; fz.left = 0;
+    saveFocus(); paintFocus(true);
+  }
+  function pauseBlock() { fz.left = fzLeft(); fz.end = 0; saveFocus(); paintFocus(true); }
+  function resumeBlock() { unlockSound(); fz.end = Date.now() + fz.left; fz.left = 0; saveFocus(); paintFocus(true); }
+  function stopBlock() { fz.mode = "idle"; fz.end = 0; fz.left = 0; saveFocus(); paintFocus(true); }
+
+  function tickFocus() {
+    if (fz.mode === "idle" || !fz.end) return;
+    if (Date.now() < fz.end) { paintFocus(false); return; }
+    var late = Date.now() - fz.end;
+    if (fz.mode === "work") {
+      // Ran out while the page was closed for over an hour: the block isn't
+      // credited. Who knows what happened in that time; the record shouldn't guess.
+      if (late < 3600000) {
+        change(function () { state.blocks[today()] = Math.min(48, (state.blocks[today()] || 0) + 1); }, "Focus block · " + fz.len + " min");
+        chime();
+        fz.mode = "break"; fz.end = Date.now() + BREAK_MIN * 60000;
+        toast("Break · " + BREAK_MIN + " min", "Stand up, get water. Not the phone.");
+      } else { fz.mode = "idle"; fz.end = 0; }
+    } else {
+      fz.mode = "idle"; fz.end = 0;
+      if (late < 600000) { chime(); toast("Break over", "One more block?"); }
+    }
+    saveFocus(); paintFocus(true);
+  }
+
+  function paintFocus(full) {
+    var bar = document.getElementById("focusbar"); if (!bar) return;
+    var running = fz.mode !== "idle", paused = running && !fz.end;
+    if (running) document.body.dataset.timer = "on"; else delete document.body.dataset.timer;
+    bar.dataset.mode = fz.mode; bar.dataset.paused = String(paused);
+    var left = running ? fzLeft() : fz.len * 60000, total = (fz.mode === "break" ? BREAK_MIN : fz.len) * 60000;
+    setText("fb-clock", mmss(left));
+    setText("fb-label", fz.mode === "break" ? "Break" : paused ? "Focus block · paused" : running ? "Focus block · " + fz.len + " min" : "Focus block");
+    var lit = running ? Math.floor(20 * (1 - left / total)) : 0;
+    Array.prototype.forEach.call(document.querySelectorAll("#fb-ticks i"), function (el, i) { el.className = i < lit ? "on" : ""; });
+    document.title = (running && !paused ? mmss(left) + " · " + (fz.mode === "break" ? "Break" : "Focus") + " · " : "") + TITLE;
+    if (!full) return;
+    var b = function (act, text, cls, extra) { return '<button type="button" class="btn' + (cls ? " " + cls : "") + '" data-act="' + act + '"' + (extra || "") + ">" + text + "</button>"; };
+    var h = "";
+    if (fz.mode === "idle") h = b("start", "Start 25 min", "btn-primary", ' data-len="25"') + b("start", "15 min", "", ' data-len="15"');
+    else if (fz.mode === "work") h = (paused ? b("resume", "Resume", "btn-primary") : b("pause", "Pause")) + b("stop", "Stop");
+    else h = b("stop", "Skip break");
+    h += fz.on ? b("focus-off", "Exit focus", "btn-quiet") : b("focus-on", "Focus mode", "btn-quiet");
+    document.getElementById("fb-ctl").innerHTML = h;
+    setText("fb-sub", fzSub(score()));
+  }
+
+  // Two short tones at the end of a block or break. Browsers only allow
+  // sound after a tap, so the context is created on Start.
+  var audio = null;
+  function unlockSound() {
+    try { if (!audio) { var C = window.AudioContext || window.webkitAudioContext; if (C) audio = new C(); } if (audio && audio.state === "suspended") audio.resume(); } catch (e) {}
+  }
+  function chime() {
+    if (!audio) return;
+    try {
+      [[0, 660], [0.28, 880]].forEach(function (n) {
+        var o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + n[0];
+        o.frequency.value = n[1];
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + 0.55);
+      });
+    } catch (e) {}
+  }
+
+  // ==== The notebook: parked thoughts, notes and highlights ====
+  function notebookCount() {
+    var n = state.later.length + Object.keys(state.notes).length;
+    Object.keys(state.marks).forEach(function (k) { n += state.marks[k].length; });
+    return n;
+  }
+  function park(text) {
+    var t = text.trim().slice(0, 500); if (!t) return false;
+    if (state.later.length >= 300) { toast("Full", "Clear some parked thoughts first"); return false; }
+    state.later.push({ t: t, at: today() });
+    queueSave(); updateCounts();
+    toast("Parked", "It's in Notes. Back to the task.");
+    return true;
+  }
+
+  function notesHtml() {
+    return '<section class="section-head syl-head"><span class="label">Notes</span>' +
+      '<p class="lede">What you parked, wrote and highlighted. Highlight by selecting text in any lesson; write notes under each one. Saved with the rest of your progress.</p>' +
+      '<div class="nb-search"><input class="field" type="search" id="nb-q" placeholder="Search your notes" aria-label="Search your notes"></div></section><div id="nb"></div>';
+  }
+  function renderNotebook() {
+    var box = document.getElementById("nb"); if (!box) return;
+    var qel = document.getElementById("nb-q"), q = qel ? qel.value.trim().toLowerCase() : "";
+    var hit = function (t) { return !q || String(t).toLowerCase().indexOf(q) >= 0; };
+    var h = "", later = state.later.map(function (x, i) { return [x, i]; }).filter(function (p) { return hit(p[0].t); });
+    h += '<section class="instrument"><div class="section-head"><span class="label">Parked for later · ' + state.later.length + "</span>" +
+      '<p class="why">Thoughts that showed up mid-task. Deal with them after the block, or never.</p></div>';
+    if (later.length) {
+      h += '<ul class="nb-later">' + later.slice().reverse().map(function (p) {
+        return "<li><span>" + esc(p[0].t) + '</span><span class="stamp">' + esc(p[0].at) + '</span><button type="button" class="btn" data-act="unpark" data-i="' + p[1] + '">Done</button></li>';
+      }).join("") + "</ul>";
+    }
+    h += '<form class="park-form" data-park><input class="field" name="t" maxlength="500" autocomplete="off" placeholder="Park a thought" aria-label="Park a thought"><button class="btn" type="submit">Park</button></form></section>';
+    var shown = 0;
+    LESSONS.forEach(function (l) {
+      var marks = state.marks[l.id] || [], note = state.notes[l.id] || "";
+      if (!marks.length && !note) return;
+      if (q && !hit(l.title) && !hit(note) && !marks.some(hit)) return;
+      shown++;
+      h += '<section class="instrument nb-lesson"><div class="section-head"><span class="label">Lesson ' + (LESSONS.indexOf(l) + 1) + " · " + esc(l.part.title) + "</span>" +
+        '<h2><a href="#/lesson/' + l.id + '">' + esc(l.title) + " ›</a></h2></div>";
+      if (marks.length) {
+        h += '<ul class="marks">' + marks.map(function (m, i) {
+          return "<li><q>" + esc(m) + '</q><button type="button" class="btn btn-quiet" data-act="unmark" data-lesson="' + l.id + '" data-i="' + i + '" aria-label="Remove highlight">Remove</button></li>';
+        }).join("") + "</ul>";
+      }
+      h += '<label class="notes"><span class="label">Your notes</span><textarea data-note="' + l.id + '" rows="4">' + esc(note) + "</textarea></label></section>";
+    });
+    if (!shown && !Object.keys(state.notes).length && !Object.keys(state.marks).length) {
+      h += '<section class="instrument"><div class="empty"><span class="label">No highlights or notes yet</span>' +
+        "<p>Open a lesson, select a sentence worth keeping and press Highlight. Your notes box is under each lesson.</p>" +
+        '<a class="btn" href="#/syllabus">Open the syllabus</a></div></section>';
+    } else if (!shown) {
+      h += '<section class="instrument"><div class="empty"><span class="label">Nothing matches</span><p>No lesson notes or highlights contain that.</p></div></section>';
+    }
+    box.innerHTML = h;
+  }
+  // After the server's copy arrives: update notes in place, unless being typed in.
+  function refreshNotebook() {
+    Array.prototype.forEach.call(document.querySelectorAll("textarea[data-note]"), function (t) {
+      if (t !== document.activeElement) t.value = state.notes[t.dataset.note] || "";
+    });
+    if (route === "notes") renderNotebook();
+    if (route && route.indexOf("lesson/") === 0) repaintReading(route.slice(7));
+  }
+
+  // ---- Highlights. Stored as the selected text, not as positions, so they
+  // survive a lesson being edited; one whose text is gone stays in Notes.
+  // Matching ignores whitespace, because a selection's text and the page's
+  // text differ in line breaks between paragraphs and list items. ----
+  function squeeze(t) { return t.replace(/\s+/g, ""); }
+  // Case too: a selection's text is what's rendered, so a label that CSS
+  // uppercases comes back as "FROM PHP" while the page holds "From PHP".
+  function fold(t) { return squeeze(t).split("").map(function (c) { var l = c.toLowerCase(); return l.length === 1 ? l : c; }).join(""); }
+  function applyMarks(id) {
+    var box = document.getElementById("reading"), marks = state.marks[id] || [];
+    if (!box) return;
+    marks.forEach(function (m, idx) {
+      var walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), flat = "", at = [], n;
+      while ((n = walk.nextNode())) {
+        var v = n.nodeValue;
+        for (var i = 0; i < v.length; i++) {
+          if (/\s/.test(v[i])) continue;
+          var c = v[i].toLowerCase(); flat += c.length === 1 ? c : v[i]; at.push([n, i]);
+        }
+      }
+      var want = fold(m), pos = want ? flat.indexOf(want) : -1;
+      if (pos < 0) return;
+      var segs = [];
+      for (var k = pos; k < pos + want.length; k++) {
+        var last = segs[segs.length - 1];
+        if (last && last.node === at[k][0]) last.b = at[k][1]; else segs.push({ node: at[k][0], a: at[k][1], b: at[k][1] });
+      }
+      segs.forEach(function (sg) {
+        var r = document.createRange(), el = document.createElement("mark");
+        r.setStart(sg.node, sg.a); r.setEnd(sg.node, sg.b + 1);
+        el.dataset.mark = String(idx);
+        try { r.surroundContents(el); } catch (e) {}
+      });
+    });
+  }
+  function repaintReading(id) {
+    var box = document.getElementById("reading");
+    if (box && lessonCache[id] && route === "lesson/" + id) { box.innerHTML = lessonCache[id]; applyMarks(id); }
+  }
+  function changeMarks(id, fn) {
+    var list = (state.marks[id] || []).slice();
+    fn(list);
+    if (list.length) state.marks[id] = list; else delete state.marks[id];
+    queueSave(); updateCounts();
+  }
+
+  // The highlight button. On a phone, tapping it can clear the selection
+  // before the tap lands, so the last selection is kept for a moment.
+  var lastSel = null, unmarkAt = null, selHide = null;
+  function showSelbar(text) {
+    clearTimeout(selHide);
+    var bar = document.getElementById("selbar");
+    document.getElementById("selbar-btn").textContent = text;
+    bar.hidden = false;
+  }
+  function hideSelbar() { var bar = document.getElementById("selbar"); if (bar) bar.hidden = true; unmarkAt = null; }
+  document.addEventListener("selectionchange", function () {
+    var box = document.getElementById("reading"), sel = window.getSelection();
+    if (box && route && route.indexOf("lesson/") === 0 && sel && !sel.isCollapsed && sel.rangeCount &&
+        box.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      var t = sel.toString().trim();
+      if (squeeze(t).length >= 3 && t.length <= 1000) { lastSel = { t: t, id: route.slice(7), at: Date.now() }; unmarkAt = null; showSelbar("Highlight"); return; }
+    }
+    if (unmarkAt) return;
+    clearTimeout(selHide);
+    selHide = setTimeout(hideSelbar, 400);
+  });
+  function selbarAct() {
+    if (unmarkAt) {
+      var u = unmarkAt;
+      changeMarks(u.id, function (list) { list.splice(u.i, 1); });
+      repaintReading(u.id);
+    } else if (lastSel && Date.now() - lastSel.at < 5000) {
+      var s = lastSel;
+      if ((state.marks[s.id] || []).length >= 200) toast("Full", "200 highlights is the limit per lesson");
+      else changeMarks(s.id, function (list) { if (list.indexOf(s.t) < 0) list.push(s.t); });
+      try { window.getSelection().removeAllRanges(); } catch (e) {}
+      repaintReading(s.id);
+    }
+    lastSel = null; hideSelbar();
+  }
+
+  // One listener for every button with a data-act, wherever it is.
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (t.closest && t.closest("#selbar-btn")) { selbarAct(); return; }
+    var mk = t.closest && t.closest("#reading mark[data-mark]");
+    if (mk && route && route.indexOf("lesson/") === 0 && window.getSelection().isCollapsed) {
+      unmarkAt = { id: route.slice(7), i: +mk.dataset.mark }; showSelbar("Remove highlight"); return;
+    }
+    if (unmarkAt) hideSelbar();
+    var b = t.closest && t.closest("[data-act]"); if (!b) return;
+    var act = b.dataset.act;
+    if (act === "focus-on") setFocus(true);
+    else if (act === "focus-off") setFocus(false);
+    else if (act === "start") startBlock(+b.dataset.len || 25);
+    else if (act === "pause") pauseBlock();
+    else if (act === "resume") resumeBlock();
+    else if (act === "stop") stopBlock();
+    else if (act === "unpark") { state.later.splice(+b.dataset.i, 1); queueSave(); updateCounts(); renderNotebook(); }
+    else if (act === "unmark") { changeMarks(b.dataset.lesson, function (list) { list.splice(+b.dataset.i, 1); }); renderNotebook(); }
+  });
+  // Keep the selection when the button is pressed with a mouse.
+  document.addEventListener("mousedown", function (ev) { if (ev.target.closest && ev.target.closest("#selbar")) ev.preventDefault(); });
+  document.addEventListener("submit", function (ev) {
+    var f = ev.target; if (!f.hasAttribute || !f.hasAttribute("data-park")) return;
+    ev.preventDefault();
+    if (park(f.elements.t.value)) { f.elements.t.value = ""; if (route === "notes") renderNotebook(); }
+  });
+  document.addEventListener("input", function (ev) {
+    var t = ev.target;
+    if (t.id === "nb-q") { renderNotebook(); return; }
+    if (!t.dataset || !t.dataset.note) return;
+    var v = t.value.slice(0, 20000);
+    if (v.trim()) state.notes[t.dataset.note] = v; else delete state.notes[t.dataset.note];
+    queueSave();
+    var nn = notebookCount(); setText("tab-notes", nn ? String(nn) : "");
+  });
+
   // ---- Routing ----
-  //   #/plan  #/plan/<item>  #/syllabus  #/lesson/<id>[/check]  #/drills  #/drill/<id>  #/review  #/record
+  //   #/plan  #/plan/<item>  #/syllabus  #/lesson/<id>[/check]  #/drills  #/drill/<id>  #/review  #/notes  #/record
   function renderView() {
     var hash = location.hash.replace(/^#\/?/, "") || "plan";
     var m = /^lesson\/([a-z0-9-]+)(\/check)?$/.exec(hash), focus = /^plan\/([a-z0-9-]+)$/.exec(hash), dr = /^drill\/([a-z0-9]+)$/.exec(hash);
     if (m && !BY_ID[m[1]]) { m = null; hash = "syllabus"; }
     if (focus) hash = "plan";
-    if (!m && !dr && ["plan", "syllabus", "record", "drills", "review"].indexOf(hash) < 0) hash = "plan";
+    if (!m && !dr && ["plan", "syllabus", "record", "drills", "review", "notes"].indexOf(hash) < 0) hash = "plan";
     if (route === "plan") planScroll = window.scrollY;
     if (route && route.indexOf("drill/") === 0) stopClock();
     route = m ? "lesson/" + m[1] : dr ? "drill/" + dr[1] : hash;
@@ -1103,7 +1475,11 @@ a.btn { text-decoration: none; }
     var view = document.getElementById("view");
     var tab = m ? "syllabus" : dr ? "drills" : hash === "review" ? "plan" : hash;
     view.innerHTML = m ? lessonHtml(BY_ID[m[1]]) : dr ? drillHtml(dr[1]) :
-      hash === "syllabus" ? syllabusHtml() : hash === "record" ? recordHtml() : hash === "drills" ? drillsHtml() : hash === "review" ? reviewHtml() : planHtml();
+      hash === "syllabus" ? syllabusHtml() : hash === "record" ? recordHtml() : hash === "drills" ? drillsHtml() : hash === "review" ? reviewHtml() :
+      hash === "notes" ? notesHtml() : planHtml();
+    // In focus mode the tabs are gone, so every other view ends with the next step.
+    if (hash !== "plan" || m || dr) view.insertAdjacentHTML("beforeend", '<div class="next-box focus-only" data-next></div>');
+    hideSelbar();
     Array.prototype.forEach.call(document.querySelectorAll(".tabs a"), function (a) {
       if (a.dataset.tab === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
@@ -1114,6 +1490,7 @@ a.btn { text-decoration: none; }
     } else if (dr) { renderDrill(dr[1]); window.scrollTo(0, 0); }
     else if (hash === "drills") { renderDrillList(); window.scrollTo(0, 0); }
     else if (hash === "review") { reviewRun = {}; renderReview(); window.scrollTo(0, 0); }
+    else if (hash === "notes") { renderNotebook(); window.scrollTo(0, 0); }
     else if (focus) {
       var row = document.querySelector('[data-item="' + focus[1] + '"]');
       if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600); }
@@ -1139,6 +1516,12 @@ a.btn { text-decoration: none; }
     setText("tab-syl", s.read + "/" + LESSONS.length);
     setText("tab-drl", drills ? s.drillsTried + "/" + drills.length : "");
     setText("tab-rec", s.badges.length + "/" + BADGES.length);
+    var nn = notebookCount();
+    setText("tab-notes", nn ? String(nn) : "");
+    Array.prototype.forEach.call(document.querySelectorAll("[data-next]"), function (el) {
+      var nh = nextHtml(); if (el._h !== nh) { el.innerHTML = nh; el._h = nh; }
+    });
+    setText("fb-sub", fzSub(s));
     PLAN.forEach(function (d) {
       var el = document.getElementById("count-" + d.id); if (!el) return;
       var all = dayItems(d), k = all.filter(function (i) { return state.done[i.id]; }).length;
@@ -1238,7 +1621,10 @@ a.btn { text-decoration: none; }
   var local = readLocal();
   if (local) { adopt(local); dirty = !!local.dirty; }
   renderShell();
+  setFocus(fz.on, true);
   renderView();
+  paintFocus(true);
+  setInterval(tickFocus, 1000);
   window.addEventListener("hashchange", renderView);
   loadDrills().catch(function () {});
   if (DEMO) setStatus("ok", "Demo · progress stays in this browser");
@@ -1249,6 +1635,7 @@ a.btn { text-decoration: none; }
     // Update in place rather than re-rendering, so a lesson being read
     // isn't reloaded and the scroll position stays put.
     Array.prototype.forEach.call(document.querySelectorAll("input[data-id]"), function (cb) { cb.checked = !!state.done[cb.dataset.id]; });
+    refreshNotebook();
     updateCounts();
     var at = srv.updated_at ? " · last change " + hhmm(new Date(srv.updated_at)) : "";
     setStatus("ok", "Synced with server" + at);

@@ -16,6 +16,13 @@ learner's progress in SQLite.
     log      XP earned per local day, for the streak and daily goal
     review   missed questions and when they're due again: {"py-types.1": "2026-11-08"}
     cleared  how many missed questions were later answered right
+    blocks   focus blocks finished per local day: {"2026-11-07": 3}
+    later    thoughts parked during a block: [{"t": "look up Laravel queues", "at": "2026-11-07"}]
+    notes    the learner's own notes per lesson: {"py-types": "..."}
+    marks    highlighted passages per lesson, as the text that was selected
+
+A PUT that leaves a field out keeps what's stored for it, so a tab still
+running an older page (which doesn't know about notes) can't wipe them.
 
 STUDY_DEMO=1 runs a public demo: no database at all, the page keeps each
 visitor's progress in their own browser, and PUT /state is refused. So
@@ -34,6 +41,7 @@ import os
 import re
 import sqlite3
 from collections.abc import Iterator
+from typing import Annotated
 from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -105,13 +113,25 @@ class QuizScore(BaseModel):
     of: int = Field(ge=1, le=20)
 
 
+class Parked(BaseModel):
+    t: str = Field(min_length=1, max_length=500)
+    at: str = Field(pattern=DATE.pattern)
+
+
+Mark = Annotated[str, Field(min_length=1, max_length=1000)]
+
+
 class Progress(BaseModel):
-    """The game layer: kept apart from `done` so older rows still load."""
+    """The game layer and the notebook: kept apart from `done` so older rows still load."""
 
     quiz: dict[str, QuizScore] = Field(default_factory=dict)
     log: dict[str, int] = Field(default_factory=dict)
     review: dict[str, str] = Field(default_factory=dict)
     cleared: int = Field(0, ge=0, le=100_000)
+    blocks: dict[str, int] = Field(default_factory=dict)
+    later: list[Parked] = Field(default_factory=list, max_length=300)
+    notes: dict[str, Annotated[str, Field(max_length=20_000)]] = Field(default_factory=dict)
+    marks: dict[str, list[Mark]] = Field(default_factory=dict)
 
     @field_validator("quiz")
     @classmethod
@@ -132,6 +152,23 @@ class Progress(BaseModel):
     def review_keys(cls, v: dict[str, str]) -> dict[str, str]:
         if len(v) > 500 or any(not REVIEW_KEY.match(k) or not DATE.match(d) for k, d in v.items()):
             raise ValueError("review keys are <lesson>.<n>, values YYYY-MM-DD")
+        return v
+
+    @field_validator("blocks")
+    @classmethod
+    def block_days(cls, v: dict[str, int]) -> dict[str, int]:
+        # 48 is a 24-hour day of 30-minute cycles: more is not from the page.
+        if len(v) > 400 or any(not DATE.match(k) or not 0 <= n <= 48 for k, n in v.items()):
+            raise ValueError("blocks keys are YYYY-MM-DD, values 0-48")
+        return v
+
+    @field_validator("notes", "marks")
+    @classmethod
+    def lesson_keys(cls, v: dict) -> dict:
+        if len(v) > 200 or any(not ID.match(k) for k in v):
+            raise ValueError("bad lesson ids")
+        if any(isinstance(x, list) and len(x) > 200 for x in v.values()):
+            raise ValueError("at most 200 highlights per lesson")
         return v
 
 
@@ -229,8 +266,15 @@ def put_state(body: State) -> StateOut:
     if app.state.demo:
         raise HTTPException(403, "demo: progress stays in your browser")
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    progress = Progress(quiz=body.quiz, log=body.log, review=body.review, cleared=body.cleared)
     with connect() as conn:  # commits on success, rolls back on error
+        # Fields the body left out keep their stored value (see the top).
+        missing = set(State.model_fields) - body.model_fields_set
+        if missing:
+            row = conn.execute("SELECT done, progress FROM state WHERE id = 1").fetchone()
+            if row is not None:
+                stored = State(done=json.loads(row[0]), **json.loads(row[1]))
+                body = body.model_copy(update={k: getattr(stored, k) for k in missing})
+        progress = Progress(**body.model_dump(exclude={"done"}))
         conn.execute(
             "INSERT INTO state (id, done, progress, updated_at) VALUES (1, ?, ?, ?)"
             " ON CONFLICT (id) DO UPDATE SET done = excluded.done,"
