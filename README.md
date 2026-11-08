@@ -79,6 +79,27 @@ Copy `config.example.json` to `config.json` (gitignored) and edit it:
 | `overrides` | Replace a plan item's text by id, e.g. your own project for the `eve-deepdive` item |
 | `mentor_token` | Turns on a read-only page at `/mentor/<token>` to share with a mentor: progress, scores, drills, highlights and notes, not parked thoughts. At least 32 characters: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The Record page shows the link to copy. Change it to revoke the link |
 
+### More than one learner
+
+Put each learner's own `start`, `target`, `finish_by`, `overrides` and
+`mentor_token` under `users`, keyed by their name, and set
+`STUDY_USER_HEADER` to a header your auth proxy sets to the logged-in name
+(oauth2-proxy with `--set-xauthrequest`, then in nginx
+`auth_request_set $u $upstream_http_x_auth_request_preferred_username;
+proxy_set_header X-Study-User $u;`). Each learner gets their own progress,
+dates and mentor link. A request without the header is refused, so the
+proxy must always set it, and must overwrite whatever a client sends.
+
+```json
+{ "owner": "anish",
+  "users": { "anish":  { "target": { "label": "Interview", "at": "2026-01-13T14:00:00+01:00" }, "mentor_token": "…" },
+             "friend": { "mentor_token": "…" } } }
+```
+
+`owner` names the learner whose progress was there before (and the one
+learner when there's no header). Someone not under `users` gets the
+top-level fields.
+
 Restart after editing; an invalid config stops the app at startup with the
 reason. Environment variables: `STUDY_DB` (SQLite path), `STUDY_CONFIG`
 (config path), `STUDY_HOST` and `STUDY_PORT` (default `127.0.0.1:8781`),

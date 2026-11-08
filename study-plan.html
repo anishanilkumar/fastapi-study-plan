@@ -812,7 +812,9 @@ body[data-focus="on"] .park { display: flex; }
     { id: "ready", t: "Interview-ready", d: "Reach the top rank", ok: function (s) { return s.rank === RANKS.length - 1; } }
   ];
 
-  var LS = DEMO ? "study-plan-demo" : "study-plan";
+  // Each learner's local copy under their own key (from the server), so two
+  // people on one browser never see or overwrite each other's progress.
+  var LS = DEMO ? "study-plan-demo" : CONFIG.store || "study-plan";
   // Everything the server stores. Notes and highlights earn no XP: they're
   // for you, and XP for them would reward copying text instead of learning it.
   function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, marknotes: {}, answers: {}, perday: {}, deadline: null }; }
@@ -1696,8 +1698,8 @@ body[data-focus="on"] .park { display: flex; }
       h += "</article>";
       box.innerHTML = h;
       var notes = document.getElementById("notes");
-      try { notes.value = localStorage.getItem("study-plan-notes-" + d.id) || ""; } catch (e) {}
-      notes.oninput = function () { try { localStorage.setItem("study-plan-notes-" + d.id, notes.value); } catch (e) {} };
+      try { notes.value = localStorage.getItem(LS.replace("study-plan", "study-plan-notes") + "-" + d.id) || ""; } catch (e) {}
+      notes.oninput = function () { try { localStorage.setItem(LS.replace("study-plan", "study-plan-notes") + "-" + d.id, notes.value); } catch (e) {} };
       var reveal = document.getElementById("reveal");
       if (reveal) reveal.onclick = function () {
         stopClock(); box.dataset.revealed = "true";

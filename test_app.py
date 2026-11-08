@@ -185,3 +185,55 @@ def test_mentor_token_checked_and_never_leaked(mentor):
 def test_no_mentor_page_without_a_token(client):
     assert client.get("/mentor/" + "t" * 40).status_code == 404
     assert '"mentor_path"' not in client.get("/").text
+
+
+A_TOKEN, B_TOKEN = "a" * 40, "b" * 40
+
+
+@pytest.fixture
+def two(tmp_path, monkeypatch):
+    """Two learners behind a proxy that names them; anish owns the old progress."""
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE state (id INTEGER PRIMARY KEY CHECK (id = 1), done TEXT NOT NULL, updated_at TEXT NOT NULL, progress TEXT NOT NULL DEFAULT '{}')")
+    conn.execute("""INSERT INTO state VALUES (1, '{"sat-is": true}', '2026-11-07T10:00:00+00:00', '{}')""")
+    conn.commit(); conn.close()
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"owner": "anish", "users": {
+        "anish": {"target": {"label": "Interview", "at": "2026-11-10T13:30:00+01:00"}, "mentor_token": A_TOKEN},
+        "friend": {"mentor_token": B_TOKEN}}}))
+    monkeypatch.setattr(study, "DB_PATH", db)
+    monkeypatch.setattr(study, "CONFIG_PATH", cfg)
+    monkeypatch.setenv("STUDY_USER_HEADER", "X-Study-User")
+    with TestClient(study.app) as c:
+        yield c
+
+
+def as_(user):
+    return {"X-Study-User": user}
+
+
+def test_learners_are_kept_apart(two):
+    assert two.get("/state", headers=as_("anish")).json()["done"] == {"sat-is": True}   # the old progress is the owner's
+    assert two.get("/state", headers=as_("friend")).json()["done"] == {}
+    two.put("/state", headers=as_("friend"), json={"done": {"sat-none": True}, "notes": {"py-types": "hers"}})
+    assert two.get("/state", headers=as_("anish")).json()["done"] == {"sat-is": True}
+    assert two.get("/state", headers=as_("anish")).json()["notes"] == {}
+    assert two.get("/state", headers=as_("friend")).json()["notes"] == {"py-types": "hers"}
+
+
+def test_no_name_no_progress(two):
+    assert two.get("/state").status_code == 401
+    assert two.put("/state", json={"done": {}}).status_code == 401
+    assert two.get("/state", headers=as_("not a name!")).status_code == 401
+
+
+def test_each_learner_gets_their_own_page_and_mentor_link(two):
+    mine, hers = two.get("/", headers=as_("anish")).text, two.get("/", headers=as_("friend")).text
+    assert f"/mentor/{A_TOKEN}" in mine and B_TOKEN not in mine and '"target": {"label": "Interview"' in mine
+    assert f"/mentor/{B_TOKEN}" in hers and A_TOKEN not in hers and '"target": null' in hers
+    assert '"store": "study-plan"' in mine and '"store": "study-plan-friend"' in hers
+    two.put("/state", headers=as_("friend"), json={"done": {"sat-none": True}})
+    assert '"sat-none": true' in two.get(f"/mentor/{B_TOKEN}").text
+    assert '"sat-none": true' not in two.get(f"/mentor/{A_TOKEN}").text
+    assert '"sat-is": true' in two.get(f"/mentor/{A_TOKEN}").text

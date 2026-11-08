@@ -32,6 +32,12 @@ learner's progress in SQLite.
 A PUT that leaves a field out keeps what's stored for it, so a tab still
 running an older page (which doesn't know about notes) can't wipe them.
 
+Several learners: set STUDY_USER_HEADER to a header your auth proxy sets to
+the logged-in user's name (and strips from what clients send). Each name
+gets its own progress, and its own dates and mentor link from "users" in
+config.json. Without it there is one learner, named by config's "owner"
+(or nameless). Progress from before learners were named belongs to "owner".
+
 The mentor link is the one route meant to sit outside your login: put only
 /mentor/ outside it. The token is the only thing guarding it, so make it long
 (at least 32 characters; `python -c "import secrets; print(secrets.token_urlsafe(32))"`)
@@ -41,7 +47,7 @@ STUDY_DEMO=1 runs a public demo: no database at all, the page keeps each
 visitor's progress in their own browser, and PUT /state is refused. So
 visitors never see or change each other's ticks, and there's nothing to reset.
 
-One row holds the whole state as JSON. The page sends everything on each save,
+One row per learner holds their whole state as JSON. The page sends everything on each save,
 so there is nothing to merge and the last write wins, which is what a single
 learner wants. There is no login: run it on localhost, or put your own auth
 in front of it (see README).
@@ -60,7 +66,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -91,8 +97,12 @@ class Target(BaseModel):
         return v
 
 
-class Config(BaseModel):
-    title: str = Field("Python and FastAPI, from the basics", max_length=120)
+USER = re.compile(r"^[A-Za-z0-9._@-]{1,128}$")
+
+
+class Personal(BaseModel):
+    """One learner's own dates, texts and mentor link."""
+
     start: date | None = None                # day 1 of the plan; None shows "Day 1"
     target: Target | None = None             # the date you're working towards
     finish_by: datetime | None = None        # default deadline for all the work; the page can change it
@@ -107,6 +117,38 @@ class Config(BaseModel):
         if v is not None and v.tzinfo is None:
             raise ValueError("finish_by needs a UTC offset, e.g. +01:00")
         return v
+
+
+class Config(Personal):
+    """The top-level personal fields are for a learner with no entry in `users`."""
+
+    title: str = Field("Python and FastAPI, from the basics", max_length=120)
+    owner: str | None = Field(None, pattern=USER.pattern)    # the one learner, when no header names them
+    users: dict[str, Personal] = Field(default_factory=dict)
+
+    @field_validator("users")
+    @classmethod
+    def user_names(cls, v: dict[str, Personal]) -> dict[str, Personal]:
+        if any(not USER.match(k) for k in v):
+            raise ValueError("user names are letters, digits and ._@-")
+        tokens = [p.mentor_token for p in v.values() if p.mentor_token]
+        if len(tokens) != len(set(tokens)):
+            raise ValueError("each learner needs their own mentor_token")
+        return v
+
+    def personal(self, user: str) -> Personal:
+        if user in self.users:
+            return self.users[user]
+        return Personal(**self.model_dump(include=set(Personal.model_fields)))
+
+    def mentor_user(self, token: str) -> str | None:
+        """Whose mentor link this is, if anyone's. Every token is compared, in constant time."""
+        found = None
+        pairs = [(u, p.mentor_token) for u, p in self.users.items()] + [(self.owner or "", self.mentor_token)]
+        for user, want in pairs:
+            if want and secrets.compare_digest(token.encode(), want.encode()) and found is None:
+                found = user
+        return found
 
 
 def load_config() -> Config:
@@ -277,7 +319,34 @@ async def lifespan(app: FastAPI):
         cols = {r[1] for r in conn.execute("PRAGMA table_info(state)")}
         if "progress" not in cols:
             conn.execute("ALTER TABLE state ADD COLUMN progress TEXT NOT NULL DEFAULT '{}'")
+        # One row per learner. The old one-row table is copied in once, as
+        # the owner's, and then left alone (a copy to go back to).
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS learners ("
+            " user TEXT PRIMARY KEY,"
+            " done TEXT NOT NULL,"
+            " progress TEXT NOT NULL,"
+            " updated_at TEXT NOT NULL)"
+        )
+        owner = app.state.config.owner or ""
+        if conn.execute("SELECT COUNT(*) FROM learners").fetchone()[0] == 0:
+            conn.execute("INSERT INTO learners SELECT ?, done, progress, updated_at FROM state WHERE id = 1", (owner,))
+        elif owner and not conn.execute("SELECT 1 FROM learners WHERE user = ?", (owner,)).fetchone():
+            # Named an owner after the copy: the nameless progress is theirs.
+            conn.execute("UPDATE learners SET user = ? WHERE user = ''", (owner,))
     yield
+
+
+def learner(request: Request) -> str:
+    """Whose progress this request is about."""
+    header = os.environ.get("STUDY_USER_HEADER")
+    if not header:
+        return app.state.config.owner or ""
+    user = request.headers.get(header, "")
+    if not USER.match(user):
+        # The proxy always sets it; without it, nobody can be told apart.
+        raise HTTPException(401, "no learner name from the proxy")
+    return user
 
 
 app = FastAPI(title="Study plan", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -289,24 +358,34 @@ app.mount("/icons", StaticFiles(directory=HERE / "icons"), name="icons")
 NO_CACHE = {"Cache-Control": "no-cache"}  # revalidate each visit, so a deploy shows at once
 
 
-def render_page(extra: dict) -> str:
-    cfg = json.dumps({**app.state.config.model_dump(mode="json", exclude={"mentor_token"}), **extra})
+def render_page(user: str, extra: dict) -> str:
+    cfg = app.state.config
+    me = cfg.personal(user).model_dump(mode="json", exclude={"mentor_token"})
+    # Each learner's local copy under its own key; the owner keeps the original.
+    store = "study-plan" if user == (cfg.owner or "") else "study-plan-" + user
+    cfg = json.dumps({"title": cfg.title, **me, "store": store, **extra})
     # "<" escaped so a title containing "</script>" can't end the script early.
     return PAGE.read_text(encoding="utf-8").replace("/*STUDY_CONFIG*/null", cfg.replace("<", "\\u003c"), 1)
 
 
 @app.get("/", include_in_schema=False)
-def page() -> HTMLResponse:
-    extra: dict = {"demo": app.state.demo}
-    if app.state.config.mentor_token and not app.state.demo:
-        extra["mentor_path"] = "/mentor/" + app.state.config.mentor_token   # shown on Record, to copy
-    return HTMLResponse(render_page(extra), headers=NO_CACHE)
+def page(request: Request) -> HTMLResponse:
+    if app.state.demo:
+        return HTMLResponse(render_page("", {"demo": True}), headers=NO_CACHE)
+    user = learner(request)
+    extra: dict = {"demo": False}
+    token = app.state.config.personal(user).mentor_token
+    if token:
+        extra["mentor_path"] = "/mentor/" + token   # shown in the masthead and on Record, to copy
+    # A page per learner: never shared by a cache between them.
+    return HTMLResponse(render_page(user, extra), headers={**NO_CACHE, "Vary": "Cookie"})
 
 
-def check_mentor(token: str) -> None:
-    want = app.state.config.mentor_token
-    if app.state.demo or not want or not secrets.compare_digest(token.encode(), want.encode()):
+def check_mentor(token: str) -> str:
+    user = None if app.state.demo else app.state.config.mentor_user(token)
+    if user is None:
         raise HTTPException(404)
+    return user
 
 
 # The token is in the URL, so: no referrer to the docs links, nothing cached.
@@ -315,13 +394,13 @@ MENTOR_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
 @app.get("/mentor/{token}", include_in_schema=False)
 def mentor_page(token: str) -> HTMLResponse:
-    check_mentor(token)
+    user = check_mentor(token)
     data = {
-        "state": read_state().model_dump(mode="json", exclude={"later"}),
+        "state": read_state(user).model_dump(mode="json", exclude={"later"}),
         "quizzes": json.loads((HERE / "quizzes.json").read_text(encoding="utf-8")),
         "drills": json.loads((HERE / "drills.json").read_text(encoding="utf-8")),
     }
-    html = render_page({"demo": False, "mentor": data}).replace('url("/fonts/', f'url("/mentor/{token}/fonts/')
+    html = render_page(user, {"demo": False, "mentor": data}).replace('url("/fonts/', f'url("/mentor/{token}/fonts/')
     return HTMLResponse(html, headers=MENTOR_HEADERS)
 
 
@@ -357,39 +436,40 @@ def service_worker() -> FileResponse:
 # Plain def, not async def: sqlite3 blocks, so these run in the threadpool
 # instead of stalling the event loop.
 @app.get("/state", response_model=StateOut)
-def get_state() -> StateOut:
+def get_state(request: Request) -> StateOut:
     if app.state.demo:
         return StateOut()
-    return read_state()
+    return read_state(learner(request))
 
 
-def read_state() -> StateOut:
+def read_state(user: str) -> StateOut:
     with connect() as conn:
-        row = conn.execute("SELECT done, progress, updated_at FROM state WHERE id = 1").fetchone()
+        row = conn.execute("SELECT done, progress, updated_at FROM learners WHERE user = ?", (user,)).fetchone()
     if row is None:
         return StateOut()
     return StateOut(done=json.loads(row[0]), **json.loads(row[1]), updated_at=row[2])
 
 
 @app.put("/state", response_model=StateOut)
-def put_state(body: State) -> StateOut:
+def put_state(body: State, request: Request) -> StateOut:
     if app.state.demo:
         raise HTTPException(403, "demo: progress stays in your browser")
+    user = learner(request)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with connect() as conn:  # commits on success, rolls back on error
         # Fields the body left out keep their stored value (see the top).
         missing = set(State.model_fields) - body.model_fields_set
         if missing:
-            row = conn.execute("SELECT done, progress FROM state WHERE id = 1").fetchone()
+            row = conn.execute("SELECT done, progress FROM learners WHERE user = ?", (user,)).fetchone()
             if row is not None:
                 stored = State(done=json.loads(row[0]), **json.loads(row[1]))
                 body = body.model_copy(update={k: getattr(stored, k) for k in missing})
         progress = Progress(**body.model_dump(exclude={"done"}))
         conn.execute(
-            "INSERT INTO state (id, done, progress, updated_at) VALUES (1, ?, ?, ?)"
-            " ON CONFLICT (id) DO UPDATE SET done = excluded.done,"
+            "INSERT INTO learners (user, done, progress, updated_at) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT (user) DO UPDATE SET done = excluded.done,"
             " progress = excluded.progress, updated_at = excluded.updated_at",
-            (json.dumps(body.done), progress.model_dump_json(), now),
+            (user, json.dumps(body.done), progress.model_dump_json(), now),
         )
     return StateOut(**body.model_dump(), updated_at=now)
 
