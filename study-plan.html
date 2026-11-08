@@ -499,6 +499,14 @@ body[data-focus="on"][data-view="plan"] .focusbar { position: sticky; top: 0; z-
 .fpill[data-mode="break"] .fp-time { color: var(--gold); }
 .fpill[data-paused="true"] .fp-time { color: var(--ink-dim); }
 body[data-focus="on"][data-view="plan"] .fpill { display: none; }
+/* ==== Mentor view: read-only. Anything that acts is hidden, not disabled. ==== */
+body[data-mentor] .focusbar, body[data-mentor] .fpill, body[data-mentor] .selbar,
+body[data-mentor] #view .btn, body[data-mentor] #view form, body[data-mentor] .drill-timer,
+body[data-mentor] .drill-own, body[data-mentor] .focus-only, body[data-mentor] .nb-search { display: none !important; }
+body[data-mentor] .lessons a[data-lesson], body[data-mentor] .perf a, body[data-mentor] .missed a, body[data-mentor] .item a[href^="#/"] { pointer-events: none; color: inherit; text-decoration: none; }
+body[data-mentor] input[type="checkbox"] { pointer-events: none; }
+.mentor-link { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+.mentor-link .field { flex: 1; min-width: 0; font-family: var(--face-mono); font-size: var(--t-min); }
 .btn-quiet { color: var(--ink-dim); border-color: transparent; }
 .btn-quiet:hover { color: var(--ink); }
 .park { display: none; gap: 0.5rem; }
@@ -673,6 +681,9 @@ body[data-focus="on"] .park { display: flex; }
   // Demo mode: no server state at all. Each visitor's progress lives in
   // their own browser, and the page never tries to save it anywhere else.
   var DEMO = !!CONFIG.demo;
+  // Mentor mode (/mentor/<token>): read-only. The progress, questions and
+  // drills come inlined in the page; nothing is fetched, stored or saved.
+  var MENTOR = CONFIG.mentor || null;
   function planDate(n) { var t = new Date(START); t.setDate(t.getDate() + n); return t; }
   function dayLabel(d) {
     var base = START ? planDate(d.n).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "Day " + (d.n + 1);
@@ -860,6 +871,7 @@ body[data-focus="on"] .park { display: flex; }
   // Wrap every change: measure before and after, log the XP difference to
   // today, and announce what moved. Unticking takes XP back, honestly.
   function change(mutate, why) {
+    if (MENTOR) return;
     var before = score();
     mutate();
     var after = score(), delta = after.xp - before.xp;
@@ -894,6 +906,7 @@ body[data-focus="on"] .park { display: flex; }
     try { return JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) { return null; }
   }
   function writeLocal() {
+    if (MENTOR) return false;
     try {
       var v = payload(); v.dirty = dirty;
       localStorage.setItem(LS, JSON.stringify(v));
@@ -931,6 +944,14 @@ body[data-focus="on"] .park { display: flex; }
   function renderShell() {
     document.title = TITLE;
     var h = "";
+    if (MENTOR) {
+      var upd = MENTOR.state.updated_at ? new Date(MENTOR.state.updated_at) : null;
+      h += '<header class="mast"><span class="wordmark">Study plan · progress report</span>' +
+        "<h1>" + esc(TITLE) + "</h1>" +
+        '<p class="lede">A read-only view of the learner\'s progress' + (upd ? ", as of their last change " + esc(fmtWhen(upd)) : "") +
+        ". Reload for the latest. The page speaks to the learner, so \u201cyou\u201d means them." +
+        (TARGET ? " They're working towards: " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") + "</p></header>";
+    } else
     h += '<header class="mast"><span class="wordmark">Study plan</span>' +
       "<h1>" + esc(TITLE) + "</h1>" +
       '<p class="lede">Python and FastAPI for PHP developers, in three days.' +
@@ -959,7 +980,7 @@ body[data-focus="on"] .park { display: flex; }
     h += '<nav class="tabs" aria-label="Views">' +
       '<a href="#/plan" data-tab="plan">Plan <span id="tab-plan"></span></a>' +
       '<a href="#/syllabus" data-tab="syllabus">Syllabus <span id="tab-syl"></span></a>' +
-      '<a href="#/quiz" data-tab="quiz">Quiz</a>' +
+      (MENTOR ? "" : '<a href="#/quiz" data-tab="quiz">Quiz</a>') +
       '<a href="#/drills" data-tab="drills">Drills <span id="tab-drl"></span></a>' +
       '<a href="#/notes" data-tab="notes">Notes <span id="tab-notes"></span></a>' +
       '<a href="#/record" data-tab="record">Record <span id="tab-rec"></span></a></nav>';
@@ -1097,6 +1118,11 @@ body[data-focus="on"] .park { display: flex; }
         var on = s.badges.indexOf(b.id) >= 0;
         return '<li data-on="' + on + '"><span class="mark" aria-hidden="true"></span><span class="ltitle">' + esc(b.t) + '</span><span class="why">' + esc(b.d) + "</span>" + (on ? "" : '<span class="visually-hidden">(locked)</span>') + "</li>";
       }).join("") + "</ul></section>";
+    if (CONFIG.mentor_path && !MENTOR) {
+      h += '<section class="instrument"><div class="section-head"><span class="label">Share with your mentor</span>' +
+        '<p class="why">A read-only link: your progress, scores, drills, highlights and notes, but not your parked thoughts. No login needed, so share it only with them. To revoke it, change <code>mentor_token</code> in config.json and redeploy.</p></div>' +
+        '<div class="mentor-link"><input class="field" id="mentor-url" readonly value="' + esc(location.origin + CONFIG.mentor_path) + '" aria-label="Mentor link"><button type="button" class="btn" data-act="copy-mentor">Copy</button></div></section>';
+    }
     var rule = function (a, b) { return "<li><span>" + a + '</span><span class="stamp">' + b + "</span></li>"; };
     h += '<section class="instrument"><div class="section-head"><span class="label">How XP works</span></div><ul class="rules">' +
       rule("Tick a plan item", "+" + XP.tick) + rule("Read a lesson", "+" + XP.read) +
@@ -1608,14 +1634,14 @@ body[data-focus="on"] .park { display: flex; }
       var d = ds.filter(function (x) { return x.id === id; })[0], box = document.getElementById("drill");
       if (!box || route !== "drill/" + id) return;
       if (!d) { location.hash = "#/drills"; return; }
-      var revealed = drillTried(d) || box.dataset.revealed === "true";
+      var revealed = !!MENTOR || drillTried(d) || box.dataset.revealed === "true";
       var h = '<article class="instrument lesson"><header class="lesson-head"><span class="label">Drill · ' + d.minutes + " minutes · " + d.findings.length + " planted problems</span><h2>" + esc(d.title) + '</h2><p class="why">' + codeish(d.context) + "</p></header>" +
         '<div class="drill-timer"><span class="readout" id="clock">' + d.minutes + ':00</span><button type="button" class="btn" id="clock-btn">Start timer</button></div>' +
         '<div class="reading"><pre><code>' + esc(d.code) + "</code></pre></div>" +
-        '<label class="notes"><span class="label">Your findings, worst first</span><textarea id="notes" rows="6" placeholder="1. …"></textarea></label>';
+        '<label class="notes drill-own"><span class="label">Your findings, worst first</span><textarea id="notes" rows="6" placeholder="1. …"></textarea></label>';
       if (!revealed) h += '<button type="button" class="btn btn-primary" id="reveal">Reveal the answer key</button>';
       else {
-        h += '<div class="section-head key-head"><span class="label">Answer key · tick what you found</span></div><ul>' +
+        h += '<div class="section-head key-head"><span class="label">' + (MENTOR ? "Answer key · ticked = found" : "Answer key · tick what you found") + '</span></div><ul>' +
           d.findings.map(function (f, n) {
             return itemHtml({ id: "drill-" + d.id + "-" + n, t: (n === 0 ? '<span class="worst">Worst</span> ' : "") + codeish(f.t), why: codeish(f.d) }, false, true);
           }).join("") + "</ul>";
@@ -1789,14 +1815,14 @@ body[data-focus="on"] .park { display: flex; }
     var qel = document.getElementById("nb-q"), q = qel ? qel.value.trim().toLowerCase() : "";
     var hit = function (t) { return !q || String(t).toLowerCase().indexOf(q) >= 0; };
     var h = "", later = state.later.map(function (x, i) { return [x, i]; }).filter(function (p) { return hit(p[0].t); });
-    h += '<section class="instrument"><div class="section-head"><span class="label">Parked for later · ' + state.later.length + "</span>" +
+    if (!MENTOR) h += '<section class="instrument"><div class="section-head"><span class="label">Parked for later · ' + state.later.length + "</span>" +
       '<p class="why">Thoughts that showed up mid-task. Deal with them after the block, or never.</p></div>';
     if (later.length) {
       h += '<ul class="nb-later">' + later.slice().reverse().map(function (p) {
         return "<li><span>" + esc(p[0].t) + '</span><span class="stamp">' + esc(p[0].at) + '</span><button type="button" class="btn" data-act="unpark" data-i="' + p[1] + '">Done</button></li>';
       }).join("") + "</ul>";
     }
-    h += '<form class="park-form" data-park><input class="field" name="t" maxlength="500" autocomplete="off" placeholder="Park a thought" aria-label="Park a thought"><button class="btn" type="submit">Park</button></form></section>';
+    if (!MENTOR) h += '<form class="park-form" data-park><input class="field" name="t" maxlength="500" autocomplete="off" placeholder="Park a thought" aria-label="Park a thought"><button class="btn" type="submit">Park</button></form></section>';
     var shown = 0;
     LESSONS.forEach(function (l) {
       var marks = state.marks[l.id] || [], note = state.notes[l.id] || "", mn = state.marknotes[l.id] || {};
@@ -1995,6 +2021,11 @@ body[data-focus="on"] .park { display: flex; }
       try { localStorage.setItem(DLATER, JSON.stringify(dlt)); } catch (e) {}
       updateCounts();
     }
+    else if (act === "copy-mentor") {
+      var mu = document.getElementById("mentor-url");
+      (navigator.clipboard ? navigator.clipboard.writeText(mu.value) : Promise.reject()).then(function () { toast("Copied", "Send it to your mentor"); },
+        function () { mu.select(); toast("Selected", "Copy it from the box"); });
+    }
     else if (act === "fb-top") window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     else if (act === "resume") resumeBlock();
     else if (act === "stop") stopBlock();
@@ -2063,6 +2094,12 @@ body[data-focus="on"] .park { display: flex; }
     if (qz) { quizScope = qz[1] || quizScope || "mix"; hash = "quiz"; }
     if (m && !BY_ID[m[1]]) { m = null; hash = "syllabus"; }
     if (focus) hash = "plan";
+    if (MENTOR) {
+      // No lesson texts, quizzes or reviews here: those need the login.
+      if (m) { m = null; hash = "syllabus"; }
+      if (hash === "quiz" || hash === "review") hash = "record";
+      if (!location.hash) hash = "record";
+    }
     if (!m && !dr && ["plan", "syllabus", "record", "drills", "review", "notes", "quiz"].indexOf(hash) < 0) hash = "plan";
     if (route === "plan") planScroll = window.scrollY;
     if (route && route.indexOf("drill/") === 0) stopClock();
@@ -2238,6 +2275,7 @@ body[data-focus="on"] .park { display: flex; }
   }
 
   function queueSave() {
+    if (MENTOR) return;
     if (DEMO) { writeLocal(); setStatus("ok", "Saved in this browser · " + hhmm(new Date())); return; }
     dirty = true; seq++;
     writeLocal();
@@ -2258,7 +2296,7 @@ body[data-focus="on"] .park { display: flex; }
   // With nothing unsent, still check in when the server was out of reach,
   // so the status line doesn't keep saying "unreachable" after it's back.
   function retry() {
-    if (DEMO || inflight) return;
+    if (DEMO || MENTOR || inflight) return;
     if (dirty) push();
     else if (document.getElementById("status").dataset.state === "local") pull();
   }
@@ -2268,13 +2306,19 @@ body[data-focus="on"] .park { display: flex; }
   setInterval(function () { updateCountdown(); updateCounts(); }, 60000);   // the deadline moves with the clock
 
   // ---- Load: local copy first (instant), then the server's. ----
-  var local = readLocal();
+  var local = MENTOR ? null : readLocal();
   if (local) { adopt(local); dirty = !!local.dirty; }
+  if (MENTOR) { adopt(MENTOR.state); quizzes = MENTOR.quizzes; drills = MENTOR.drills; document.body.dataset.mentor = "on"; }
   renderShell();
-  setFocus(fz.on, true);
+  // Every field a mentor sees is read-only, wherever a view draws one.
+  if (MENTOR && window.MutationObserver) new MutationObserver(function () {
+    Array.prototype.forEach.call(document.querySelectorAll("#view textarea, #view input"), function (el) {
+      if (el.type === "checkbox") el.disabled = true; else el.readOnly = true;
+    });
+  }).observe(document.getElementById("root"), { childList: true, subtree: true });
+  if (!MENTOR) setFocus(fz.on, true);
   renderView();
-  paintFocus(true);
-  setInterval(tickFocus, 1000);
+  if (!MENTOR) { paintFocus(true); setInterval(tickFocus, 1000); }
   window.addEventListener("hashchange", renderView);
   loadDrills().catch(function () {});
   // The analysis on Record needs the questions' text and count.
@@ -2298,10 +2342,11 @@ body[data-focus="on"] .park { display: flex; }
       setStatus("ok", "Synced with server" + at);
     }).catch(function (e) { inflight = false; unreachable(e); });
   }
-  if (!DEMO) pull();
+  if (MENTOR) setStatus("ok", "Read-only" + (MENTOR.state.updated_at ? " · last change " + fmtWhen(new Date(MENTOR.state.updated_at)) : " · nothing recorded yet"));
+  else if (!DEMO) pull();
 
   // Offline: cache the page, lessons and questions. Served over http(s) only.
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  if (!MENTOR && "serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("/sw.js").catch(function () {});
     // First visit: the page isn't controlled until the worker activates.
     navigator.serviceWorker.addEventListener("controllerchange", function () { setTimeout(function () { checkOffline(true); }, 500); });

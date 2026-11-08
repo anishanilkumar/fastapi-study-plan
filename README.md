@@ -77,6 +77,7 @@ Copy `config.example.json` to `config.json` (gitignored) and edit it:
 | `finish_by` | When all the work should be done, e.g. `"2026-01-12T21:00:00+01:00"`. The page then shows hours of work left against usable hours left (07:00–23:00), whether you're ahead or behind, and today's share. It can be changed on the Record page. |
 | `target` | What you're counting down to: `{"label": "Interview", "at": "2026-01-13T14:00:00+01:00"}`. The time needs a UTC offset. Leave it out for no countdown |
 | `overrides` | Replace a plan item's text by id, e.g. your own project for the `eve-deepdive` item |
+| `mentor_token` | Turns on a read-only page at `/mentor/<token>` to share with a mentor: progress, scores, drills, highlights and notes, not parked thoughts. At least 32 characters: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The Record page shows the link to copy. Change it to revoke the link |
 
 Restart after editing; an invalid config stops the app at startup with the
 reason. Environment variables: `STUDY_DB` (SQLite path), `STUDY_CONFIG`
@@ -96,6 +97,10 @@ localhost by default. To put it on the internet, run it behind a reverse
 proxy that handles authentication (oauth2-proxy, Authelia, basic auth in
 nginx, Tailscale, …). `PUT /state` only accepts small, validated data, but
 without auth anyone with the URL could change your progress.
+
+The mentor page is the one exception: `/mentor/` is meant to sit outside
+the login, read-only (GET), guarded only by its long token. Exempt just that
+path in your proxy (in nginx, a `location /mentor/` with `auth_request off`).
 
 ## How it's built
 

@@ -145,3 +145,43 @@ def test_demo_mode_keeps_nothing(tmp_path, monkeypatch):
         assert c.put("/state", json={"done": {"sat-is": True}}).status_code == 403
         assert c.get("/state").json()["done"] == {}
     assert not (tmp_path / "t.db").exists()      # no database created
+
+
+TOKEN = "t" * 40
+
+
+@pytest.fixture
+def mentor(tmp_path, monkeypatch):
+    monkeypatch.setattr(study, "DB_PATH", tmp_path / "t.db")
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"mentor_token": TOKEN}))
+    monkeypatch.setattr(study, "CONFIG_PATH", cfg)
+    with TestClient(study.app) as c:
+        yield c
+
+
+def test_mentor_page_is_read_only_and_leaves_out_parked(mentor):
+    mentor.put("/state", json={"done": {"read-py-types": True}, "notes": {"py-types": "mine"},
+                               "later": [{"t": "private thought", "at": "2026-11-08"}]})
+    r = mentor.get(f"/mentor/{TOKEN}")
+    assert r.status_code == 200 and r.headers["referrer-policy"] == "no-referrer"
+    assert '"read-py-types": true' in r.text and '"mine"' in r.text
+    assert "private thought" not in r.text
+    assert f'url("/mentor/{TOKEN}/fonts/archivo.woff2")' in r.text
+    assert mentor.get(f"/mentor/{TOKEN}/fonts/archivo.woff2").status_code == 200
+    assert mentor.put(f"/mentor/{TOKEN}", json={}).status_code == 405
+
+
+def test_mentor_token_checked_and_never_leaked(mentor):
+    assert mentor.get("/mentor/" + "x" * 40).status_code == 404
+    assert mentor.get("/mentor/" + "x" * 40 + "/fonts/archivo.woff2").status_code == 404
+    assert mentor.get(f"/mentor/{TOKEN}/fonts/..%2Fapp.py").status_code == 404
+    # The learner's page carries the link (it's behind the login); the token never
+    # appears as config, and with no token configured there is no mentor page.
+    assert f'"mentor_path": "/mentor/{TOKEN}"' in mentor.get("/").text
+    assert '"mentor_token"' not in mentor.get("/").text
+
+
+def test_no_mentor_page_without_a_token(client):
+    assert client.get("/mentor/" + "t" * 40).status_code == 404
+    assert '"mentor_path"' not in client.get("/").text

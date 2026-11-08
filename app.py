@@ -8,6 +8,9 @@ learner's progress in SQLite.
     GET  /quizzes.json        the check questions for every lesson
     GET  /drills.json         the code-review drills
     GET  /sw.js               the service worker that caches all of it offline
+    GET  /mentor/<token>      a read-only copy of the page for a mentor, with the
+                              progress, questions and drills inlined (no other calls),
+                              when config.json sets mentor_token; 404 otherwise
     GET  /manifest.webmanifest, /icons/*   so it installs as an app on a phone
     GET  /state               {"done": ..., "quiz": ..., "log": ..., "review": ..., "cleared": n, "updated_at": ...}
     PUT  /state               the same without updated_at; replaces the whole state
@@ -29,6 +32,11 @@ learner's progress in SQLite.
 A PUT that leaves a field out keeps what's stored for it, so a tab still
 running an older page (which doesn't know about notes) can't wipe them.
 
+The mentor link is the one route meant to sit outside your login: put only
+/mentor/ outside it. The token is the only thing guarding it, so make it long
+(at least 32 characters; `python -c "import secrets; print(secrets.token_urlsafe(32))"`)
+and change it to revoke the link. Parked thoughts are left out of it.
+
 STUDY_DEMO=1 runs a public demo: no database at all, the page keeps each
 visitor's progress in their own browser, and PUT /state is refused. So
 visitors never see or change each other's ticks, and there's nothing to reset.
@@ -44,6 +52,7 @@ Run locally:  uv run --with fastapi --with uvicorn python app.py
 import json
 import os
 import re
+import secrets
 import sqlite3
 from collections.abc import Iterator
 from typing import Annotated
@@ -52,7 +61,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -88,6 +97,8 @@ class Config(BaseModel):
     target: Target | None = None             # the date you're working towards
     finish_by: datetime | None = None        # default deadline for all the work; the page can change it
     overrides: dict[str, dict[str, str]] = Field(default_factory=dict)  # plan item id -> {"t"/"why": html}
+    # Turns on the read-only page at /mentor/<token>. Never sent to a page.
+    mentor_token: str | None = Field(None, min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
     @field_validator("finish_by")
@@ -278,12 +289,49 @@ app.mount("/icons", StaticFiles(directory=HERE / "icons"), name="icons")
 NO_CACHE = {"Cache-Control": "no-cache"}  # revalidate each visit, so a deploy shows at once
 
 
+def render_page(extra: dict) -> str:
+    cfg = json.dumps({**app.state.config.model_dump(mode="json", exclude={"mentor_token"}), **extra})
+    # "<" escaped so a title containing "</script>" can't end the script early.
+    return PAGE.read_text(encoding="utf-8").replace("/*STUDY_CONFIG*/null", cfg.replace("<", "\\u003c"), 1)
+
+
 @app.get("/", include_in_schema=False)
 def page() -> HTMLResponse:
-    cfg = json.dumps({**app.state.config.model_dump(mode="json"), "demo": app.state.demo})
-    # "<" escaped so a title containing "</script>" can't end the script early.
-    html = PAGE.read_text(encoding="utf-8").replace("/*STUDY_CONFIG*/null", cfg.replace("<", "\\u003c"), 1)
-    return HTMLResponse(html, headers=NO_CACHE)
+    extra: dict = {"demo": app.state.demo}
+    if app.state.config.mentor_token and not app.state.demo:
+        extra["mentor_path"] = "/mentor/" + app.state.config.mentor_token   # shown on Record, to copy
+    return HTMLResponse(render_page(extra), headers=NO_CACHE)
+
+
+def check_mentor(token: str) -> None:
+    want = app.state.config.mentor_token
+    if app.state.demo or not want or not secrets.compare_digest(token.encode(), want.encode()):
+        raise HTTPException(404)
+
+
+# The token is in the URL, so: no referrer to the docs links, nothing cached.
+MENTOR_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
+
+
+@app.get("/mentor/{token}", include_in_schema=False)
+def mentor_page(token: str) -> HTMLResponse:
+    check_mentor(token)
+    data = {
+        "state": read_state().model_dump(mode="json", exclude={"later"}),
+        "quizzes": json.loads((HERE / "quizzes.json").read_text(encoding="utf-8")),
+        "drills": json.loads((HERE / "drills.json").read_text(encoding="utf-8")),
+    }
+    html = render_page({"demo": False, "mentor": data}).replace('url("/fonts/', f'url("/mentor/{token}/fonts/')
+    return HTMLResponse(html, headers=MENTOR_HEADERS)
+
+
+@app.get("/mentor/{token}/fonts/{name}", include_in_schema=False)
+def mentor_font(token: str, name: str) -> FileResponse:
+    check_mentor(token)
+    path = HERE / "fonts" / name
+    if not re.fullmatch(r"[a-z0-9-]+\.woff2", name) or not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path, media_type="font/woff2", headers=MENTOR_HEADERS)
 
 
 @app.get("/quizzes.json", include_in_schema=False)
@@ -312,6 +360,10 @@ def service_worker() -> FileResponse:
 def get_state() -> StateOut:
     if app.state.demo:
         return StateOut()
+    return read_state()
+
+
+def read_state() -> StateOut:
     with connect() as conn:
         row = conn.execute("SELECT done, progress, updated_at FROM state WHERE id = 1").fetchone()
     if row is None:
