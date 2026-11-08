@@ -346,6 +346,40 @@
   ]
  },
  {
+  "id": "import",
+  "after": "db-session-model",
+  "title": "Importing readings",
+  "minutes": 7,
+  "context": "Devices send batches of meter readings as JSON. `SessionLocal = sessionmaker(engine)`; `Reading.device_id` is NOT NULL.",
+  "code": "def import_readings(rows):\n    saved = []\n    for row in rows:\n        session = SessionLocal()\n        device = session.scalar(select(Device).where(Device.serial == row[\"serial\"]))\n        reading = Reading(device=device, value=row[\"value\"], taken_at=row[\"taken_at\"])\n        session.add(reading)\n        session.commit()\n        saved.append(reading)\n    return saved\n\n@app.post(\"/readings/import\")\ndef import_endpoint(rows: list[dict]):\n    saved = import_readings(rows)\n    return [{\"id\": r.id, \"device\": r.device.serial} for r in saved]",
+  "findings": [
+   {
+    "t": "A commit per row: not atomic",
+    "d": "Row 300 fails and 299 are already committed; the client retries and they're duplicated. One transaction for the batch: `with SessionLocal.begin() as session:` and `add_all`."
+   },
+   {
+    "t": "Sessions are never closed",
+    "d": "`SessionLocal()` without `with` or `close()`: each one keeps a pooled connection until garbage collection. A big import exhausts the pool (\"QueuePool limit reached\") and every other request waits."
+   },
+   {
+    "t": "Unknown serial becomes a 500",
+    "d": "`device` is None, the NOT NULL `device_id` fails at commit with IntegrityError. Look the serials up first and return 422 naming the unknown ones."
+   },
+   {
+    "t": "The response reloads every row, twice",
+    "d": "After commit each reading is expired: `r.id` is a SELECT, `r.device` a lazy load: 2N queries. It only works because the sessions leaked; close them and it's DetachedInstanceError. Build the response inside the session (after a flush the ids are there)."
+   },
+   {
+    "t": "One device lookup per row",
+    "d": "N SELECTs for the serials. Load them in one: `select(Device).where(Device.serial.in_(serials))`, into a dict."
+   },
+   {
+    "t": "`list[dict]`: nothing is validated",
+    "d": "A missing `value` is a KeyError (500); a string value goes straight to the database. A Pydantic `ReadingIn` model gives a 422 with the field, and a size limit on the batch."
+   }
+  ]
+ },
+ {
   "id": "transfer",
   "after": "db-sessions",
   "title": "Transferring credit",

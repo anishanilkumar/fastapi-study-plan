@@ -280,6 +280,10 @@ body[data-view="plan"] .strip { position: sticky; }
    try-it = ink; further reading = engraved, the quietest. */
 .reading aside { display: grid; gap: 0.5rem; background: var(--panel-lit); border-left: 6px solid var(--engrave); padding: 1rem 1.125rem; }
 .reading aside.php { border-left-color: var(--arc); }
+.reading ul.map { list-style: none; display: grid; gap: 0; margin: 0; padding: 0; }
+.reading ul.map li { display: grid; gap: 0.125rem; padding: 0.5rem 0; border-top: var(--rule) solid var(--engrave); }
+.reading ul.map li::before { content: none; }
+.reading ul.map .to { color: var(--ink-dim); }
 .reading aside.trap { border-left-color: var(--gold); }
 .reading aside.trap .label { color: var(--gold); }
 .reading aside.try { border-left-color: var(--ink-dim); }
@@ -653,6 +657,8 @@ body[data-focus="on"] .park { display: flex; }
     ]},
     { id: "mon", n: 2, title: "SQLAlchemy and pytest", groups: [
       { label: "Morning · the database", items: [
+        { id: "mon-flush", lesson: "db-session-model", t: "When SQL actually runs: <code>add</code>, flush, autoflush, <code>commit</code>", why: "Nothing is sent on <code>add()</code> or on setting an attribute. Flush sends it inside the transaction (ids appear, constraint errors fire); commit ends it. Closing without commit rolls back. Unlike Drupal's <code>save()</code>, which writes at once.", src: ["SQLAlchemy: session basics", "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"] },
+        { id: "mon-expire", lesson: "db-session-model", t: "After commit objects reload; after close they can't (DetachedInstanceError)", why: "<code>expire_on_commit</code> makes the next attribute read a fresh SELECT. A closed session can't do that, nor a lazy load like <code>d.owner</code>. Build the response while the session is open, <code>refresh()</code>, or <code>expire_on_commit=False</code>.", src: ["SQLAlchemy: object states and expiry", "https://docs.sqlalchemy.org/en/20/orm/session_state_management.html"] },
         { id: "mon-session", lesson: "db-sessions", t: "One session per request, via <code>Depends()</code> with <code>yield</code>", why: "Never a module-level <code>db = Session(engine)</code>: it is shared by every request and every thread.", src: ["FastAPI: dependencies with yield", "https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/"] },
         { id: "mon-tx", lesson: "db-sessions", t: "<code>commit</code>, <code>rollback</code>, and the failed-transaction state", why: "After an error, the session must be rolled back. If not, every later use fails with \"transaction has been rolled back due to a previous exception\".", src: ["SQLAlchemy: session basics", "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"] },
         { id: "mon-unique", lesson: "db-sessions", t: "Unique constraint + catch <code>IntegrityError</code> (return 409)", why: "\"Check if it exists, then insert\" has a race: two requests both pass the check. Let the database enforce it." },
@@ -672,7 +678,7 @@ body[data-focus="on"] .park { display: flex; }
     ]},
     { id: "eve", n: 2, part: "evening", title: "Practice and rest", groups: [
       { items: [
-        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has fourteen; do any you haven't." },
+        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has fifteen; do any you haven't." },
         { id: "eve-deepdive", min: 20, t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
         { id: "eve-rest", min: 0, t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
       ]}
@@ -767,6 +773,7 @@ body[data-focus="on"] .park { display: flex; }
     ]},
     { n: 3, title: "Data and tests", blurb: "SQLAlchemy, transactions, pytest.", lessons: [
       { id: "db-sqlalchemy", title: "SQLAlchemy 2.0 basics", min: 25, day: "mon" },
+      { id: "db-session-model", title: "How a Session works, step by step", min: 25, day: "mon" },
       { id: "db-sessions", title: "Sessions, transactions and integrity", min: 20, day: "mon" },
       { id: "test-pytest", title: "pytest", min: 20, day: "mon" },
       { id: "test-fastapi", title: "Testing FastAPI apps", min: 20, day: "mon" }

@@ -10,20 +10,20 @@ teaches) serving one page:
 - **Plan**: a three-day checklist from Python basics to async, FastAPI,
   SQLAlchemy and pytest, with a "next up" button that always points at the
   next thing to do.
-- **Syllabus**: 27 lessons (about 9 hours of reading) with code,
+- **Syllabus**: 28 lessons (about 9.5 hours of reading) with code,
   "From PHP" comparisons, common traps, a short exercise and links to the
   official docs.
 - **Checks**: three questions after every lesson, with the reason behind
   each answer. Questions you miss come back the next day for review.
 - **Quiz**: 10-question rounds, one question at a time, from a bank of six
-  per lesson (162 in all), weighted towards what you get wrong and haven't
+  per lesson (168 in all), weighted towards what you get wrong and haven't
   seen. Rounds can cover everything you've read, your weak spots, one part
   or one lesson. Keys 1-4 answer, Enter moves on.
 - **Today**: say how long you have (1–3 h, or until 23:00) and the plan
   fills it with the most useful things left, in order: missed questions,
   lessons you started, drills, the next lessons, weak spots. It reflows as
   you go, and Next up (and focus mode) follows it.
-- **Drills**: fourteen timed code reviews of realistic snippets with planted
+- **Drills**: fifteen timed code reviews of realistic snippets with planted
   bugs, and a ranked answer key. Each unlocks with a lesson; once you've read
   it, Next up asks you for that drill.
 - **Record**: XP, ranks, a daily goal, a streak and badges. All of it is

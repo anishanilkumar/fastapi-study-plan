@@ -1,0 +1,131 @@
+<p>Transactions, isolation and constraints you know. What's new is the layer on top: in Drupal, <code>$entity-&gt;save()</code> writes right away; in SQLAlchemy you change objects, nothing is sent, and the <code>Session</code> decides when the SQL goes out. This lesson shows exactly when, line by line. Once that's clear, the rules in the next lesson (one session per request, roll back after errors) follow from it.</p>
+
+<h3>See the SQL: turn on echo</h3>
+<pre><code>engine = create_engine("sqlite:///test.db", echo=True)   # logs every statement
+SessionLocal = sessionmaker(engine)                       # a factory, configured once</code></pre>
+<p>Do every example below with <code>echo=True</code>. Watching when SQL goes out is the fastest way to learn this. <code>sessionmaker</code> is just a configured way to make sessions: <code>SessionLocal()</code> is a new one.</p>
+
+<h3>The session is a unit of work</h3>
+<p>A session sits in front of one database transaction and collects changes. It sends them (<em>flush</em>) when it needs to, and ends the transaction (<em>commit</em>) when you say so. Three things it keeps:</p>
+<ul>
+<li><strong>A transaction.</strong> Opened on the first statement (it borrows a connection from the engine's pool), ended by <code>commit()</code> or <code>rollback()</code>.</li>
+<li><strong>The pending changes.</strong> New objects you <code>add()</code>, attributes you set on loaded objects, objects you <code>delete()</code>.</li>
+<li><strong>An identity map.</strong> One Python object per database row: load row 5 twice in a session and you get the same object back, with no second query. Drupal's entity static cache does the same within a request.</li>
+</ul>
+
+<h3>Step by step, with the SQL</h3>
+<pre><code>with SessionLocal() as session:            # no connection, no SQL yet
+    d = Device(serial="A-1", owner_id=1)  # a plain object: the session doesn't know it
+    session.add(d)                         # now it does ("pending"). Still no SQL
+    print(d.id)                            # None: nothing has been inserted
+
+    session.flush()                        # BEGIN
+                                           # INSERT INTO devices (serial, owner_id) VALUES (?, ?)
+    print(d.id)                            # 7: the row exists, inside the transaction
+
+    d.note = "rack 3"                      # tracked. No SQL
+    same = session.get(Device, 7)          # identity map: no SQL, and same is d
+
+    rows = session.scalars(select(Device).where(Device.note == "rack 3")).all()
+                                           # autoflush first: UPDATE devices SET note=? WHERE id=?
+                                           # then the SELECT, which finds d
+
+    session.commit()                       # COMMIT. Now it's visible to other connections
+    print(d.note)                          # BEGIN; SELECT ... FROM devices WHERE id = 7
+                                           # (reloaded: see "after commit" below)
+# leaving the with block closes the session; d is now "detached"</code></pre>
+<p>Three things to take from this:</p>
+<ul>
+<li><strong>flush ≠ commit.</strong> Flush sends the SQL inside the open transaction (so you get ids, and constraint errors show up). Commit ends the transaction. Nothing is permanent until commit.</li>
+<li><strong>Autoflush.</strong> Before any query, the session flushes pending changes, so your own query sees them. That's why an <code>IntegrityError</code> can surface on a <code>select</code>, not where you called <code>add</code>.</li>
+<li><strong>No commit, no save.</strong> Closing a session that wasn't committed rolls back. Forgetting <code>commit()</code> is the classic "it returned 201 but nothing is in the table".</li>
+</ul>
+
+<h3>The four states of an object</h3>
+<div class="table-wrap"><table>
+<thead><tr><th class="label">State</th><th class="label">How it gets there</th><th class="label">What it means</th></tr></thead>
+<tbody>
+<tr><td>transient</td><td><code>Device(...)</code></td><td>A plain object. The session doesn't know it</td></tr>
+<tr><td>pending</td><td><code>session.add(d)</code></td><td>Will be inserted at the next flush</td></tr>
+<tr><td>persistent</td><td>after a flush, or loaded by a query</td><td>Has a row; changes are tracked</td></tr>
+<tr><td>detached</td><td>the session closed (or <code>expunge</code>)</td><td>Has data, but no session: it can't load anything more</td></tr>
+</tbody></table></div>
+
+<h3>After commit: attributes expire</h3>
+<p>By default (<code>expire_on_commit=True</code>), <code>commit()</code> marks every loaded object as stale. The next attribute you read triggers a fresh <code>SELECT</code>, in a new transaction. That's deliberate: after commit, another request may have changed the row.</p>
+<p>The trap is the next step: <em>a detached object can't reload</em>.</p>
+<pre><code>def create_device(data) -> Device:
+    with SessionLocal() as session:
+        d = Device(**data)
+        session.add(d)
+        session.commit()      # d's attributes expire here
+        return d              # the session closes on the way out
+
+d = create_device({"serial": "A-1", "owner_id": 1})
+d.serial                      # DetachedInstanceError: expired, and no session to reload it</code></pre>
+<p>Fixes, in order of preference: do the work (or build the response) while the session is open; <code>session.refresh(d)</code> before closing, to load it again on purpose; or <code>sessionmaker(engine, expire_on_commit=False)</code>, so committed objects keep their values (common with <code>AsyncSession</code>, where an implicit reload isn't allowed).</p>
+
+<h3>Lazy loading needs a live session</h3>
+<p>Relationships aren't loaded with the object. Reading <code>d.owner</code> the first time sends a <code>SELECT</code> then. That works while the session is open, and fails on a detached object with the same <code>DetachedInstanceError</code>. In a loop it is the N+1 problem. Two ways round it:</p>
+<pre><code># load what you'll need, up front, in the same query
+from sqlalchemy.orm import selectinload, joinedload
+devices = session.scalars(select(Device).options(joinedload(Device.owner))).all()   # one JOINed query
+owners = session.scalars(select(Owner).options(selectinload(Owner.devices))).all()  # 2 queries total
+
+# or make a forgotten one loud instead of slow
+devices = session.scalars(select(Device).options(raiseload("*"))).all()</code></pre>
+<p>Rule of thumb: <code>joinedload</code> for many-to-one (a device's owner), <code>selectinload</code> for one-to-many (an owner's devices).</p>
+
+<h3>Errors: roll back, then carry on</h3>
+<pre><code>session.add(Device(serial="A-1", owner_id=1))   # serial already exists
+try:
+    session.commit()                            # flush → IntegrityError
+except IntegrityError:
+    session.rollback()                          # required: the transaction is dead
+    raise HTTPException(409, "serial already registered")</code></pre>
+<p>After a failed flush, the session refuses to do anything else until you <code>rollback()</code> (PendingRollbackError). Rollback also discards everything pending and expires every object, because none of it is true any more.</p>
+
+<h3>One transaction for one job</h3>
+<pre><code># BUG: a commit per row. Half-done if row 40 fails; 100 transactions
+for row in rows:
+    session.add(Reading(**row))
+    session.commit()
+
+# one unit of work: all or nothing
+with SessionLocal.begin() as session:      # commits at the end, rolls back on an exception
+    session.add_all([Reading(**row) for row in rows])</code></pre>
+<p><code>SessionLocal.begin()</code> is the short form of "open a session, begin, commit or roll back, close". In FastAPI the session comes from a dependency (next lesson); the endpoint calls <code>commit()</code> once, at the end.</p>
+
+<h3>Bulk statements skip the objects</h3>
+<pre><code>session.execute(update(Device).where(Device.owner_id == 1).values(note="moved"))
+session.execute(delete(Device).where(Device.serial.like("TEST-%")))</code></pre>
+<p>One SQL statement, no objects loaded, no per-row events. Use them for "change many rows" and for counters (<code>values(stock=Product.stock - 1)</code>), which also avoids lost updates. Objects already loaded in the session are updated to match by default.</p>
+
+<h3>A request, start to finish</h3>
+<pre><code>def get_db():
+    with SessionLocal() as session:   # 1. a new session for this request
+        yield session                 # 2. the endpoint runs with it
+                                      # 4. closed: not committed? rolled back
+
+@app.post("/devices", status_code=201, response_model=DeviceOut)
+def create(body: DeviceIn, db: Annotated[Session, Depends(get_db)]):
+    d = Device(**body.model_dump())
+    db.add(d)
+    try:
+        db.commit()                   # 3. one commit, at the end
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "serial already registered")
+    return d                          # read while the session is still open</code></pre>
+
+<aside class="php"><span class="label">From Drupal</span><ul class="map"><li><span class="from"><code>$t = $connection-&gt;startTransaction()</code>, committed when <code>$t</code> goes out of scope</span><span class="to">→ <code>with SessionLocal.begin() as session:</code> commits at the end of the block, rolls back on an exception</span></li><li><span class="from"><code>$t-&gt;rollBack()</code> in a <code>catch</code></span><span class="to">→ <code>session.rollback()</code>, and it's required before the session does anything else</span></li><li><span class="from"><code>Node::create([...])</code></span><span class="to">→ <code>Device(...)</code>: transient, not stored</span></li><li><span class="from"><code>$node-&gt;save()</code>: SQL now, in its own transaction</span><span class="to">→ <code>session.add(d)</code>, then one <code>commit()</code> for everything. Setting <code>d.note</code> is the whole "save"</span></li><li><span class="from">Entity static cache; <code>resetCache()</code></span><span class="to">→ The identity map; <code>expire()</code>, <code>refresh()</code></span></li><li><span class="from"><code>$node-&gt;field_owner-&gt;entity</code> loads on access</span><span class="to">→ Lazy loading of <code>d.owner</code>, with the same N+1 risk in a loop</span></li><li><span class="from"><code>loadMultiple($ids)</code> to avoid N+1</span><span class="to">→ <code>selectinload</code> / <code>joinedload</code></span></li><li><span class="from"><code>$connection-&gt;update('devices')-&gt;fields(...)-&gt;condition(...)</code></span><span class="to">→ <code>update(Device).where(...).values(...)</code>: one statement, no objects</span></li><li><span class="from">Placeholders: <code>-&gt;condition('serial', $serial)</code></span><span class="to">→ <code>.where(Device.serial == serial)</code></span></li></ul>
+<p>The big difference: a Drupal request starts fresh, so the static cache and any open transaction die with it. A Python server keeps running, so a session must be opened and closed per request on purpose, or it leaks state between users.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>With <code>echo=True</code> and SQLite, run the step-by-step block and match each logged statement to its line. Then return an object from a <code>with SessionLocal()</code> block after <code>commit()</code> and read an attribute: get the DetachedInstanceError, then fix it all three ways.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html" target="_blank" rel="noopener">SQLAlchemy: session basics</a></li>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/session_state_management.html" target="_blank" rel="noopener">SQLAlchemy: object states and expiry</a></li>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/session_transaction.html" target="_blank" rel="noopener">SQLAlchemy: transactions and connection management</a></li>
+<li><a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html" target="_blank" rel="noopener">SQLAlchemy: relationship loading techniques</a></li>
+</ul></aside>

@@ -1426,6 +1426,68 @@
    "Raw SQL is fine with parameters; an f-string with x in it is the injection."
   ]
  ],
+ "db-session-model": [
+  [
+   "You call `session.add(d)` and then read `d.id`. What do you get?",
+   [
+    "The new id",
+    "`None`: nothing has been inserted yet",
+    "An error"
+   ],
+   1,
+   "`add()` only makes it pending. A `flush()` (or a commit, or a query's autoflush) sends the INSERT and fills in the id."
+  ],
+  [
+   "An endpoint adds a row and returns 201, but the table stays empty. The likeliest cause?",
+   [
+    "The flush failed silently",
+    "No `commit()`: closing the session rolled it back",
+    "Autoflush is off"
+   ],
+   1,
+   "Closing a session that wasn't committed rolls back. Flushed SQL ran inside a transaction that never committed."
+  ],
+  [
+   "A helper commits inside `with SessionLocal() as s:` and returns the object. Reading `obj.serial` afterwards raises DetachedInstanceError. Why?",
+   [
+    "The row was deleted",
+    "Commit expired its attributes, and a closed session can't reload them",
+    "Strings aren't stored"
+   ],
+   1,
+   "`expire_on_commit=True` by default. Read what you need before closing, `refresh()` it, or set `expire_on_commit=False`."
+  ],
+  [
+   "Within one session, `session.get(Device, 5)` is called twice. What happens?",
+   [
+    "Two SELECTs, two objects",
+    "One SELECT; the second call returns the same object from the identity map",
+    "One SELECT, two copies"
+   ],
+   1,
+   "One object per row per session, like Drupal's entity static cache within a request."
+  ],
+  [
+   "You set `d.note = \"x\"` and then run a `select` filtering on note. Does it find `d`?",
+   [
+    "No: the change isn't in the database yet",
+    "Yes: autoflush sends the UPDATE before the query",
+    "Only after commit"
+   ],
+   1,
+   "Autoflush runs before queries, inside the same transaction, so your own queries see your pending changes. It's also why an IntegrityError can appear on a select."
+  ],
+  [
+   "An import loops over 500 rows and commits after each. What's the main problem?",
+   [
+    "It's too fast",
+    "Not atomic: a failure at row 300 leaves 299 committed (and 500 transactions)",
+    "Commit can't be called in a loop"
+   ],
+   1,
+   "One job, one transaction: `with SessionLocal.begin() as s:` and `add_all`, so it's all or nothing."
+  ]
+ ],
  "db-sessions": [
   [
    "Why is \"check if serial exists, then insert\" wrong?",
