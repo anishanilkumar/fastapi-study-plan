@@ -488,6 +488,17 @@ body[data-focus="on"][data-view="plan"] .focusbar { position: sticky; top: 0; z-
 .focusbar[data-mode="break"] .ticks > i.on { background: var(--gold); }
 /* Paused: the clock is frozen, so it dims; it must not look like it's running. */
 .focusbar[data-paused="true"] .readout { color: var(--ink-dim); }
+/* While a block runs and the full bar is scrolled away: a small pill, top
+   right, with minutes left (no ticking seconds to watch) and pause. Tapping
+   the time goes back up to the bar. */
+.fpill { position: fixed; top: calc(env(safe-area-inset-top) + 0.75rem); right: 1rem; z-index: 4; display: flex; background: var(--panel-lit); border-left: 6px solid var(--arc); }
+.fpill[hidden] { display: none; }
+.fpill .btn { min-height: 44px; padding: 0 0.875rem; margin: 0; border-color: transparent; }
+.fpill .fp-time { font-family: var(--face-mono); font-weight: 500; letter-spacing: 0.05em; }
+.fpill[data-mode="break"] { border-left-color: var(--gold); }
+.fpill[data-mode="break"] .fp-time { color: var(--gold); }
+.fpill[data-paused="true"] .fp-time { color: var(--ink-dim); }
+body[data-focus="on"][data-view="plan"] .fpill { display: none; }
 .btn-quiet { color: var(--ink-dim); border-color: transparent; }
 .btn-quiet:hover { color: var(--ink); }
 .park { display: none; gap: 0.5rem; }
@@ -917,6 +928,7 @@ body[data-focus="on"] .park { display: flex; }
       '<span class="readout" id="fb-clock" role="timer"></span><span class="stamp" id="fb-sub"></span></div><div class="fb-ctl" id="fb-ctl"></div></div>' +
       '<div class="ticks" id="fb-ticks" aria-hidden="true"></div>' +
       '<form class="park" data-park><input class="field" name="t" maxlength="500" autocomplete="off" placeholder="A thought that isn\'t this task? Park it" aria-label="Park a thought for later"><button class="btn" type="submit">Park</button></form></div>';
+    h += '<div class="fpill" id="fpill" hidden><button type="button" class="btn fp-time" id="fp-time" data-act="fb-top" aria-label="Back to the focus timer"></button><span id="fp-ctl"></span></div>';
     h += '<div class="strip instrument" aria-live="polite"><div class="strip-row">' +
       '<div><span class="label">Rank</span><span class="readout" id="rank"></span><span class="stamp" id="xp"></span></div>' +
       '<div class="today"><div><span class="label">Today</span><span class="readout" id="today"></span><span class="stamp" id="goal"></span></div>' + dialSvg() + "</div>" +
@@ -1675,6 +1687,7 @@ body[data-focus="on"] .park { display: flex; }
     setText("fb-label", fz.mode === "break" ? "Break" : paused ? "Focus block · paused" : running ? "Focus block · " + fz.len + " min" : "Focus block");
     var lit = running ? Math.floor(20 * (1 - left / total)) : 0;
     Array.prototype.forEach.call(document.querySelectorAll("#fb-ticks i"), function (el, i) { el.className = i < lit ? "on" : ""; });
+    paintPill(running, paused, left);
     document.title = (running && !paused ? mmss(left) + " · " + (fz.mode === "break" ? "Break" : "Focus") + " · " : "") + TITLE;
     if (!full) return;
     var b = function (act, text, cls, extra) { return '<button type="button" class="btn' + (cls ? " " + cls : "") + '" data-act="' + act + '"' + (extra || "") + ">" + text + "</button>"; };
@@ -1686,6 +1699,23 @@ body[data-focus="on"] .park { display: flex; }
     document.getElementById("fb-ctl").innerHTML = h;
     setText("fb-sub", fzSub(score()));
   }
+
+  function paintPill(running, paused, left) {
+    var pill = document.getElementById("fpill"), bar = document.getElementById("focusbar"); if (!pill || !bar) return;
+    var r = bar.getBoundingClientRect(), away = r.bottom < 0 || r.height === 0;
+    pill.hidden = !(running && away);
+    if (pill.hidden) return;
+    pill.dataset.mode = fz.mode; pill.dataset.paused = String(paused);
+    var m = Math.ceil(left / 60000);
+    setText("fp-time", (fz.mode === "break" ? "Break · " : paused ? "Paused · " : "") + (left < 60000 ? "<1" : m) + " min");
+    var ctl = fz.mode === "work" ? (paused ? "resume" : "pause") : "stop", lbl = fz.mode === "work" ? (paused ? "Resume" : "Pause") : "Skip";
+    var c = document.getElementById("fp-ctl");
+    if (c.dataset.act !== ctl) { c.dataset.act = ctl; c.innerHTML = '<button type="button" class="btn" data-act="' + ctl + '">' + lbl + "</button>"; }
+  }
+  window.addEventListener("scroll", function () {
+    if (fz.mode === "idle") return;
+    paintPill(true, !fz.end, fzLeft());
+  }, { passive: true });
 
   // Two short tones at the end of a block or break. Browsers only allow
   // sound after a tap, so the context is created on Start.
@@ -1931,6 +1961,7 @@ body[data-focus="on"] .park { display: flex; }
     else if (act === "focus-off") setFocus(false);
     else if (act === "start") startBlock(+b.dataset.len || 25);
     else if (act === "pause") pauseBlock();
+    else if (act === "fb-top") window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     else if (act === "resume") resumeBlock();
     else if (act === "stop") stopBlock();
     else if (act === "unpark") { state.later.splice(+b.dataset.i, 1); queueSave(); updateCounts(); renderNotebook(); }
