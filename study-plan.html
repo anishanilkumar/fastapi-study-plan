@@ -366,6 +366,13 @@ a.btn { text-decoration: none; }
 .ladder [data-state="now"] .mark { background: var(--arc); border-color: var(--arc); }
 .ladder [data-state="now"] .ltitle { color: var(--arc); font-weight: 600; }
 .ladder [data-state="ahead"] { opacity: 0.5; }
+.ladder .ltitle .why { display: block; font-weight: 400; color: var(--ink-dim); font-size: var(--t-min); }
+.ladder li { padding: 0.375rem 0; }
+.need { list-style: none; display: grid; gap: 0.375rem; margin: 0 0 1rem; }
+.need li { display: grid; grid-template-columns: 0.75rem 1fr; gap: 0.75rem; align-items: baseline; }
+.need .mark { width: 0.75rem; height: 0.75rem; border: var(--rule) solid var(--arc-dim); }
+.need [data-ok="true"] .mark { background: var(--arc); border-color: var(--arc); }
+.need [data-ok="true"] { color: var(--ink-dim); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1rem 1.5rem; }
 .stats div { display: grid; gap: 0.25rem; }
 .stats dd { margin: 0; }
@@ -758,10 +765,31 @@ body[data-focus="on"] .park { display: flex; }
   // only in quiz rounds, and each is worth XP.extra the first time it's right.
   var CHECK_N = 3;
   var GOAL = 300;                      // XP a day: about a third of the plan
+  // Ranks need XP and evidence. XP alone can be farmed (focus blocks, rereading),
+  // so each rank also names what it proves: checks passed, drills done, and at
+  // the top, answers that are right now, not just once.
+  function partPassed(n) {
+    return LESSONS.filter(function (l) { return l.part.n === n && l.day; }).every(function (l) { return state.done[readId(l.id)] && passed(l.id); });
+  }
   var RANKS = [
-    [0, "Novice"], [150, "Scripter"], [400, "Pythonista"], [800, "Router"],
-    [1300, "Async adept"], [1900, "Reviewer"], [2500, "Interview-ready"]
+    { xp: 0, t: "Novice", need: [] },
+    { xp: 200, t: "Scripter", need: [["Read 3 lessons", function (s) { return s.read >= 3; }]] },
+    { xp: 700, t: "Pythonista", need: [["Every Python lesson in the plan read, its check passed", function () { return partPassed(1); }]] },
+    { xp: 1300, t: "Router", need: [["Every FastAPI lesson in the plan read, its check passed", function () { return partPassed(2); }]] },
+    { xp: 1900, t: "Tester", need: [
+      ["Every data and testing lesson read, its check passed", function () { return partPassed(3); }],
+      ["4 drills done", function (s) { return s.drillsDone >= 4; }]] },
+    { xp: 2600, t: "Reviewer", need: [
+      ["10 drills done", function (s) { return s.drillsDone >= 10; }],
+      ["The worst bug found in 7 drills", function (s) { return s.worst >= 7; }]] },
+    { xp: 3300, t: "Interview-ready", need: [
+      ["Every lesson in the plan read, its check passed", function () { return partPassed(1) && partPassed(2) && partPassed(3) && partPassed(4); }],
+      ["Every drill done, the worst bug found in all but 3", function (s) { return drills && s.drillsDone >= drills.length && s.worst >= drills.length - 3; }],
+      ["120 questions answered, 85% of them right the last time", function (s) { return s.seen >= 120 && s.lastRight >= 0.85 * s.seen; }],
+      ["No weak lesson (under 60% over 3+ answers)", function (s) { return s.weak === 0; }],
+      ["No missed questions waiting for review", function (s) { return s.due === 0; }]] }
   ];
+  function rankMet(x, s) { return s.xp >= x.xp && x.need.every(function (n) { return n[1](s); }); }
   var DRILL_ID = /^drill-([a-z0-9]+)-(\d+)$/;
   var BADGES = [
     { id: "first-tick", t: "First tick", d: "Tick a plan item", ok: function (s) { return s.planDone >= 1; } },
@@ -781,7 +809,7 @@ body[data-focus="on"] .park { display: flex; }
     { id: "part-1", t: "Python, read", d: "All 14 Python lessons", ok: function (s) { return s.parts[1]; } },
     { id: "part-2", t: "FastAPI, read", d: "All 8 FastAPI lessons", ok: function (s) { return s.parts[2]; } },
     { id: "all-checks", t: "Every check passed", d: "Pass all " + LESSONS.length + " checks", ok: function (s) { return s.passed >= LESSONS.length; } },
-    { id: "ready", t: "Interview-ready", d: "Reach the top rank", ok: function (s) { return s.xp >= RANKS[RANKS.length - 1][0]; } }
+    { id: "ready", t: "Interview-ready", d: "Reach the top rank", ok: function (s) { return s.rank === RANKS.length - 1; } }
   ];
 
   var LS = DEMO ? "study-plan-demo" : "study-plan";
@@ -849,8 +877,6 @@ body[data-focus="on"] .park { display: flex; }
       (quizzes ? Object.keys(quizzes).reduce(function (a, k) { return a + Math.max(0, quizzes[k].length - CHECK_N) * XP.extra; }, 0) : 0);
     PLAN.forEach(function (d) { s.days[d.id] = dayItems(d).every(function (i) { return state.done[i.id]; }); });
     PARTS.forEach(function (p) { s.parts[p.n] = p.lessons.every(function (l) { return state.done[readId(l.id)]; }); });
-    var r = 0; RANKS.forEach(function (x, i) { if (s.xp >= x[0]) r = i; });
-    s.rank = r;
     s.today = Math.max(0, state.log[today()] || 0);
     // Streak: consecutive days with XP, ending today, or yesterday if today
     // hasn't started yet (a streak isn't lost until the day is over).
@@ -868,6 +894,15 @@ body[data-focus="on"] .park { display: flex; }
     s.bestDay = Math.max.apply(null, Object.keys(state.log).map(function (k) { return state.log[k]; }).concat([0]));
     s.due = dueReviews().length;
     s.pending = Object.keys(state.review).length;
+    s.drillsDone = drills ? drills.filter(function (d) { return drillTried(d); }).length : s.drillsTried;
+    var akeys = Object.keys(state.answers);
+    s.seen = akeys.length;
+    s.lastRight = akeys.filter(function (k) { return state.answers[k].r; }).length;
+    s.weak = LESSONS.filter(function (l) { var st = lessonStats(l.id); return st.n >= 3 && st.ok / st.n < 0.6; }).length;
+    // Ranks in order: one not yet met stops the climb, whatever the XP.
+    var r = 0;
+    for (var ri = 1; ri < RANKS.length && rankMet(RANKS[ri], s); ri++) r = ri;
+    s.rank = r;
     s.badges = BADGES.filter(function (b) { return b.ok(s); }).map(function (b) { return b.id; });
     return s;
   }
@@ -882,7 +917,7 @@ body[data-focus="on"] .park { display: flex; }
     if (delta) state.log[today()] = (state.log[today()] || 0) + delta;
     var final = delta ? score() : after;      // the log feeds goal/streak badges
     if (delta > 0 && why) toast("+" + delta + " XP", why);
-    if (final.rank > before.rank) toast("Rank up", RANKS[final.rank][1], "rank");
+    if (final.rank > before.rank) toast("Rank up", RANKS[final.rank].t, "rank");
     final.badges.forEach(function (id) {
       if (before.badges.indexOf(id) < 0) { var b = BADGES.filter(function (x) { return x.id === id; })[0]; toast("Badge", b.t, "badge"); }
     });
@@ -1099,10 +1134,17 @@ body[data-focus="on"] .park { display: flex; }
 
   function recordHtml() {
     var s = score(), r = s.rank, nextR = RANKS[r + 1];
-    var h = analysisHtml(s) + '<section class="instrument"><div class="section-head"><span class="label">Rank ' + (r + 1) + " of " + RANKS.length + "</span><h2 class=\"rank-name\">" + esc(RANKS[r][1]) + "</h2>" +
-      '<span class="stamp">' + num(s.xp) + " XP" + (nextR ? " · " + num(nextR[0] - s.xp) + " to " + esc(nextR[1]) : " · top rank") + " · " + num(s.max) + " XP possible</span></div>" +
-      '<ol class="ladder">' + RANKS.map(function (x, i) {
-        return '<li data-state="' + (i < r ? "past" : i === r ? "now" : "ahead") + '"><span class="mark"></span><span class="ltitle">' + esc(x[1]) + '</span><span class="stamp">' + num(x[0]) + " XP</span></li>";
+    var h = analysisHtml(s) + '<section class="instrument"><div class="section-head"><span class="label">Rank ' + (r + 1) + " of " + RANKS.length + "</span><h2 class=\"rank-name\">" + esc(RANKS[r].t) + "</h2>" +
+      '<span class="stamp">' + num(s.xp) + " XP · " + num(s.max) + " XP possible · a rank needs its XP and everything listed under it</span></div>";
+    if (nextR) {
+      h += '<div class="section-head"><span class="label">For ' + esc(nextR.t) + "</span></div><ul class=\"need\">" +
+        [[num(nextR.xp) + " XP" + (s.xp < nextR.xp ? " (" + num(nextR.xp - s.xp) + " to go)" : ""), s.xp >= nextR.xp]].concat(nextR.need.map(function (n) { return [esc(n[0]), n[1](s)]; })).map(function (n) {
+          return '<li data-ok="' + n[1] + '"><span class="mark" aria-hidden="true"></span><span>' + n[0] + '</span><span class="visually-hidden">' + (n[1] ? "(done)" : "(not yet)") + "</span></li>";
+        }).join("") + "</ul>";
+    }
+    h += '<ol class="ladder">' + RANKS.map(function (x, i) {
+        return '<li data-state="' + (i < r ? "past" : i === r ? "now" : "ahead") + '"><span class="mark"></span><span class="ltitle">' + esc(x.t) +
+          (x.need.length ? '<span class="why">' + x.need.map(function (n) { return esc(n[0]); }).join(" · ") + "</span>" : "") + '</span><span class="stamp">' + num(x.xp) + " XP</span></li>";
       }).join("") + "</ol></section>";
     var stats = [
       ["Plan items", s.planDone + " / " + allIds().length],
@@ -2152,8 +2194,8 @@ body[data-focus="on"] .park { display: flex; }
   function setText(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
   function updateCounts() {
     var s = score(), r = s.rank, nextR = RANKS[r + 1];
-    setText("rank", RANKS[r][1]);
-    setText("xp", num(s.xp) + " XP" + (nextR ? " · next at " + num(nextR[0]) : " · top rank"));
+    setText("rank", RANKS[r].t);
+    setText("xp", num(s.xp) + " XP" + (!nextR ? " · top rank" : s.xp < nextR.xp ? " · next at " + num(nextR.xp) : " · " + nextR.t + ": see Record"));
     document.getElementById("today").innerHTML = num(s.today) + " <small>XP</small>";
     setText("goal", s.today >= GOAL ? "Goal met" : "Goal " + GOAL);
     var lit = Math.min(30, Math.floor(30 * s.today / GOAL));
@@ -2162,7 +2204,7 @@ body[data-focus="on"] .park { display: flex; }
     document.getElementById("streak").innerHTML = s.streak + " <small>d</small>";
     setText("best", "Longest " + s.longest + " d");
     // 20 segments of progress through the current rank.
-    var lo = RANKS[r][0], hi = nextR ? nextR[0] : s.max, frac = nextR ? (s.xp - lo) / (hi - lo) : 1;
+    var lo = RANKS[r].xp, hi = nextR ? nextR.xp : s.max, frac = nextR ? Math.min(1, (s.xp - lo) / (hi - lo)) : 1;
     Array.prototype.forEach.call(document.querySelectorAll("#ticks i"), function (el, i) { el.className = i < Math.floor(frac * 20) ? "on" : ""; });
     setText("tab-plan", s.planDone + "/" + allIds().length);
     setText("tab-syl", s.read + "/" + LESSONS.length);
