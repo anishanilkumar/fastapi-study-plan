@@ -127,6 +127,10 @@ code { font-family: var(--face-mono); font-size: 0.875em; background: var(--pane
    page wider than a phone. */
 .page > * { min-width: 0; }
 .mast { display: grid; gap: 0.75rem; padding: 1.5rem 0 0.5rem; }
+.mast-row { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; }
+a.wordmark { text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+a.wordmark:hover { color: var(--arc); }
+.mast-row .btn { margin: 0; min-height: 44px; }
 .mast h1 { font-size: var(--t-major); letter-spacing: -0.03em; }
 .lede { color: var(--ink-dim); max-width: 60ch; }
 
@@ -946,13 +950,14 @@ body[data-focus="on"] .park { display: flex; }
     var h = "";
     if (MENTOR) {
       var upd = MENTOR.state.updated_at ? new Date(MENTOR.state.updated_at) : null;
-      h += '<header class="mast"><span class="wordmark">Study plan · progress report</span>' +
+      h += '<header class="mast"><div class="mast-row"><a class="wordmark" href="#/record">Study plan · progress report</a></div>' +
         "<h1>" + esc(TITLE) + "</h1>" +
         '<p class="lede">A read-only view of the learner\'s progress' + (upd ? ", as of their last change " + esc(fmtWhen(upd)) : "") +
         ". Reload for the latest. The page speaks to the learner, so \u201cyou\u201d means them." +
         (TARGET ? " They're working towards: " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") + "</p></header>";
     } else
-    h += '<header class="mast"><span class="wordmark">Study plan</span>' +
+    h += '<header class="mast"><div class="mast-row"><a class="wordmark" href="#/plan" aria-label="Study plan: home">Study plan</a>' +
+      (CONFIG.mentor_path ? '<button type="button" class="btn" data-act="share-mentor" aria-label="Share progress with mentor">Share with mentor</button>' : "") + "</div>" +
       "<h1>" + esc(TITLE) + "</h1>" +
       '<p class="lede">Python and FastAPI for PHP developers, in three days.' +
       (TARGET ? " Counting down to " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") +
@@ -1996,6 +2001,12 @@ body[data-focus="on"] .park { display: flex; }
   // One listener for every button with a data-act, wherever it is.
   document.addEventListener("click", function (ev) {
     var t = ev.target;
+    if (t.closest && t.closest("a.wordmark")) {
+      // Home is the top of the plan, not wherever it was last scrolled to.
+      planScroll = 0;
+      if (route === "plan" || (MENTOR && route === "record")) { ev.preventDefault(); history.replaceState(null, "", MENTOR ? "#/record" : "#/plan"); window.scrollTo(0, 0); }
+      return;
+    }
     if (t.closest && t.closest("#selbar-btn")) { selbarAct(false); return; }
     if (t.closest && t.closest("#selbar-note")) { selbarAct(true); return; }
     var mk = t.closest && t.closest("#reading mark[data-mark]");
@@ -2020,6 +2031,13 @@ body[data-focus="on"] .park { display: flex; }
       var dlt = drillLater(); dlt[b.dataset.id] = today();
       try { localStorage.setItem(DLATER, JSON.stringify(dlt)); } catch (e) {}
       updateCounts();
+    }
+    else if (act === "share-mentor") {
+      // The phone's share sheet where there is one; otherwise copy the link.
+      var url = location.origin + CONFIG.mentor_path;
+      if (navigator.share) navigator.share({ title: TITLE + " · progress", text: "My study progress, read-only:", url: url }).catch(function () {});
+      else (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast("Link copied", "Send it to your mentor. It's read-only."); },
+        function () { location.hash = "#/record"; setTimeout(function () { var mu = document.getElementById("mentor-url"); if (mu) { mu.scrollIntoView({ block: "center" }); mu.select(); } }, 50); });
     }
     else if (act === "copy-mentor") {
       var mu = document.getElementById("mentor-url");
