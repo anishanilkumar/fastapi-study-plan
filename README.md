@@ -28,8 +28,11 @@ teaches) serving one page:
   in one searchable place.
 
 Progress is saved in SQLite on the server and in the browser, so it survives
-a lost connection, and a service worker caches the lessons for offline
-reading.
+a lost connection. It works fully offline, made for studying on a train:
+every lesson, check and drill is saved on the device on the first visit (the
+status line says when all of it is), a connection that hangs falls back to
+the saved copy after 3 seconds, and whatever you do offline syncs when the
+connection is back. Add it to your phone's home screen to open it like an app.
 
 ## Run it
 

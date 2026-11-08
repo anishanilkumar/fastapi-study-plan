@@ -8,6 +8,7 @@ learner's progress in SQLite.
     GET  /quizzes.json        the check questions for every lesson
     GET  /drills.json         the code-review drills
     GET  /sw.js               the service worker that caches all of it offline
+    GET  /manifest.webmanifest, /icons/*   so it installs as an app on a phone
     GET  /state               {"done": ..., "quiz": ..., "log": ..., "review": ..., "cleared": n, "updated_at": ...}
     PUT  /state               the same without updated_at; replaces the whole state
 
@@ -221,6 +222,7 @@ app = FastAPI(title="Study plan", lifespan=lifespan, docs_url=None, redoc_url=No
 app.mount("/fonts", StaticFiles(directory=HERE / "fonts"), name="fonts")
 # Lesson texts: HTML fragments the page fetches into its reading view.
 app.mount("/lessons", StaticFiles(directory=HERE / "lessons"), name="lessons")
+app.mount("/icons", StaticFiles(directory=HERE / "icons"), name="icons")
 
 NO_CACHE = {"Cache-Control": "no-cache"}  # revalidate each visit, so a deploy shows at once
 
@@ -241,6 +243,11 @@ def quizzes() -> FileResponse:
 @app.get("/drills.json", include_in_schema=False)
 def drills() -> FileResponse:
     return FileResponse(HERE / "drills.json", headers=NO_CACHE)
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifest() -> FileResponse:
+    return FileResponse(HERE / "manifest.webmanifest", media_type="application/manifest+json", headers=NO_CACHE)
 
 
 @app.get("/sw.js", include_in_schema=False)

@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0e14">
 <meta name="robots" content="noindex, nofollow">
+<!-- Installable: "Add to Home Screen" opens it full screen, offline. The
+     manifest sits behind the same login as the page, hence use-credentials. -->
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Study">
 <title>Python Study Plan</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Crect width=%2720%27 height=%2720%27 fill=%27%230a0e14%27/%3E%3Crect x=%275%27 y=%275%27 width=%2710%27 height=%2710%27 fill=%27none%27 stroke=%27%233dd6f5%27 stroke-width=%272%27/%3E%3Crect x=%278%27 y=%278%27 width=%274%27 height=%274%27 fill=%27%233dd6f5%27/%3E%3C/svg%3E">
 <style>
@@ -139,6 +147,15 @@ code { font-family: var(--face-mono); font-size: 0.875em; background: var(--pane
 .status[data-state="unsent"] .stamp { color: var(--unsent); }
 .status[data-state="local"] .dot { background: var(--slate); }
 @keyframes blink { 50% { opacity: 0.2; } }
+/* Offline readiness: arc when every lesson is on this device, gold while some
+   aren't yet, so it can be checked before the connection goes. */
+.offline { flex-wrap: wrap; }
+.offline[hidden] { display: none; }
+.offline[data-state="ready"] .stamp { color: var(--ink-dim); }
+.offline[data-state="partial"] .dot { background: var(--gold); }
+.offline[data-state="partial"] .stamp { color: var(--gold); }
+.offline[data-state="saving"] .dot { animation: blink 0.9s steps(2) infinite; }
+.offline .btn { min-height: 44px; padding: 0 0.75rem; }
 
 /* ---- Callout and table ---- */
 .callout { background: var(--panel); border-left: 6px solid var(--arc); padding: var(--pad); display: grid; gap: 0.75rem; }
@@ -830,7 +847,9 @@ body[data-focus="on"] .park { display: flex; }
       (TARGET ? '<div class="right"><span class="label">To ' + esc(TARGET.label.toLowerCase()) + '</span><span class="readout" id="countdown"></span><span class="stamp">' + esc(targetText()) + "</span></div>" : "") +
       "</div>" +
       '<div class="ticks" id="ticks" aria-hidden="true"></div>' +
-      '<div class="status" id="status" data-state="syncing"><span class="dot"></span><span class="stamp" id="status-text">Connecting</span></div></div>';
+      '<div class="status" id="status" data-state="syncing"><span class="dot"></span><span class="stamp" id="status-text">Connecting</span></div>' +
+      '<div class="status offline" id="offline" hidden><span class="dot"></span><span class="stamp" id="offline-text"></span>' +
+      '<button type="button" class="btn btn-quiet" data-act="save-offline" id="offline-btn" hidden>Save the rest</button></div></div>';
     h += '<nav class="tabs" aria-label="Views">' +
       '<a href="#/plan" data-tab="plan">Plan <span id="tab-plan"></span></a>' +
       '<a href="#/syllabus" data-tab="syllabus">Syllabus <span id="tab-syl"></span></a>' +
@@ -1441,6 +1460,7 @@ body[data-focus="on"] .park { display: flex; }
     else if (act === "resume") resumeBlock();
     else if (act === "stop") stopBlock();
     else if (act === "unpark") { state.later.splice(+b.dataset.i, 1); queueSave(); updateCounts(); renderNotebook(); }
+    else if (act === "save-offline") saveOffline();
     else if (act === "unmark") { changeMarks(b.dataset.lesson, function (list) { list.splice(+b.dataset.i, 1); }); renderNotebook(); }
   });
   // Keep the selection when the button is pressed with a mouse.
@@ -1563,15 +1583,50 @@ body[data-focus="on"] .park { display: flex; }
   }
 
   // ---- Server sync ----
+  // A 10 s limit: on a weak mobile signal a request can hang far longer
+  // than that, and an unanswered save would block the next one.
   function api(method, body) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var t = ctl ? setTimeout(function () { ctl.abort(); }, 10000) : null;
     return fetch("/state", {
-      method: method, cache: "no-store",
+      method: method, cache: "no-store", signal: ctl ? ctl.signal : undefined,
       headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
+      clearTimeout(t);
       if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
       return r.json();
+    }, function (e) { clearTimeout(t); throw e; });
+  }
+
+  // ---- Offline readiness: count what's actually in the cache on this
+  // device, rather than assume the service worker got it all. ----
+  function offlineUrls() { return LESSONS.map(function (l) { return "/lessons/" + l.id + ".html"; }); }
+  var CORE_URLS = ["/", "/quizzes.json", "/drills.json"];
+  function paintOffline(kind, text, button) {
+    var el = document.getElementById("offline"); if (!el) return;
+    el.hidden = !kind; el.dataset.state = kind || "";
+    setText("offline-text", text || "");
+    document.getElementById("offline-btn").hidden = !button;
+  }
+  function checkOffline(fill) {
+    if (!window.caches || !navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+    var urls = CORE_URLS.concat(offlineUrls());
+    Promise.all(urls.map(function (u) { return caches.match(u).then(function (r) { return !!r; }, function () { return false; }); })).then(function (hits) {
+      var missing = urls.filter(function (u, i) { return !hits[i]; });
+      var lessonsIn = hits.slice(CORE_URLS.length).filter(Boolean).length;
+      if (!missing.length) { paintOffline("ready", "Offline ready · all " + LESSONS.length + " lessons on this device"); return; }
+      if (fill && navigator.onLine) { saveOffline(missing); return; }
+      paintOffline("partial", "Offline · " + lessonsIn + " of " + LESSONS.length + " lessons on this device" + (hits[0] ? "" : " · page not saved"), navigator.onLine);
     });
+  }
+  // Fetching through the service worker is what stores a file, so saving
+  // the rest is just asking for it.
+  function saveOffline(urls) {
+    paintOffline("saving", "Saving lessons for offline");
+    Promise.all((urls || CORE_URLS.concat(offlineUrls())).map(function (u) {
+      return fetch(u, { credentials: "same-origin" }).then(function (r) { return r.ok && r.text(); }).catch(function () { return null; });
+    })).then(function () { setTimeout(function () { checkOffline(false); }, 300); });
   }
 
   function unreachable(err) {
@@ -1611,7 +1666,13 @@ body[data-focus="on"] .park { display: flex; }
   });
 
   // Retry unsent changes when the network or the tab comes back, and every 30 s.
-  function retry() { if (dirty && !DEMO) push(); }
+  // With nothing unsent, still check in when the server was out of reach,
+  // so the status line doesn't keep saying "unreachable" after it's back.
+  function retry() {
+    if (DEMO || inflight) return;
+    if (dirty) push();
+    else if (document.getElementById("status").dataset.state === "local") pull();
+  }
   window.addEventListener("online", retry);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { retry(); updateCounts(); } });
   setInterval(retry, 30000);
@@ -1628,22 +1689,31 @@ body[data-focus="on"] .park { display: flex; }
   window.addEventListener("hashchange", renderView);
   loadDrills().catch(function () {});
   if (DEMO) setStatus("ok", "Demo · progress stays in this browser");
-  else api("GET").then(function (srv) {
-    if (dirty) { push(); return; }              // local has changes the server never got
-    adopt(srv);
-    writeLocal();
-    // Update in place rather than re-rendering, so a lesson being read
-    // isn't reloaded and the scroll position stays put.
-    Array.prototype.forEach.call(document.querySelectorAll("input[data-id]"), function (cb) { cb.checked = !!state.done[cb.dataset.id]; });
-    refreshNotebook();
-    updateCounts();
-    var at = srv.updated_at ? " · last change " + hhmm(new Date(srv.updated_at)) : "";
-    setStatus("ok", "Synced with server" + at);
-  }).catch(unreachable);
+  function pull() {
+    inflight = true;
+    api("GET").then(function (srv) {
+      inflight = false;
+      if (dirty) { push(); return; }              // local has changes the server never got
+      adopt(srv);
+      writeLocal();
+      // Update in place rather than re-rendering, so a lesson being read
+      // isn't reloaded and the scroll position stays put.
+      Array.prototype.forEach.call(document.querySelectorAll("input[data-id]"), function (cb) { cb.checked = !!state.done[cb.dataset.id]; });
+      refreshNotebook();
+      updateCounts();
+      var at = srv.updated_at ? " · last change " + hhmm(new Date(srv.updated_at)) : "";
+      setStatus("ok", "Synced with server" + at);
+    }).catch(function (e) { inflight = false; unreachable(e); });
+  }
+  if (!DEMO) pull();
 
   // Offline: cache the page, lessons and questions. Served over http(s) only.
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("/sw.js").catch(function () {});
+    // First visit: the page isn't controlled until the worker activates.
+    navigator.serviceWorker.addEventListener("controllerchange", function () { setTimeout(function () { checkOffline(true); }, 500); });
+    if (navigator.serviceWorker.controller) setTimeout(function () { checkOffline(true); }, 1500);
+    window.addEventListener("online", function () { checkOffline(true); });
   }
 })();
 </script>

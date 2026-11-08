@@ -73,6 +73,10 @@ def test_old_rows_still_load(tmp_path, monkeypatch):
 
 
 def test_serves_page_and_assets(client):
+    m = client.get("/manifest.webmanifest")
+    assert m.status_code == 200 and m.headers["content-type"].startswith("application/manifest+json")
+    for icon in m.json()["icons"]:
+        assert client.get(icon["src"]).status_code == 200
     r = client.get("/")
     assert r.status_code == 200 and "Study plan" in r.text
     assert "/*STUDY_CONFIG*/" not in r.text            # config was injected

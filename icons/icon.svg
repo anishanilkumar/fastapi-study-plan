@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed ground so Android's masks only ever cut dark; the mark sits
+       inside the central 60%, well within the maskable safe zone. -->
+  <rect width="512" height="512" fill="#0a0e14"/>
+  <rect x="166" y="150" width="180" height="180" fill="none" stroke="#3dd6f5" stroke-width="20"/>
+  <rect x="226" y="210" width="60" height="60" fill="#3dd6f5"/>
+  <rect x="166" y="372" width="180" height="12" fill="#2a3543" opacity="0.9"/>
+</svg>
