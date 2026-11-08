@@ -28,6 +28,8 @@ learner's progress in SQLite.
     answers  every answer per question, for the analysis: {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": true}}
     perday   answers per local day: {"2026-11-08": {"n": 20, "ok": 15}}
     deadline when everything should be done, set on the page; null falls back to config's finish_by
+    profile  the learner's own start date and goal, set on the page (asked at first login);
+             null falls back to config: {"start": "2026-11-07", "target": {"label": "Interview", "at": "..."}}
 
 A PUT that leaves a field out keeps what's stored for it, so a tab still
 running an older page (which doesn't know about notes) can't wipe them.
@@ -201,6 +203,13 @@ class DayTally(BaseModel):
     ok: int = Field(ge=0, le=100_000)
 
 
+class Profile(BaseModel):
+    """What the learner set on the page. Present means it wins over config, even when empty."""
+
+    start: date | None = None
+    target: Target | None = None
+
+
 class Progress(BaseModel):
     """The game layer and the notebook: kept apart from `done` so older rows still load."""
 
@@ -216,6 +225,7 @@ class Progress(BaseModel):
     answers: dict[str, Tally] = Field(default_factory=dict)
     perday: dict[str, DayTally] = Field(default_factory=dict)
     deadline: datetime | None = None
+    profile: Profile | None = None
 
     @field_validator("deadline")
     @classmethod

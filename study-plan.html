@@ -441,6 +441,10 @@ body[data-mentor] .need-go a { pointer-events: none; color: var(--ink-dim); }
 .dl-break li { display: flex; justify-content: space-between; gap: 1rem; min-height: 40px; align-items: center; }
 .dl-break li + li { border-top: var(--rule) solid var(--engrave); }
 .dl-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.setup-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+.setup-form label { display: grid; gap: 0.25rem; }
+.setup-form .field { color-scheme: dark; width: 100%; }
+.setup-form .next-actions { grid-column: 1 / -1; }
 .dl-form .field { flex: 1 1 14rem; color-scheme: dark; }
 
 /* ==== Quiz rounds and the analysis ==== */
@@ -857,7 +861,7 @@ body[data-focus="on"] .park { display: flex; }
   var LS = DEMO ? "study-plan-demo" : CONFIG.store || "study-plan";
   // Everything the server stores. Notes and highlights earn no XP: they're
   // for you, and XP for them would reward copying text instead of learning it.
-  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, marknotes: {}, answers: {}, perday: {}, deadline: null }; }
+  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, marknotes: {}, answers: {}, perday: {}, deadline: null, profile: null }; }
   var state = blank();
   var dirty = false, seq = 0, timer = null, inflight = false;
   var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
@@ -994,9 +998,41 @@ body[data-focus="on"] .park { display: flex; }
       return true;
     } catch (e) { return false; }
   }
+  // The learner's own dates win over config's once set on the page (even
+  // set to nothing); until then config's are the default.
+  function applyProfile() {
+    var src = state.profile || CONFIG;
+    TARGET = src.target ? { label: src.target.label, at: new Date(src.target.at) } : null;
+    START = src.start ? new Date(src.start + "T12:00:00") : null;
+  }
+  function localInput(d) { return d ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""; }
+  // Asked once, on the plan, after the server's copy has arrived: never for
+  // someone whose dates are in config, and never again after Save or Not now.
+  var synced = DEMO;
+  function needSetup() { return synced && !MENTOR && !state.profile && !CONFIG.target && !CONFIG.start; }
+  function setupHtml(first) {
+    var dl = state.deadline || CONFIG.finish_by;
+    return '<section class="' + (first ? "callout next setup" : "instrument setup") + '"><div class="section-head"><span class="label">' + (first ? "First, your dates" : "Your dates") + "</span>" +
+      "<h2>" + (first ? "What are you working towards?" : "Goal, start and deadline") + '</h2><p class="why">' +
+      (first ? "So the plan can count down to it, show real days and pace you. All optional; change any of it later on Record."
+             : "The countdown, the plan's days and the deadline come from these. Only you see them, and your mentor's page.") + "</p></div>" +
+      '<form class="setup-form" data-profile>' +
+      '<label><span class="label">Goal</span><input class="field" name="label" maxlength="40" autocomplete="off" placeholder="Interview, exam, first day…" value="' + esc(TARGET ? TARGET.label : "") + '"></label>' +
+      '<label><span class="label">Its date and time</span><input class="field" type="datetime-local" name="at" value="' + localInput(TARGET && TARGET.at) + '"></label>' +
+      '<label><span class="label">Day 1 of the plan</span><input class="field" type="date" name="start" value="' + (START ? dayKey(START) : first ? today() : "") + '"></label>' +
+      '<label><span class="label">Finish all the work by</span><input class="field" type="datetime-local" name="finish" value="' + localInput(dl ? new Date(dl) : null) + '"></label>' +
+      '<div class="next-actions"><button class="btn btn-primary" type="submit">' + (first ? "Save and start" : "Save") + "</button>" +
+      (first ? '<button type="button" class="btn btn-quiet" data-act="profile-skip">Not now</button>' : "") + "</div></form></section>";
+  }
+  function redrawAll() {
+    var y = window.scrollY;
+    renderShell(); if (!MENTOR) setFocus(fz.on, true); renderView(); if (!MENTOR) paintFocus(true);
+    window.scrollTo(0, y);
+  }
   function adopt(v) {
     var b = blank();
     Object.keys(b).forEach(function (k) { state[k] = v[k] != null ? v[k] : b[k]; });
+    applyProfile();
   }
   function payload() { var v = {}; Object.keys(blank()).forEach(function (k) { v[k] = state[k]; }); return v; }
 
@@ -1134,7 +1170,7 @@ body[data-focus="on"] .park { display: flex; }
   }
 
   function planHtml() {
-    var h = '<div class="next-box" data-next></div>';
+    var h = (needSetup() ? setupHtml(true) : "") + '<div class="next-box" data-next></div>';
     h += '<section class="callout"><span class="label">The one big mental shift</span>' +
       "<p>PHP starts fresh for every request and throws everything away at the end. A Python server is one long-running process that handles thousands of requests. Anything at module level (a variable, a list, a database session) lives across requests and is shared between them.</p>" +
       "<p>When you review a snippet, ask: what here is shared that PHP would have thrown away? And what here waits without <code>await</code>?</p></section>";
@@ -1217,6 +1253,7 @@ body[data-focus="on"] .park { display: flex; }
         var on = s.badges.indexOf(b.id) >= 0;
         return '<li data-on="' + on + '"><span class="mark" aria-hidden="true"></span><span class="ltitle">' + esc(b.t) + '</span><span class="why">' + esc(b.d) + "</span>" + (on ? "" : '<span class="visually-hidden">(locked)</span>') + "</li>";
       }).join("") + "</ul></section>";
+    if (!MENTOR) h += setupHtml(false);
     if (CONFIG.mentor_path && !MENTOR) {
       h += '<section class="instrument"><div class="section-head"><span class="label">Share with your mentor</span>' +
         '<p class="why">A read-only link: your progress, scores, drills, highlights and notes, but not your parked thoughts. No login needed, so share it only with them. To revoke it, change <code>mentor_token</code> in config.json and redeploy.</p></div>' +
@@ -2133,6 +2170,7 @@ body[data-focus="on"] .park { display: flex; }
       else (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast("Link copied", "Send it to your mentor. It's read-only."); },
         function () { location.hash = "#/record"; setTimeout(function () { var mu = document.getElementById("mentor-url"); if (mu) { mu.scrollIntoView({ block: "center" }); mu.select(); } }, 50); });
     }
+    else if (act === "profile-skip") { state.profile = { start: null, target: null }; queueSave(); applyProfile(); redrawAll(); }
     else if (act === "copy-mentor") {
       var mu = document.getElementById("mentor-url");
       (navigator.clipboard ? navigator.clipboard.writeText(mu.value) : Promise.reject()).then(function () { toast("Copied", "Send it to your mentor"); },
@@ -2153,6 +2191,17 @@ body[data-focus="on"] .park { display: flex; }
   document.addEventListener("mousedown", function (ev) { if (ev.target.closest && ev.target.closest("#selbar")) ev.preventDefault(); });
   document.addEventListener("submit", function (ev) {
     var f = ev.target;
+    if (f.hasAttribute && f.hasAttribute("data-profile")) {
+      ev.preventDefault();
+      var label = f.elements.label.value.trim().slice(0, 40), at = new Date(f.elements.at.value), fin = new Date(f.elements.finish.value);
+      var startV = /^\d{4}-\d{2}-\d{2}$/.test(f.elements.start.value) ? f.elements.start.value : null;
+      if (label && isNaN(at)) { toast("Needs a date", "When is your " + label.toLowerCase() + "?"); f.elements.at.focus(); return; }
+      state.profile = { start: startV, target: !isNaN(at) ? { label: label || "Goal", at: at.toISOString() } : null };
+      state.deadline = isNaN(fin) ? null : fin.toISOString();
+      queueSave(); applyProfile(); redrawAll();
+      toast("Saved", TARGET ? TARGET.label + " · " + targetText() : "Your dates");
+      return;
+    }
     if (f.hasAttribute && f.hasAttribute("data-deadline")) {
       ev.preventDefault();
       var t = new Date(f.elements.at.value);
@@ -2443,8 +2492,11 @@ body[data-focus="on"] .park { display: flex; }
     inflight = true;
     api("GET").then(function (srv) {
       inflight = false;
-      if (dirty) { push(); return; }              // local has changes the server never got
+      var first = !synced; synced = true;
+      if (dirty) { push(); if (first && needSetup()) redrawAll(); return; }   // local has changes the server never got
+      var was = JSON.stringify(state.profile);
       adopt(srv);
+      if (JSON.stringify(state.profile) !== was || (first && needSetup())) redrawAll();
       writeLocal();
       // Update in place rather than re-rendering, so a lesson being read
       // isn't reloaded and the scroll position stays put.

@@ -77,6 +77,7 @@ Copy `config.example.json` to `config.json` (gitignored) and edit it:
 | `finish_by` | When all the work should be done, e.g. `"2026-01-12T21:00:00+01:00"`. The page then shows hours of work left against usable hours left (07:00–23:00), whether you're ahead or behind, and today's share. It can be changed on the Record page. |
 | `target` | What you're counting down to: `{"label": "Interview", "at": "2026-01-13T14:00:00+01:00"}`. The time needs a UTC offset. Leave it out for no countdown |
 | `overrides` | Replace a plan item's text by id, e.g. your own project for the `eve-deepdive` item |
+| (on the page) | Each learner can set their own goal and date, day 1 and finish-by deadline: asked on the plan at first login when config has no `target` or `start` for them, and editable under "Your dates" on Record. Once set there, they win over config |
 | `mentor_token` | Turns on a read-only page at `/mentor/<token>` to share with a mentor: progress, scores, drills, highlights and notes, not parked thoughts. At least 32 characters: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The Record page shows the link to copy. Change it to revoke the link |
 
 ### More than one learner
