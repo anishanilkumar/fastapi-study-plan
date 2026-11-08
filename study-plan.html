@@ -1731,18 +1731,19 @@ body[data-focus="on"] .park { display: flex; }
   function paintPill(running, paused, left) {
     var pill = document.getElementById("fpill"), bar = document.getElementById("focusbar"); if (!pill || !bar) return;
     var r = bar.getBoundingClientRect(), away = r.bottom < 0 || r.height === 0;
-    pill.hidden = !(running && away);
+    pill.hidden = !((running || fz.on) && away);
     if (pill.hidden) return;
     pill.dataset.mode = fz.mode; pill.dataset.paused = String(paused);
     var m = Math.ceil(left / 60000);
-    setText("fp-time", (fz.mode === "break" ? "Break · " : paused ? "Paused · " : "") + (left < 60000 ? "<1" : m) + " min");
-    var ctl = fz.mode === "work" ? (paused ? "resume" : "pause") : "stop", lbl = fz.mode === "work" ? (paused ? "Resume" : "Pause") : "Skip";
+    setText("fp-time", !running ? "Focus" : (fz.mode === "break" ? "Break · " : paused ? "Paused · " : "") + (left < 60000 ? "<1" : m) + " min");
+    var ctl = !running ? "start" : fz.mode === "work" ? (paused ? "resume" : "pause") : "stop";
+    var lbl = { start: "Start 25 min", resume: "Resume", pause: "Pause", stop: "Skip" }[ctl];
     var c = document.getElementById("fp-ctl");
-    if (c.dataset.act !== ctl) { c.dataset.act = ctl; c.innerHTML = '<button type="button" class="btn" data-act="' + ctl + '">' + lbl + "</button>"; }
+    if (c.dataset.act !== ctl) { c.dataset.act = ctl; c.innerHTML = '<button type="button" class="btn" data-act="' + ctl + '"' + (ctl === "start" ? ' data-len="25"' : "") + ">" + lbl + "</button>"; }
   }
   window.addEventListener("scroll", function () {
-    if (fz.mode === "idle") return;
-    paintPill(true, !fz.end, fzLeft());
+    if (fz.mode === "idle" && !fz.on) return;
+    paintPill(fz.mode !== "idle", fz.mode !== "idle" && !fz.end, fzLeft());
   }, { passive: true });
 
   // Two short tones at the end of a block or break. Browsers only allow
