@@ -21,6 +21,7 @@ learner's progress in SQLite.
     later    thoughts parked during a block: [{"t": "look up Laravel queues", "at": "2026-11-07"}]
     notes    the learner's own notes per lesson: {"py-types": "..."}
     marks    highlighted passages per lesson, as the text that was selected
+    marknotes a note written on a highlight, keyed by its text: {"py-types": {"None is a singleton": "..."}}
     answers  every answer per question, for the analysis: {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": true}}
     perday   answers per local day: {"2026-11-08": {"n": 20, "ok": 15}}
     deadline when everything should be done, set on the page; null falls back to config's finish_by
@@ -132,6 +133,7 @@ class Parked(BaseModel):
 
 
 Mark = Annotated[str, Field(min_length=1, max_length=1000)]
+MarkNote = Annotated[str, Field(min_length=1, max_length=2000)]
 
 
 class Tally(BaseModel):
@@ -157,6 +159,7 @@ class Progress(BaseModel):
     later: list[Parked] = Field(default_factory=list, max_length=300)
     notes: dict[str, Annotated[str, Field(max_length=20_000)]] = Field(default_factory=dict)
     marks: dict[str, list[Mark]] = Field(default_factory=dict)
+    marknotes: dict[str, dict[Mark, MarkNote]] = Field(default_factory=dict)
     answers: dict[str, Tally] = Field(default_factory=dict)
     perday: dict[str, DayTally] = Field(default_factory=dict)
     deadline: datetime | None = None
@@ -211,12 +214,12 @@ class Progress(BaseModel):
             raise ValueError("perday keys are YYYY-MM-DD, with ok <= n")
         return v
 
-    @field_validator("notes", "marks")
+    @field_validator("notes", "marks", "marknotes")
     @classmethod
     def lesson_keys(cls, v: dict) -> dict:
         if len(v) > 200 or any(not ID.match(k) for k in v):
             raise ValueError("bad lesson ids")
-        if any(isinstance(x, list) and len(x) > 200 for x in v.values()):
+        if any(isinstance(x, (list, dict)) and len(x) > 200 for x in v.values()):
             raise ValueError("at most 200 highlights per lesson")
         return v
 

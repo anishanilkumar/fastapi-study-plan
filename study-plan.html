@@ -520,6 +520,17 @@ body[data-focus="on"] .park { display: flex; }
 .marks { display: grid; gap: 0.5rem; margin: 0.75rem 0 0; }
 .marks li { background: var(--panel-lit); border-left: 6px solid var(--gold); padding: 0.5rem 0.5rem 0.5rem 1rem; }
 .marks q { quotes: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.marks .mn { grid-column: 1; color: var(--ink-dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+.marks .mn::before { content: "Note · "; font-family: var(--face-mono); font-size: var(--t-label); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+/* A note on a highlight, under the paragraph that holds it. */
+.reading .mnote { display: block; margin: 0.5rem 0 1rem; padding: 0.5rem 0.75rem; background: var(--panel-lit); border-left: 6px solid var(--gold); font-family: var(--face-data); font-size: 1rem; }
+.reading .mnote .label { display: block; color: var(--gold); }
+.reading .mnote p { margin: 0.25rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reading [data-mnote-open] { cursor: pointer; }
+.reading [data-mnote-open]:hover, .reading [data-mnote-open]:focus-visible { outline: var(--rule) solid var(--gold); outline-offset: 2px; }
+.reading .mnote textarea { display: block; width: 100%; min-height: 4.5rem; margin-top: 0.375rem; font: inherit; }
+.reading .mnote .btn { margin-top: 0.5rem; min-height: 44px; }
+.reading li .mnote { margin-bottom: 0.5rem; }
 .nb-lesson h2 a { color: var(--ink); text-decoration: none; }
 .nb-lesson h2 a:hover { color: var(--arc); }
 .nb-search { display: flex; margin-top: 0.75rem; max-width: 32rem; }
@@ -750,7 +761,7 @@ body[data-focus="on"] .park { display: flex; }
   var LS = DEMO ? "study-plan-demo" : "study-plan";
   // Everything the server stores. Notes and highlights earn no XP: they're
   // for you, and XP for them would reward copying text instead of learning it.
-  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, answers: {}, perday: {} }; }
+  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, marknotes: {}, answers: {}, perday: {}, deadline: null }; }
   var state = blank();
   var dirty = false, seq = 0, timer = null, inflight = false;
   var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
@@ -928,7 +939,7 @@ body[data-focus="on"] .park { display: flex; }
       '<a href="#/record" data-tab="record">Record <span id="tab-rec"></span></a></nav>';
     h += '<div id="view"></div>';
     document.getElementById("root").innerHTML = '<main class="page">' + h + '</main><div class="toast instrument" id="toast" role="status" aria-live="polite"></div>' +
-      '<div class="selbar" id="selbar" hidden><button type="button" class="btn btn-primary" id="selbar-btn"></button></div>';
+      '<div class="selbar" id="selbar" hidden><button type="button" class="btn" id="selbar-note"></button><button type="button" class="btn btn-primary" id="selbar-btn"></button></div>';
     var ticks = "";
     for (var i = 0; i < 20; i++) ticks += "<i></i>";
     document.getElementById("ticks").innerHTML = ticks;
@@ -1074,7 +1085,7 @@ body[data-focus="on"] .park { display: flex; }
       '<div class="reading" id="reading" aria-busy="true"><div class="placeholder"><i></i><i></i><i></i><i class="short"></i></div></div>' +
       '<div class="lesson-notes"><label class="notes"><span class="label">Your notes</span>' +
       '<textarea data-note="' + l.id + '" rows="4" placeholder="In your own words: what to remember, what to ask">' + esc(state.notes[l.id] || "") + "</textarea></label>" +
-      '<span class="stamp">Select any text above to highlight it · find it all later under Notes</span></div>' +
+      '<span class="stamp">Select any text above to highlight it · tap a highlight to write a note on it · find it all later under Notes</span></div>' +
       '<ul class="read-done">' + itemHtml({ id: readId(l.id), t: "I've read this" }, false, true) + "</ul></article>";
     h += '<section class="instrument quiz" id="check"><div class="day-head"><div><span class="label">Check · 3 questions</span><h2>What stuck?</h2></div><span class="stamp" id="qbest"></span></div><div id="quiz"></div></section>';
     if (covers.length) {
@@ -1711,7 +1722,7 @@ body[data-focus="on"] .park { display: flex; }
 
   function notesHtml() {
     return '<section class="section-head syl-head"><span class="label">Notes</span>' +
-      '<p class="lede">What you parked, wrote and highlighted. Highlight by selecting text in any lesson; write notes under each one. Saved with the rest of your progress.</p>' +
+      '<p class="lede">What you parked, wrote and highlighted. Highlight by selecting text in any lesson and tap a highlight to note on it; write notes under each lesson. Saved with the rest of your progress.</p>' +
       '<div class="nb-search"><input class="field" type="search" id="nb-q" placeholder="Search your notes" aria-label="Search your notes"></div></section><div id="nb"></div>';
   }
   function renderNotebook() {
@@ -1729,15 +1740,15 @@ body[data-focus="on"] .park { display: flex; }
     h += '<form class="park-form" data-park><input class="field" name="t" maxlength="500" autocomplete="off" placeholder="Park a thought" aria-label="Park a thought"><button class="btn" type="submit">Park</button></form></section>';
     var shown = 0;
     LESSONS.forEach(function (l) {
-      var marks = state.marks[l.id] || [], note = state.notes[l.id] || "";
+      var marks = state.marks[l.id] || [], note = state.notes[l.id] || "", mn = state.marknotes[l.id] || {};
       if (!marks.length && !note) return;
-      if (q && !hit(l.title) && !hit(note) && !marks.some(hit)) return;
+      if (q && !hit(l.title) && !hit(note) && !marks.some(function (m) { return hit(m) || (mn[m] && hit(mn[m])); })) return;
       shown++;
       h += '<section class="instrument nb-lesson"><div class="section-head"><span class="label">Lesson ' + (LESSONS.indexOf(l) + 1) + " · " + esc(l.part.title) + "</span>" +
         '<h2><a href="#/lesson/' + l.id + '">' + esc(l.title) + " ›</a></h2></div>";
       if (marks.length) {
         h += '<ul class="marks">' + marks.map(function (m, i) {
-          return "<li><q>" + esc(m) + '</q><button type="button" class="btn btn-quiet" data-act="unmark" data-lesson="' + l.id + '" data-i="' + i + '" aria-label="Remove highlight">Remove</button></li>';
+          return "<li><q>" + esc(m) + "</q>" + (mn[m] ? '<span class="mn">' + esc(mn[m]) + "</span>" : "") + '<button type="button" class="btn btn-quiet" data-act="unmark" data-lesson="' + l.id + '" data-i="' + i + '" aria-label="Remove highlight">Remove</button></li>';
         }).join("") + "</ul>";
       }
       h += '<label class="notes"><span class="label">Your notes</span><textarea data-note="' + l.id + '" rows="4">' + esc(note) + "</textarea></label></section>";
@@ -1757,7 +1768,7 @@ body[data-focus="on"] .park { display: flex; }
       if (t !== document.activeElement) t.value = state.notes[t.dataset.note] || "";
     });
     if (route === "notes") renderNotebook();
-    if (route && route.indexOf("lesson/") === 0) repaintReading(route.slice(7));
+    if (route && route.indexOf("lesson/") === 0 && !noteEdit) repaintReading(route.slice(7));
   }
 
   // ---- Highlights. Stored as the selected text, not as positions, so they
@@ -1794,6 +1805,44 @@ body[data-focus="on"] .park { display: flex; }
         try { r.surroundContents(el); } catch (e) {}
       });
     });
+    placeNotes(id, box);
+  }
+  // ---- Notes on highlights: a card under the paragraph (or list item) that
+  // holds the highlight, written in place. Keyed by the highlight's text. ----
+  var noteEdit = null;   // {id, t}: the highlight whose note is open for writing
+  function placeNotes(id, box) {
+    var marks = state.marks[id] || [], notes = state.marknotes[id] || {}, after = new Map();
+    marks.forEach(function (m, idx) {
+      var editing = noteEdit && noteEdit.id === id && noteEdit.t === m;
+      if (!notes[m] && !editing) return;
+      var els = box.querySelectorAll('mark[data-mark="' + idx + '"]'); if (!els.length) return;
+      var b = els[els.length - 1].closest("li, p, pre, blockquote, table, dd, h2, h3, h4");
+      if (!b || !box.contains(b)) { b = els[els.length - 1]; while (b.parentNode !== box) b = b.parentNode; }
+      var card = document.createElement("aside");
+      card.className = "mnote";
+      if (editing) {
+        card.innerHTML = '<label><span class="label">Note on this highlight</span><textarea data-mnote="' + idx + '" maxlength="2000" rows="3" placeholder="Why it matters, how you\'d say it"></textarea></label>' +
+          '<button type="button" class="btn" data-act="mnote-done">Done</button>';
+        card.querySelector("textarea").value = notes[m] || "";
+      } else {
+        card.dataset.mnoteOpen = String(idx); card.tabIndex = 0; card.setAttribute("role", "button");
+        card.innerHTML = '<span class="label">Note · tap to edit</span><p>' + esc(notes[m]) + "</p>";
+      }
+      var prev = after.get(b);
+      if (prev) prev.insertAdjacentElement("afterend", card);
+      else if (b.tagName === "LI") b.appendChild(card);
+      else b.insertAdjacentElement("afterend", card);
+      after.set(b, card);
+    });
+  }
+  function openNote(id, t) {
+    noteEdit = { id: id, t: t }; repaintReading(id);
+    var ta = document.querySelector("#reading textarea[data-mnote]");
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.closest(".mnote").scrollIntoView({ block: "nearest" }); }
+  }
+  function closeNote() {
+    if (!noteEdit) return;
+    var id = noteEdit.id; noteEdit = null; repaintReading(id);
   }
   function repaintReading(id) {
     var box = document.getElementById("reading");
@@ -1803,31 +1852,46 @@ body[data-focus="on"] .park { display: flex; }
     var list = (state.marks[id] || []).slice();
     fn(list);
     if (list.length) state.marks[id] = list; else delete state.marks[id];
+    var mn = state.marknotes[id];
+    if (mn) {
+      Object.keys(mn).forEach(function (k) { if (list.indexOf(k) < 0) delete mn[k]; });
+      if (!Object.keys(mn).length) delete state.marknotes[id];
+    }
     queueSave(); updateCounts();
   }
 
   // The highlight button. On a phone, tapping it can clear the selection
   // before the tap lands, so the last selection is kept for a moment.
   var lastSel = null, unmarkAt = null, selHide = null;
-  function showSelbar(text) {
+  function showSelbar(text, note) {
     clearTimeout(selHide);
     var bar = document.getElementById("selbar");
     document.getElementById("selbar-btn").textContent = text;
+    document.getElementById("selbar-note").textContent = note;
     bar.hidden = false;
   }
   function hideSelbar() { var bar = document.getElementById("selbar"); if (bar) bar.hidden = true; unmarkAt = null; }
   document.addEventListener("selectionchange", function () {
     var box = document.getElementById("reading"), sel = window.getSelection();
+    var ae = document.activeElement;
+    if (ae && ae.closest && ae.closest(".mnote")) return;   // selecting inside a note being written
     if (box && route && route.indexOf("lesson/") === 0 && sel && !sel.isCollapsed && sel.rangeCount &&
         box.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      var c = sel.getRangeAt(0).commonAncestorContainer; c = c.nodeType === 1 ? c : c.parentElement;
       var t = sel.toString().trim();
-      if (squeeze(t).length >= 3 && t.length <= 1000) { lastSel = { t: t, id: route.slice(7), at: Date.now() }; unmarkAt = null; showSelbar("Highlight"); return; }
+      if (!(c && c.closest(".mnote")) && squeeze(t).length >= 3 && t.length <= 1000) { lastSel = { t: t, id: route.slice(7), at: Date.now() }; unmarkAt = null; showSelbar("Highlight", "Highlight + note"); return; }
     }
     if (unmarkAt) return;
     clearTimeout(selHide);
     selHide = setTimeout(hideSelbar, 400);
   });
-  function selbarAct() {
+  function selbarAct(withNote) {
+    if (unmarkAt && withNote) {
+      var w = unmarkAt, mt = (state.marks[w.id] || [])[w.i];
+      hideSelbar();
+      if (mt) openNote(w.id, mt);
+      return;
+    }
     if (unmarkAt) {
       var u = unmarkAt;
       changeMarks(u.id, function (list) { list.splice(u.i, 1); });
@@ -1837,7 +1901,9 @@ body[data-focus="on"] .park { display: flex; }
       if ((state.marks[s.id] || []).length >= 200) toast("Full", "200 highlights is the limit per lesson");
       else changeMarks(s.id, function (list) { if (list.indexOf(s.t) < 0) list.push(s.t); });
       try { window.getSelection().removeAllRanges(); } catch (e) {}
-      repaintReading(s.id);
+      lastSel = null; hideSelbar();
+      if (withNote && (state.marks[s.id] || []).indexOf(s.t) >= 0) openNote(s.id, s.t); else repaintReading(s.id);
+      return;
     }
     lastSel = null; hideSelbar();
   }
@@ -1845,10 +1911,18 @@ body[data-focus="on"] .park { display: flex; }
   // One listener for every button with a data-act, wherever it is.
   document.addEventListener("click", function (ev) {
     var t = ev.target;
-    if (t.closest && t.closest("#selbar-btn")) { selbarAct(); return; }
+    if (t.closest && t.closest("#selbar-btn")) { selbarAct(false); return; }
+    if (t.closest && t.closest("#selbar-note")) { selbarAct(true); return; }
     var mk = t.closest && t.closest("#reading mark[data-mark]");
     if (mk && route && route.indexOf("lesson/") === 0 && window.getSelection().isCollapsed) {
-      unmarkAt = { id: route.slice(7), i: +mk.dataset.mark }; showSelbar("Remove highlight"); return;
+      var lid = route.slice(7), mt = (state.marks[lid] || [])[+mk.dataset.mark];
+      unmarkAt = { id: lid, i: +mk.dataset.mark };
+      showSelbar("Remove highlight", (state.marknotes[lid] || {})[mt] ? "Edit note" : "Add note"); return;
+    }
+    var mo = t.closest && t.closest("#reading [data-mnote-open]");
+    if (mo && route && route.indexOf("lesson/") === 0 && window.getSelection().isCollapsed) {
+      var oid = route.slice(7), ot = (state.marks[oid] || [])[+mo.dataset.mnoteOpen];
+      if (ot) openNote(oid, ot); return;
     }
     if (unmarkAt) hideSelbar();
     var b = t.closest && t.closest("[data-act]"); if (!b) return;
@@ -1864,6 +1938,7 @@ body[data-focus="on"] .park { display: flex; }
     else if (act === "dl-reset") { state.deadline = null; queueSave(); updateCounts(); var y = window.scrollY; renderView(); window.scrollTo(0, y); }
     else if (act === "next-q") { round.i++; renderRound(); window.scrollTo(0, 0); }
     else if (act === "new-round") { round = null; renderRound(); window.scrollTo(0, 0); }
+    else if (act === "mnote-done") closeNote();
     else if (act === "unmark") { changeMarks(b.dataset.lesson, function (list) { list.splice(+b.dataset.i, 1); }); renderNotebook(); }
   });
   // Keep the selection when the button is pressed with a mouse.
@@ -1886,11 +1961,32 @@ body[data-focus="on"] .park { display: flex; }
   document.addEventListener("input", function (ev) {
     var t = ev.target;
     if (t.id === "nb-q") { renderNotebook(); return; }
+    if (t.dataset && t.dataset.mnote != null && noteEdit) {
+      var nid = noteEdit.id, nt = noteEdit.t, nv = t.value.slice(0, 2000);
+      var mn = state.marknotes[nid] || (state.marknotes[nid] = {});
+      if (nv.trim()) mn[nt] = nv; else delete mn[nt];
+      if (!Object.keys(mn).length) delete state.marknotes[nid];
+      queueSave(); return;
+    }
     if (!t.dataset || !t.dataset.note) return;
     var v = t.value.slice(0, 20000);
     if (v.trim()) state.notes[t.dataset.note] = v; else delete state.notes[t.dataset.note];
     queueSave();
     var nn = notebookCount(); setText("tab-notes", nn ? String(nn) : "");
+  });
+
+  // Leaving the note box closes it; an empty note is simply not kept.
+  document.addEventListener("focusout", function (ev) {
+    var t = ev.target;
+    if (!t.dataset || t.dataset.mnote == null) return;
+    var to = ev.relatedTarget;
+    if (to && to.closest && to.closest(".mnote") === t.closest(".mnote")) return;
+    closeNote();
+  });
+  document.addEventListener("keydown", function (ev) {
+    var t = ev.target;
+    if (t.dataset && t.dataset.mnote != null && (ev.key === "Escape" || (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)))) { ev.preventDefault(); t.blur(); return; }
+    if (t.dataset && t.dataset.mnoteOpen != null && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); var id = route.slice(7), m = (state.marks[id] || [])[+t.dataset.mnoteOpen]; if (m) openNote(id, m); }
   });
 
   // ---- Routing ----

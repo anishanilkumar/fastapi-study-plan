@@ -18,7 +18,7 @@ def client(tmp_path, monkeypatch):
 
 def test_empty_then_roundtrip(client):
     assert client.get("/state").json() == {"done": {}, "quiz": {}, "log": {}, "review": {}, "cleared": 0,
-                                           "blocks": {}, "later": [], "notes": {}, "marks": {},
+                                           "blocks": {}, "later": [], "notes": {}, "marks": {}, "marknotes": {},
                                            "answers": {}, "perday": {}, "deadline": None, "updated_at": None}
     r = client.put("/state", json={"done": {"sat-is": True, "b-setup": False}})
     assert r.status_code == 200
@@ -38,6 +38,8 @@ def test_rejects_bad_input(client):
     assert client.put("/state", json={"later": [{"t": "", "at": "2026-11-07"}]}).status_code == 422
     assert client.put("/state", json={"notes": {"Bad Id": "x"}}).status_code == 422
     assert client.put("/state", json={"marks": {"py-types": ["x" * 1001]}}).status_code == 422
+    assert client.put("/state", json={"marknotes": {"py-types": {"a": "x" * 2001}}}).status_code == 422
+    assert client.put("/state", json={"marknotes": {"Bad Id": {"a": "x"}}}).status_code == 422
     assert client.put("/state", json={"answers": {"py-types": {"n": 1, "ok": 1, "last": "2026-11-08", "r": True}}}).status_code == 422
     assert client.put("/state", json={"answers": {"py-types.1": {"n": 1, "ok": 2, "last": "2026-11-08", "r": True}}}).status_code == 422
     assert client.put("/state", json={"perday": {"2026-11-08": {"n": 1, "ok": 5}}}).status_code == 422
@@ -46,11 +48,13 @@ def test_rejects_bad_input(client):
 
 def test_put_keeps_fields_it_leaves_out(client):
     # An older page sends only the fields it knows; notes must survive it.
-    client.put("/state", json={"done": {"sat-is": True}, "notes": {"py-types": "mine"}, "marks": {"py-types": ["a"]}})
+    client.put("/state", json={"done": {"sat-is": True}, "notes": {"py-types": "mine"}, "marks": {"py-types": ["a"]},
+                             "marknotes": {"py-types": {"a": "why"}}})
     client.put("/state", json={"done": {"sat-is": True, "sat-none": True}, "quiz": {}, "log": {}, "review": {}, "cleared": 0})
     got = client.get("/state").json()
     assert got["done"] == {"sat-is": True, "sat-none": True}
     assert got["notes"] == {"py-types": "mine"} and got["marks"] == {"py-types": ["a"]}
+    assert got["marknotes"] == {"py-types": {"a": "why"}}
 
 
 def test_full_state_roundtrip(client):
@@ -59,6 +63,7 @@ def test_full_state_roundtrip(client):
             "review": {"py-types.1": "2026-11-08"}, "cleared": 3,
             "blocks": {"2026-11-07": 2}, "later": [{"t": "Laravel queues?", "at": "2026-11-07"}],
             "notes": {"py-types": "is vs ==: identity"}, "marks": {"py-types": ["None is a singleton"]},
+            "marknotes": {"py-types": {"None is a singleton": "so `is None`, never `== None`"}},
             "answers": {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": True}},
             "perday": {"2026-11-08": {"n": 20, "ok": 15}}, "deadline": "2026-11-09T20:00:00Z"}
     assert client.put("/state", json=body).status_code == 200
