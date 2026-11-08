@@ -15,10 +15,18 @@ teaches) serving one page:
   official docs.
 - **Checks**: three questions after every lesson, with the reason behind
   each answer. Questions you miss come back the next day for review.
+- **Quiz**: 10-question rounds, one question at a time, from a bank of six
+  per lesson (162 in all), weighted towards what you get wrong and haven't
+  seen. Rounds can cover everything you've read, your weak spots, one part
+  or one lesson. Keys 1-4 answer, Enter moves on.
 - **Drills**: six timed code reviews of realistic snippets with planted bugs,
   and a ranked answer key.
 - **Record**: XP, ranks, a daily goal, a streak and badges. All of it is
   computed from what you've actually done, so unticking takes XP back.
+  Above it, an analysis of every answer you've given: accuracy overall and
+  by day, each lesson rated weak, shaky or solid (no verdict under three
+  answers), the questions you miss most, and whether you're on pace for
+  your target date.
 - **Focus mode**: hides everything except the next thing to do, a 25-minute
   (or 15-minute) block timer with a 5-minute break, and a box to park
   stray thoughts so you can get back to the task. Built for people who
@@ -89,7 +97,7 @@ without auth anyone with the URL could change your progress.
 app.py              FastAPI: the page (with config injected), state API, static files
 study-plan.html     the whole UI: plain HTML, CSS and JavaScript, no build step
 lessons/*.html      one reading per lesson (HTML fragments)
-quizzes.json        three questions per lesson: [question, options, answer index, why]
+quizzes.json        questions per lesson: [question, options, answer index, why]; the first three are the check
 drills.json         the code-review drills and their ranked findings
 sw.js               the service worker for offline use
 test_app.py         pytest suite
@@ -103,8 +111,9 @@ and an aware-datetime check on the config.
 
 ### Adding content
 
-- **A lesson**: add `lessons/<id>.html`, three questions under the same id in
-  `quizzes.json`, and an entry in `PARTS` in `study-plan.html`. The tests
+- **A lesson**: add `lessons/<id>.html`, at least three questions under the
+  same id in `quizzes.json` (the first three form its check; any more appear
+  in quiz rounds), and an entry in `PARTS` in `study-plan.html`. The tests
   check that all three agree.
 - **A drill**: append to `drills.json`. Put the worst finding first; it's the
   one worth the most XP.

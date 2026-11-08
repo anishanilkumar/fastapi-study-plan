@@ -81,6 +81,8 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* Components set display, which would otherwise beat the hidden attribute. */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   background: var(--ground);
@@ -404,6 +406,47 @@ a.btn { text-decoration: none; }
 .worst { font-family: var(--face-mono); font-size: var(--t-min); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-right: 0.375rem; }
 @media (max-width: 480px) { .tabs a span { display: none; } }
 
+/* ==== Quiz rounds and the analysis ==== */
+.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.chip { min-height: 44px; padding: 0 0.875rem; border: var(--rule) solid var(--engrave); border-radius: 2px; background: transparent; color: var(--ink-dim);
+  font-family: var(--face-mono); font-size: var(--t-min); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; }
+.chip:hover { color: var(--ink); }
+.chip[aria-current="true"] { color: var(--arc); border-color: var(--arc); }
+.round-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.5rem; }
+.round .ticks { margin-bottom: 0.5rem; }
+.round .ticks > i.miss { background: var(--gold); }
+.round-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.misses { display: grid; gap: 0.25rem; margin-top: 0.75rem; }
+/* Accuracy per lesson: ten segments, like the rank ticks. Too few answers
+   shows slate: a percentage from two answers would be a confident wrong number. */
+.perf { list-style: none; }
+.perf li { display: grid; gap: 0.375rem; padding: 0.75rem 0; }
+.perf li + li { border-top: var(--rule) solid var(--engrave); }
+.perf a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.perf a:hover { color: var(--arc); }
+.perf .bar { display: flex; gap: 2px; height: 0.5rem; }
+.perf .bar i { flex: 1; background: var(--engrave); }
+.perf [data-v="weak"] .bar i.on { background: var(--gold); }
+.perf [data-v="shaky"] .bar i.on { background: var(--arc-dim); }
+.perf [data-v="solid"] .bar i.on { background: var(--arc); }
+.perf [data-v="few"] .bar i.on { background: var(--slate); }
+.verdict-tag { margin-right: 0.5rem; font-family: var(--face-mono); font-size: var(--t-min); letter-spacing: 0.08em; text-transform: uppercase; }
+[data-v="weak"] .verdict-tag { color: var(--gold); }
+[data-v="shaky"] .verdict-tag { color: var(--ink-dim); }
+[data-v="solid"] .verdict-tag { color: var(--arc); }
+[data-v="few"] .verdict-tag { color: var(--slate); }
+.missed { list-style: none; }
+.missed li { display: grid; gap: 0.25rem; padding: 0.75rem 0; }
+.missed li + li { border-top: var(--rule) solid var(--engrave); }
+.pace { display: grid; gap: 0.5rem; }
+.pace[data-state="behind"] .readout { color: var(--gold); }
+.days { list-style: none; display: grid; gap: 0.375rem; }
+.days li { display: grid; grid-template-columns: 6.5rem 1fr 5.5rem; gap: 0.75rem; align-items: center; }
+.days .bar { display: flex; gap: 2px; height: 0.5rem; }
+.days .bar i { flex: 1; background: var(--engrave); }
+.days .bar i.on { background: var(--arc-dim); }
+.days .stamp:last-child { text-align: right; }
+
 /* ==== Focus mode. Hidden, not dimmed: anything on screen is something to
    look at. What stays is the next action, the timer and the park box. ==== */
 body[data-focus="on"] .mast, body[data-focus="on"] .strip, body[data-focus="on"] .tabs,
@@ -655,7 +698,10 @@ body[data-focus="on"] .park { display: flex; }
 
   // ---- The game. Every number here is derived from what's ticked and
   // scored, so XP can't drift from reality: untick something and it goes back.
-  var XP = { tick: 10, read: 25, correct: 15, perfect: 20, cleared: 10, finding: 10, worst: 20, block: 30 };
+  var XP = { tick: 10, read: 25, correct: 15, perfect: 20, cleared: 10, finding: 10, worst: 20, block: 30, extra: 5 };
+  // The first CHECK_N questions of a lesson are its check; the rest appear
+  // only in quiz rounds, and each is worth XP.extra the first time it's right.
+  var CHECK_N = 3;
   var GOAL = 300;                      // XP a day: about a third of the plan
   var RANKS = [
     [0, "Novice"], [150, "Scripter"], [400, "Pythonista"], [800, "Router"],
@@ -686,7 +732,7 @@ body[data-focus="on"] .park { display: flex; }
   var LS = DEMO ? "study-plan-demo" : "study-plan";
   // Everything the server stores. Notes and highlights earn no XP: they're
   // for you, and XP for them would reward copying text instead of learning it.
-  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {} }; }
+  function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, answers: {}, perday: {} }; }
   var state = blank();
   var dirty = false, seq = 0, timer = null, inflight = false;
   var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
@@ -726,10 +772,12 @@ body[data-focus="on"] .park { display: flex; }
     s.blocks = 0; s.bestBlocks = 0;
     Object.keys(state.blocks).forEach(function (k) { s.blocks += state.blocks[k]; s.bestBlocks = Math.max(s.bestBlocks, state.blocks[k]); });
     s.blocksToday = state.blocks[today()] || 0;
+    s.extraRight = Object.keys(state.answers).filter(function (k) { return +k.split(".")[1] >= CHECK_N && state.answers[k].ok > 0; }).length;
     s.xp = s.planDone * XP.tick + s.read * XP.read + s.correct * XP.correct + s.perfect * XP.perfect +
-      s.cleared * XP.cleared + s.found * XP.finding + s.worst * XP.worst + s.blocks * XP.block;
+      s.cleared * XP.cleared + s.found * XP.finding + s.worst * XP.worst + s.blocks * XP.block + s.extraRight * XP.extra;
     s.max = allIds().length * XP.tick + LESSONS.length * (XP.read + 3 * XP.correct + XP.perfect) +
-      (drills ? drills.reduce(function (a, d) { return a + d.findings.length * XP.finding + XP.worst; }, 0) : 0);
+      (drills ? drills.reduce(function (a, d) { return a + d.findings.length * XP.finding + XP.worst; }, 0) : 0) +
+      (quizzes ? Object.keys(quizzes).reduce(function (a, k) { return a + Math.max(0, quizzes[k].length - CHECK_N) * XP.extra; }, 0) : 0);
     PLAN.forEach(function (d) { s.days[d.id] = dayItems(d).every(function (i) { return state.done[i.id]; }); });
     PARTS.forEach(function (p) { s.parts[p.n] = p.lessons.every(function (l) { return state.done[readId(l.id)]; }); });
     var r = 0; RANKS.forEach(function (x, i) { if (s.xp >= x[0]) r = i; });
@@ -853,6 +901,7 @@ body[data-focus="on"] .park { display: flex; }
     h += '<nav class="tabs" aria-label="Views">' +
       '<a href="#/plan" data-tab="plan">Plan <span id="tab-plan"></span></a>' +
       '<a href="#/syllabus" data-tab="syllabus">Syllabus <span id="tab-syl"></span></a>' +
+      '<a href="#/quiz" data-tab="quiz">Quiz</a>' +
       '<a href="#/drills" data-tab="drills">Drills <span id="tab-drl"></span></a>' +
       '<a href="#/notes" data-tab="notes">Notes <span id="tab-notes"></span></a>' +
       '<a href="#/record" data-tab="record">Record <span id="tab-rec"></span></a></nav>';
@@ -890,7 +939,7 @@ body[data-focus="on"] .park { display: flex; }
     var a = nextAction();
     var enter = '<button type="button" class="btn focus-hide" data-act="focus-on">Focus mode</button>';
     var calm = '<p class="why focus-only">One thing at a time. When it\'s done, the next one shows up here.</p>';
-    if (!a) return '<section class="callout next"><span class="label">Next up</span><h2>Everything done</h2><p class="why">Plan ticked, every lesson read, every check passed. Try the drills again against the clock, then rest.</p></section>';
+    if (!a) return '<section class="callout next"><span class="label">Next up</span><h2>Everything done</h2><p class="why">Plan ticked, every lesson read, every check passed. Keep it fresh with a quiz round, or the drills against the clock, then rest.</p><div class="next-actions"><a class="btn btn-primary" href="#/quiz">Quiz round ›</a></div></section>';
     if (a.kind === "tick") {
       // Tickable right here, so focus mode never has to show the whole plan.
       return '<section class="callout next"><span class="label">Next up · plan item · +' + XP.tick + ' XP</span><ul class="next-item">' + itemHtml(a.item, false) + "</ul>" + calm +
@@ -957,7 +1006,7 @@ body[data-focus="on"] .park { display: flex; }
 
   function recordHtml() {
     var s = score(), r = s.rank, nextR = RANKS[r + 1];
-    var h = '<section class="instrument"><div class="section-head"><span class="label">Rank ' + (r + 1) + " of " + RANKS.length + "</span><h2 class=\"rank-name\">" + esc(RANKS[r][1]) + "</h2>" +
+    var h = analysisHtml(s) + '<section class="instrument"><div class="section-head"><span class="label">Rank ' + (r + 1) + " of " + RANKS.length + "</span><h2 class=\"rank-name\">" + esc(RANKS[r][1]) + "</h2>" +
       '<span class="stamp">' + num(s.xp) + " XP" + (nextR ? " · " + num(nextR[0] - s.xp) + " to " + esc(nextR[1]) : " · top rank") + " · " + num(s.max) + " XP possible</span></div>" +
       '<ol class="ladder">' + RANKS.map(function (x, i) {
         return '<li data-state="' + (i < r ? "past" : i === r ? "now" : "ahead") + '"><span class="mark"></span><span class="ltitle">' + esc(x[1]) + '</span><span class="stamp">' + num(x[0]) + " XP</span></li>";
@@ -988,6 +1037,7 @@ body[data-focus="on"] .park { display: flex; }
       rule("A missed question, answered right on review", "+" + XP.cleared) +
       rule("Each bug you found in a drill", "+" + XP.finding) + rule("Finding a drill's worst bug", "+" + XP.worst) +
       rule("A finished focus block (in focus mode)", "+" + XP.block) +
+      rule("A quiz-only question right for the first time", "+" + XP.extra) +
       rule("Unticking takes the XP back", "−") + "</ul></section>";
     return h;
   }
@@ -1063,7 +1113,7 @@ body[data-focus="on"] .park { display: flex; }
     document.getElementById("qbest").textContent = best ? "Best " + best.best + " / " + best.of : "Not taken";
     loadQuizzes().then(function (all) {
       if (route !== "lesson/" + l.id || !document.getElementById("quiz")) return;
-      var qs = all[l.id] || [], run = quizRuns[l.id] || (quizRuns[l.id] = qs.map(function () { return null; }));
+      var qs = (all[l.id] || []).slice(0, CHECK_N), run = quizRuns[l.id] || (quizRuns[l.id] = qs.map(function () { return null; }));
       var h = qs.map(function (q, qi) { return questionHtml(q, l.id + "." + qi, run[qi], '<span class="stamp">' + (qi + 1) + " / " + qs.length + "</span>"); }).join("");
       if (qs.length && run.every(function (x) { return x !== null; })) {
         var got = run.filter(function (x, i) { return x === qs[i][2]; }).length;
@@ -1086,7 +1136,7 @@ body[data-focus="on"] .park { display: flex; }
     var run = quizRuns[l.id]; if (run[qi] !== null) return;
     run[qi] = oi;
     // A miss goes on the review list for tomorrow: spaced, not crammed.
-    if (oi !== qs[qi][2]) change(function () { state.review[l.id + "." + qi] = tomorrow(); });
+    change(function () { record(l.id + "." + qi, oi === qs[qi][2]); if (oi !== qs[qi][2]) state.review[l.id + "." + qi] = tomorrow(); });
     if (run.every(function (x) { return x !== null; })) {
       var got = run.filter(function (x, i) { return x === qs[i][2]; }).length, prev = state.quiz[l.id];
       if (!prev || got > prev.best) {
@@ -1128,13 +1178,223 @@ body[data-focus="on"] .park { display: flex; }
         var k = b.dataset.key, p = k.split("."), q = all[p[0]][+p[1]], oi = +b.dataset.o;
         if (reviewRun[k] != null) return;
         reviewRun[k] = oi;
-        if (oi === q[2]) change(function () { delete state.review[k]; state.cleared = (state.cleared || 0) + 1; }, "Cleared · " + (BY_ID[p[0]] || {}).title);
-        else change(function () { state.review[k] = tomorrow(); });
+        if (oi === q[2]) change(function () { record(k, true); delete state.review[k]; state.cleared = (state.cleared || 0) + 1; }, "Cleared · " + (BY_ID[p[0]] || {}).title);
+        else change(function () { record(k, false); state.review[k] = tomorrow(); });
         renderReview();
       };
     }).catch(function () {
       box.innerHTML = '<div class="empty"><span class="label">Review unavailable</span><p>The questions come from the server, which can\'t be reached.</p></div>';
     });
+  }
+
+  // ---- Every answer, from a check, a review or a quiz round, is counted
+  // here: the analysis is built from these, not from best scores. ----
+  function record(key, right) {
+    var a = state.answers[key] || { n: 0, ok: 0, last: today(), r: false };
+    a.n++; if (right) a.ok++; a.last = today(); a.r = right;
+    state.answers[key] = a;
+    var d = state.perday[today()] || { n: 0, ok: 0 };
+    d.n++; if (right) d.ok++;
+    state.perday[today()] = d;
+  }
+  function pct(ok, n) { return n ? Math.round(100 * ok / n) : 0; }
+
+  // ==== Quiz rounds: ten questions, one at a time, weighted towards what
+  // you get wrong and what you haven't seen. ====
+  var ROUND = 10, quizScope = null, round = null;
+  var SCOPES = [["mix", "Smart mix"], ["weak", "Weak spots"], ["part-1", "Python"], ["part-2", "FastAPI"], ["part-3", "Data and tests"], ["part-4", "Interview"]];
+  function lessonsRead() { return LESSONS.filter(function (l) { return state.done[readId(l.id)] || state.quiz[l.id]; }); }
+  function lessonStats(id) {
+    var n = 0, ok = 0, seen = 0;
+    Object.keys(state.answers).forEach(function (k) {
+      if (k.split(".")[0] !== id) return;
+      var a = state.answers[k]; n += a.n; ok += a.ok; seen++;
+    });
+    return { n: n, ok: ok, seen: seen };
+  }
+  function scopeLessons(scope) {
+    var pm = /^part-(\d)$/.exec(scope);
+    if (pm) return LESSONS.filter(function (l) { return String(l.part.n) === pm[1]; });
+    if (BY_ID[scope]) return [BY_ID[scope]];
+    if (scope === "weak") {
+      var weak = LESSONS.filter(function (l) { var st = lessonStats(l.id); return st.n && st.ok / st.n < 0.8; });
+      if (weak.length) return weak;
+    }
+    var read = lessonsRead();
+    return read.length >= 2 ? read : LESSONS;
+  }
+  function pickRound(all, scope) {
+    var pool = [];
+    scopeLessons(scope).forEach(function (l) {
+      (all[l.id] || []).forEach(function (q, qi) {
+        var k = l.id + "." + qi, a = state.answers[k], w;
+        if (!a) w = 3;                                   // never seen
+        else if (!a.r) w = 6;                            // got it wrong last time
+        else w = 1 + 3 * (1 - a.ok / a.n);               // the shakier, the likelier
+        if (a && a.r && a.last === today()) w *= 0.25;   // just got it right: rest it
+        pool.push([k, w]);
+      });
+    });
+    var out = [];
+    while (out.length < ROUND && pool.length) {
+      var total = pool.reduce(function (t, x) { return t + x[1]; }, 0), r = Math.random() * total, i = 0;
+      while (r > pool[i][1] && i < pool.length - 1) { r -= pool[i][1]; i++; }
+      out.push(pool.splice(i, 1)[0][0]);
+    }
+    return out;
+  }
+
+  function quizHtml() {
+    var read = lessonsRead().length;
+    return '<section class="section-head syl-head"><span class="label">Quiz · ' + ROUND + " questions a round</span>" +
+      '<p class="lede">One question at a time, picked from what you\'ve read and weighted towards what you get wrong. Misses come back for review tomorrow. ' +
+      "Questions that only appear here are +" + XP.extra + " XP the first time you get one right." + (read < 2 ? " You haven't read much yet, so questions come from every lesson." : "") + "</p>" +
+      '<div class="chips" role="group" aria-label="What to quiz">' + SCOPES.map(function (x) {
+        return '<a class="chip" href="#/quiz/' + x[0] + '"' + (quizScope === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</a>";
+      }).join("") + (BY_ID[quizScope] ? '<a class="chip" aria-current="true" href="#/quiz/' + quizScope + '">' + esc(BY_ID[quizScope].title) + "</a>" : "") +
+      '</div></section><section class="instrument quiz round" id="round"><div class="placeholder"><i></i><i></i><i class="short"></i></div></section>';
+  }
+  function startRound() {
+    return loadQuizzes().then(function (all) {
+      round = { scope: quizScope, keys: pickRound(all, quizScope), i: 0, picks: {}, xp0: score().xp };
+    });
+  }
+  function renderRound() {
+    var box = document.getElementById("round"); if (!box) return;
+    var go = round && round.scope === quizScope ? Promise.resolve() : startRound();
+    go.then(function () { return loadQuizzes(); }).then(function (all) {
+      if (route !== "quiz" || !document.getElementById("round")) return;
+      var keys = round.keys, n = keys.length;
+      if (!n) { box.innerHTML = '<div class="empty"><span class="label">No questions here</span><p>Nothing to ask in this scope yet.</p></div>'; return; }
+      var ticks = '<div class="ticks" aria-hidden="true">' + keys.map(function (k, i) {
+        var p = round.picks[k], q = all[k.split(".")[0]][+k.split(".")[1]];
+        return "<i" + (p == null ? "" : p === q[2] ? ' class="on"' : ' class="miss"') + "></i>";
+      }).join("") + "</div>";
+      var answered = Object.keys(round.picks).length;
+      if (round.i >= n) {
+        var got = keys.filter(function (k) { return round.picks[k] === all[k.split(".")[0]][+k.split(".")[1]][2]; }).length;
+        var missed = keys.filter(function (k) { return round.picks[k] !== all[k.split(".")[0]][+k.split(".")[1]][2]; });
+        var lessonsMissed = []; missed.forEach(function (k) { var id = k.split(".")[0]; if (lessonsMissed.indexOf(id) < 0) lessonsMissed.push(id); });
+        var gain = score().xp - round.xp0;
+        box.innerHTML = '<div class="round-head"><span class="label">Round done</span><span class="stamp">' + (gain > 0 ? "+" + gain + " XP" : "") + "</span></div>" + ticks +
+          '<div class="result"><span class="readout">' + got + " <small>/ " + n + '</small></span><span class="stamp">' +
+          (got === n ? "Clean round" : got >= n * 0.8 ? "Strong" : got >= n * 0.6 ? "Getting there" : "Worth rereading the lessons below") + "</span></div>" +
+          (lessonsMissed.length ? '<div class="misses"><span class="label">Missed in</span>' + lessonsMissed.map(function (id) {
+            return '<a href="#/lesson/' + id + '">' + esc(BY_ID[id] ? BY_ID[id].title : id) + " ›</a>";
+          }).join("") + "</div>" : "") +
+          '<div class="round-actions"><button type="button" class="btn btn-primary" data-act="new-round">Another round</button><a class="btn" href="#/record">See how you\'re doing</a></div>';
+        return;
+      }
+      var k = keys[round.i], parts = k.split("."), q = all[parts[0]][+parts[1]], picked = round.picks[k], l = BY_ID[parts[0]];
+      box.innerHTML = '<div class="round-head"><span class="label">Question ' + (round.i + 1) + " of " + n + '</span><span class="stamp">' + esc(l ? l.title : parts[0]) + "</span></div>" + ticks +
+        questionHtml(q, k, picked, "") +
+        (picked != null ? '<div class="round-actions"><button type="button" class="btn btn-primary" data-act="next-q" id="next-q">' + (round.i + 1 < n ? "Next ›" : "Finish") + "</button>" +
+          (l ? '<a class="btn btn-quiet" href="#/lesson/' + l.id + '">Reread the lesson</a>' : "") + "</div>" : "");
+      if (picked != null) { var nb = document.getElementById("next-q"); if (nb) nb.focus({ preventScroll: true }); }
+      box.onclick = function (ev) {
+        var b = ev.target.closest(".opt"); if (!b || round.picks[k] != null) return;
+        var oi = +b.dataset.o, right = oi === q[2];
+        round.picks[k] = oi;
+        change(function () {
+          record(k, right);
+          if (!right) state.review[k] = tomorrow();
+          else if (state.review[k]) { delete state.review[k]; state.cleared = (state.cleared || 0) + 1; }
+        }, right ? (+parts[1] >= CHECK_N ? "New question right" : "Right") : "");
+        renderRound();
+      };
+    }).catch(function () {
+      if (route === "quiz") box.innerHTML = '<div class="empty"><span class="label">Quiz unavailable</span><p>The questions come from the server, which can\'t be reached, and aren\'t in the offline cache yet.</p></div>';
+    });
+  }
+  // Keys 1-4 answer, Enter goes on: a round can be done without the mouse.
+  document.addEventListener("keydown", function (ev) {
+    if (route !== "quiz" || !round || /INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName)) return;
+    var opts = document.querySelectorAll("#round .opt:not(:disabled)");
+    if (/^[1-4]$/.test(ev.key) && opts[+ev.key - 1]) { opts[+ev.key - 1].click(); ev.preventDefault(); }
+  });
+
+  // ==== Analysis: how you're doing, from every recorded answer. ====
+  function analysisHtml(s) {
+    var keys = Object.keys(state.answers), n = 0, ok = 0;
+    keys.forEach(function (k) { n += state.answers[k].n; ok += state.answers[k].ok; });
+    var td = state.perday[today()] || { n: 0, ok: 0 };
+    var total = quizzes ? Object.keys(quizzes).reduce(function (a, k) { return a + quizzes[k].length; }, 0) : 0;
+    var h = '<section class="instrument"><div class="section-head"><span class="label">How you\'re doing</span>' +
+      "<h2>" + (n ? pct(ok, n) + "% right over " + num(n) + " answer" + (n === 1 ? "" : "s") : "No answers counted yet") + "</h2>";
+    var days = Object.keys(state.perday).sort();
+    h += '<span class="stamp">' + (days.length ? "Counted since " + esc(days[0]) + " · checks before then only kept a best score" : "Every answer from now on, in checks, reviews and quiz rounds, is counted here") + "</span></div>";
+    if (!n) return h + '<a class="btn btn-primary" href="#/quiz">Take a quiz round ›</a></section>' + paceHtml(s);
+    var stats = [
+      ["Today", td.n ? td.n + " · " + pct(td.ok, td.n) + "%" : "0"],
+      ["Questions seen", keys.length + (total ? " / " + total : "")],
+      ["Right last time", keys.filter(function (k) { return state.answers[k].r; }).length + " / " + keys.length],
+      ["Due for review", String(s.due)]
+    ];
+    h += '<dl class="stats">' + stats.map(function (x) { return '<div><dt class="label">' + x[0] + '</dt><dd class="readout">' + x[1] + "</dd></div>"; }).join("") + "</dl>";
+    // Last seven days with answers.
+    var recent = days.slice(-7);
+    if (recent.length > 1) {
+      h += '<div class="section-head" style="margin:1.25rem 0 0.5rem"><span class="label">By day</span></div><ul class="days">' + recent.map(function (d) {
+        var t = state.perday[d], lit = Math.round(10 * t.ok / t.n);
+        return '<li><span class="stamp">' + esc(d) + '</span><span class="bar">' + bar(lit) + '</span><span class="stamp">' + t.n + " · " + pct(t.ok, t.n) + "%</span></li>";
+      }).join("") + "</ul>";
+    }
+    h += "</section>";
+
+    // Per lesson, weakest first. Under 3 answers, no verdict.
+    var rows = LESSONS.map(function (l) { var st = lessonStats(l.id); st.l = l; return st; }).filter(function (x) { return x.n; });
+    rows.forEach(function (x) { x.acc = x.ok / x.n; x.v = x.n < 3 ? "few" : x.acc < 0.6 ? "weak" : x.acc < 0.8 ? "shaky" : "solid"; });
+    var order = { weak: 0, shaky: 1, few: 2, solid: 3 };
+    rows.sort(function (a, b) { return order[a.v] - order[b.v] || a.acc - b.acc; });
+    var untested = LESSONS.length - rows.length, weakN = rows.filter(function (x) { return x.v === "weak" || x.v === "shaky"; }).length;
+    h += '<section class="instrument"><div class="section-head"><span class="label">By lesson · weakest first</span>' +
+      '<span class="stamp">' + rows.length + " tested · " + untested + " not yet · under 3 answers gets no verdict</span></div>" +
+      '<ul class="perf">' + rows.map(function (x) {
+        var tag = { weak: "Weak", shaky: "Shaky", solid: "Solid", few: "Too few answers" }[x.v];
+        return '<li data-v="' + x.v + '"><a href="#/quiz/' + x.l.id + '">' + esc(x.l.title) + '</a><span><span class="verdict-tag">' + tag + '</span> <span class="stamp">' + x.ok + "/" + x.n + " · " + pct(x.ok, x.n) + "%</span></span>" +
+          '<span class="bar" aria-hidden="true">' + bar(Math.round(10 * x.acc)) + "</span></li>";
+      }).join("") + "</ul>" +
+      '<div class="round-actions">' + (weakN ? '<a class="btn btn-primary" href="#/quiz/weak">Quiz your weak spots ›</a>' : '<a class="btn btn-primary" href="#/quiz/mix">Quiz round ›</a>') + "</div>" +
+      '<p class="stamp" style="margin-top:0.75rem">Tap a lesson to quiz just that one.</p></section>';
+
+    // The questions missed most, so you know exactly what to reread.
+    var worst = keys.filter(function (k) { return state.answers[k].n > state.answers[k].ok; })
+      .sort(function (a, b) { var A = state.answers[a], B = state.answers[b]; return (B.n - B.ok) - (A.n - A.ok) || (A.ok / A.n) - (B.ok / B.n); }).slice(0, 5);
+    if (worst.length && quizzes) {
+      h += '<section class="instrument"><div class="section-head"><span class="label">Missed most</span></div><ul class="missed">' + worst.map(function (k) {
+        var p = k.split("."), q = quizzes[p[0]] && quizzes[p[0]][+p[1]], a = state.answers[k], l = BY_ID[p[0]];
+        if (!q) return "";
+        return "<li><span>" + codeish(q[0]) + '</span><span class="stamp">Missed ' + (a.n - a.ok) + " of " + a.n + (a.r ? " · right last time" : "") +
+          (l ? ' · <a href="#/lesson/' + l.id + '">' + esc(l.title) + "</a>" : "") + "</span></li>";
+      }).join("") + "</ul></section>";
+    }
+    return h + paceHtml(s);
+  }
+  function bar(lit) { var h = ""; for (var i = 0; i < 10; i++) h += i < lit ? '<i class="on"></i>' : "<i></i>"; return h; }
+
+  // Pace: are you where the plan says you should be by now? Only with a
+  // start date; without one, "behind" would be a guess.
+  function paceHtml(s) {
+    var minsLeft = LESSONS.filter(function (l) { return !state.done[readId(l.id)]; }).reduce(function (a, l) { return a + l.min; }, 0);
+    var h = '<section class="instrument pace"', body = "";
+    if (START) {
+      var due = 0, done = 0, now = new Date(); now.setHours(23, 59, 59);
+      PLAN.forEach(function (d) { if (planDate(d.n) <= now) dayItems(d).forEach(function (i) { due++; if (state.done[i.id]) done++; }); });
+      var behind = due - done;
+      h += ' data-state="' + (behind > 0 ? "behind" : "ok") + '"';
+      body += '<span class="readout">' + (due === 0 ? "Not started yet" : behind > 0 ? behind + " item" + (behind === 1 ? "" : "s") + " behind" : "On track") + "</span>" +
+        '<span class="stamp">' + done + " of " + due + " plan items due by today are ticked</span>";
+    }
+    body += '<span class="stamp">' + s.read + " of " + LESSONS.length + " lessons read · " + (minsLeft ? "about " + (Math.round(minsLeft / 30) / 2) + " h of reading left" : "all read") +
+      " · " + s.passed + " of " + LESSONS.length + " checks passed</span>";
+    if (TARGET && minsLeft) {
+      var hrs = (TARGET.at.getTime() - Date.now()) / 3600000;
+      if (hrs > 0) {
+        var days = Math.max(1, Math.ceil(hrs / 24));
+        body += '<span class="stamp">' + Math.ceil(minsLeft / days) + " min of reading a day gets it all read before " + esc(TARGET.label.toLowerCase()) + "</span>";
+      }
+    }
+    return h + '><div class="section-head" style="margin:0"><span class="label">Pace</span></div>' + body + "</section>";
   }
 
   // ---- Drills: timed code reviews with a ranked answer key ----
@@ -1461,6 +1721,8 @@ body[data-focus="on"] .park { display: flex; }
     else if (act === "stop") stopBlock();
     else if (act === "unpark") { state.later.splice(+b.dataset.i, 1); queueSave(); updateCounts(); renderNotebook(); }
     else if (act === "save-offline") saveOffline();
+    else if (act === "next-q") { round.i++; renderRound(); window.scrollTo(0, 0); }
+    else if (act === "new-round") { round = null; renderRound(); window.scrollTo(0, 0); }
     else if (act === "unmark") { changeMarks(b.dataset.lesson, function (list) { list.splice(+b.dataset.i, 1); }); renderNotebook(); }
   });
   // Keep the selection when the button is pressed with a mouse.
@@ -1481,13 +1743,15 @@ body[data-focus="on"] .park { display: flex; }
   });
 
   // ---- Routing ----
-  //   #/plan  #/plan/<item>  #/syllabus  #/lesson/<id>[/check]  #/drills  #/drill/<id>  #/review  #/notes  #/record
+  //   #/plan  #/plan/<item>  #/syllabus  #/lesson/<id>[/check]  #/quiz[/<scope>]  #/drills  #/drill/<id>  #/review  #/notes  #/record
   function renderView() {
     var hash = location.hash.replace(/^#\/?/, "") || "plan";
     var m = /^lesson\/([a-z0-9-]+)(\/check)?$/.exec(hash), focus = /^plan\/([a-z0-9-]+)$/.exec(hash), dr = /^drill\/([a-z0-9]+)$/.exec(hash);
+    var qz = /^quiz(?:\/([a-z0-9-]+))?$/.exec(hash);
+    if (qz) { quizScope = qz[1] || quizScope || "mix"; hash = "quiz"; }
     if (m && !BY_ID[m[1]]) { m = null; hash = "syllabus"; }
     if (focus) hash = "plan";
-    if (!m && !dr && ["plan", "syllabus", "record", "drills", "review", "notes"].indexOf(hash) < 0) hash = "plan";
+    if (!m && !dr && ["plan", "syllabus", "record", "drills", "review", "notes", "quiz"].indexOf(hash) < 0) hash = "plan";
     if (route === "plan") planScroll = window.scrollY;
     if (route && route.indexOf("drill/") === 0) stopClock();
     route = m ? "lesson/" + m[1] : dr ? "drill/" + dr[1] : hash;
@@ -1496,7 +1760,7 @@ body[data-focus="on"] .park { display: flex; }
     var tab = m ? "syllabus" : dr ? "drills" : hash === "review" ? "plan" : hash;
     view.innerHTML = m ? lessonHtml(BY_ID[m[1]]) : dr ? drillHtml(dr[1]) :
       hash === "syllabus" ? syllabusHtml() : hash === "record" ? recordHtml() : hash === "drills" ? drillsHtml() : hash === "review" ? reviewHtml() :
-      hash === "notes" ? notesHtml() : planHtml();
+      hash === "notes" ? notesHtml() : hash === "quiz" ? quizHtml() : planHtml();
     // In focus mode the tabs are gone, so every other view ends with the next step.
     if (hash !== "plan" || m || dr) view.insertAdjacentHTML("beforeend", '<div class="next-box focus-only" data-next></div>');
     hideSelbar();
@@ -1511,6 +1775,7 @@ body[data-focus="on"] .park { display: flex; }
     else if (hash === "drills") { renderDrillList(); window.scrollTo(0, 0); }
     else if (hash === "review") { reviewRun = {}; renderReview(); window.scrollTo(0, 0); }
     else if (hash === "notes") { renderNotebook(); window.scrollTo(0, 0); }
+    else if (hash === "quiz") { renderRound(); window.scrollTo(0, 0); }
     else if (focus) {
       var row = document.querySelector('[data-item="' + focus[1] + '"]');
       if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600); }
@@ -1688,6 +1953,8 @@ body[data-focus="on"] .park { display: flex; }
   setInterval(tickFocus, 1000);
   window.addEventListener("hashchange", renderView);
   loadDrills().catch(function () {});
+  // The analysis on Record needs the questions' text and count.
+  loadQuizzes().then(function () { if (route === "record") renderView(); updateCounts(); }).catch(function () {});
   if (DEMO) setStatus("ok", "Demo · progress stays in this browser");
   function pull() {
     inflight = true;
@@ -1700,6 +1967,8 @@ body[data-focus="on"] .park { display: flex; }
       // isn't reloaded and the scroll position stays put.
       Array.prototype.forEach.call(document.querySelectorAll("input[data-id]"), function (cb) { cb.checked = !!state.done[cb.dataset.id]; });
       refreshNotebook();
+      // Record is built from the whole state, so it's redrawn rather than patched.
+      if (route === "record") { var y = window.scrollY; renderView(); window.scrollTo(0, y); }
       updateCounts();
       var at = srv.updated_at ? " · last change " + hhmm(new Date(srv.updated_at)) : "";
       setStatus("ok", "Synced with server" + at);

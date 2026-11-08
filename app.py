@@ -21,6 +21,8 @@ learner's progress in SQLite.
     later    thoughts parked during a block: [{"t": "look up Laravel queues", "at": "2026-11-07"}]
     notes    the learner's own notes per lesson: {"py-types": "..."}
     marks    highlighted passages per lesson, as the text that was selected
+    answers  every answer per question, for the analysis: {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": true}}
+    perday   answers per local day: {"2026-11-08": {"n": 20, "ok": 15}}
 
 A PUT that leaves a field out keeps what's stored for it, so a tab still
 running an older page (which doesn't know about notes) can't wipe them.
@@ -122,6 +124,18 @@ class Parked(BaseModel):
 Mark = Annotated[str, Field(min_length=1, max_length=1000)]
 
 
+class Tally(BaseModel):
+    n: int = Field(ge=0, le=100_000)         # times answered
+    ok: int = Field(ge=0, le=100_000)        # times right
+    last: str = Field(pattern=DATE.pattern)  # day of the last answer
+    r: bool                                  # was the last answer right
+
+
+class DayTally(BaseModel):
+    n: int = Field(ge=0, le=100_000)
+    ok: int = Field(ge=0, le=100_000)
+
+
 class Progress(BaseModel):
     """The game layer and the notebook: kept apart from `done` so older rows still load."""
 
@@ -133,6 +147,8 @@ class Progress(BaseModel):
     later: list[Parked] = Field(default_factory=list, max_length=300)
     notes: dict[str, Annotated[str, Field(max_length=20_000)]] = Field(default_factory=dict)
     marks: dict[str, list[Mark]] = Field(default_factory=dict)
+    answers: dict[str, Tally] = Field(default_factory=dict)
+    perday: dict[str, DayTally] = Field(default_factory=dict)
 
     @field_validator("quiz")
     @classmethod
@@ -161,6 +177,20 @@ class Progress(BaseModel):
         # 48 is a 24-hour day of 30-minute cycles: more is not from the page.
         if len(v) > 400 or any(not DATE.match(k) or not 0 <= n <= 48 for k, n in v.items()):
             raise ValueError("blocks keys are YYYY-MM-DD, values 0-48")
+        return v
+
+    @field_validator("answers")
+    @classmethod
+    def answer_keys(cls, v: dict[str, Tally]) -> dict[str, Tally]:
+        if len(v) > 2000 or any(not REVIEW_KEY.match(k) or t.ok > t.n for k, t in v.items()):
+            raise ValueError("answers keys are <lesson>.<n>, with ok <= n")
+        return v
+
+    @field_validator("perday")
+    @classmethod
+    def perday_keys(cls, v: dict[str, DayTally]) -> dict[str, DayTally]:
+        if len(v) > 400 or any(not DATE.match(k) or t.ok > t.n for k, t in v.items()):
+            raise ValueError("perday keys are YYYY-MM-DD, with ok <= n")
         return v
 
     @field_validator("notes", "marks")

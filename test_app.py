@@ -18,7 +18,8 @@ def client(tmp_path, monkeypatch):
 
 def test_empty_then_roundtrip(client):
     assert client.get("/state").json() == {"done": {}, "quiz": {}, "log": {}, "review": {}, "cleared": 0,
-                                           "blocks": {}, "later": [], "notes": {}, "marks": {}, "updated_at": None}
+                                           "blocks": {}, "later": [], "notes": {}, "marks": {},
+                                           "answers": {}, "perday": {}, "updated_at": None}
     r = client.put("/state", json={"done": {"sat-is": True, "b-setup": False}})
     assert r.status_code == 200
     got = client.get("/state").json()
@@ -37,6 +38,9 @@ def test_rejects_bad_input(client):
     assert client.put("/state", json={"later": [{"t": "", "at": "2026-11-07"}]}).status_code == 422
     assert client.put("/state", json={"notes": {"Bad Id": "x"}}).status_code == 422
     assert client.put("/state", json={"marks": {"py-types": ["x" * 1001]}}).status_code == 422
+    assert client.put("/state", json={"answers": {"py-types": {"n": 1, "ok": 1, "last": "2026-11-08", "r": True}}}).status_code == 422
+    assert client.put("/state", json={"answers": {"py-types.1": {"n": 1, "ok": 2, "last": "2026-11-08", "r": True}}}).status_code == 422
+    assert client.put("/state", json={"perday": {"2026-11-08": {"n": 1, "ok": 5}}}).status_code == 422
 
 
 def test_put_keeps_fields_it_leaves_out(client):
@@ -53,7 +57,9 @@ def test_full_state_roundtrip(client):
             "quiz": {"py-types": {"best": 2, "of": 3}}, "log": {"2026-11-07": 140},
             "review": {"py-types.1": "2026-11-08"}, "cleared": 3,
             "blocks": {"2026-11-07": 2}, "later": [{"t": "Laravel queues?", "at": "2026-11-07"}],
-            "notes": {"py-types": "is vs ==: identity"}, "marks": {"py-types": ["None is a singleton"]}}
+            "notes": {"py-types": "is vs ==: identity"}, "marks": {"py-types": ["None is a singleton"]},
+            "answers": {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": True}},
+            "perday": {"2026-11-08": {"n": 20, "ok": 15}}}
     assert client.put("/state", json=body).status_code == 200
     got = client.get("/state").json()
     del got["updated_at"]
@@ -108,8 +114,11 @@ def test_every_lesson_has_text_and_a_check(client):
     for i in ids:
         assert client.get(f"/lessons/{i}.html").status_code == 200, i
     for lesson, qs in quizzes.items():
+        # The first three are the lesson's check; the rest only appear in quiz rounds.
+        assert len(qs) >= 3, lesson
         for q, options, answer, why in qs:
             assert 0 <= answer < len(options) and why, lesson
+            assert len(set(options)) == len(options), (lesson, q)
     # every plan item's lesson link points at a real lesson
     assert set(re.findall(r'lesson: "([a-z0-9-]+)"', page)) <= set(ids)
 

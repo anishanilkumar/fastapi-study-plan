@@ -29,6 +29,36 @@
    ],
    1,
    "A venv is a per-project package folder, like `vendor/`. The difference: you must run the venv's python for it to be used."
+  ],
+  [
+   "Why prefer `python3 -m pip install x` over plain `pip install x`?",
+   [
+    "It installs into the exact interpreter you named, never a different Python on PATH",
+    "It's faster",
+    "It skips dependency resolution"
+   ],
+   0,
+   "The `pip` on PATH can belong to another Python. `-m pip` ties the install to that interpreter, or to the venv's when one is active."
+  ],
+  [
+   "What goes into git for dependencies?",
+   [
+    "The `.venv/` folder, so everyone has the same packages",
+    "The dependency list and lock file (`pyproject.toml` + `uv.lock`, or requirements.txt), never `.venv/`",
+    "Nothing; each developer installs by hand"
+   ],
+   1,
+   "A venv is machine-specific: absolute paths, compiled wheels. Like `composer.lock` without `vendor/`."
+  ],
+  [
+   "`uv run pytest` in a project with a `pyproject.toml`…",
+   [
+    "Uses the global Python's pytest",
+    "Syncs `.venv` from the lock file, then runs pytest inside it",
+    "Fails unless you activate a venv first"
+   ],
+   1,
+   "uv creates or updates the project environment and runs the command in it; no `activate` step."
   ]
  ],
  "py-syntax": [
@@ -61,6 +91,36 @@
    ],
    1,
    "Python never converts types to compare. Different types are simply not equal."
+  ],
+  [
+   "`x = 5 if ready else 0` …",
+   [
+    "Is a syntax error",
+    "Sets x to 5 when ready is truthy, otherwise 0",
+    "Sets x to a tuple"
+   ],
+   1,
+   "Python's conditional expression reads value-if-condition-else-other. PHP: `$ready ? 5 : 0`."
+  ],
+  [
+   "`7 // 2` and `-7 // 2` are…",
+   [
+    "3 and -3",
+    "3 and -4",
+    "3.5 and -3.5"
+   ],
+   1,
+   "`//` floors toward minus infinity, so -3.5 becomes -4. PHP's `intdiv` truncates toward zero and gives -3."
+  ],
+  [
+   "How do you write and, or, not in a condition?",
+   [
+    "`&&`, `||`, `!`",
+    "`and`, `or`, `not`",
+    "Either form works"
+   ],
+   1,
+   "The words are the operators. `&` and `|` exist but are bitwise; `!` alone is invalid (it only appears in `!=`)."
   ]
  ],
  "py-types": [
@@ -94,6 +154,36 @@
    ],
    1,
    "An empty string is falsy but it is not None. Know which one you mean, especially in auth checks that could fail open."
+  ],
+  [
+   "`f\"{price:.2f}\"` with price = 3.14159 gives…",
+   [
+    "`3.14`",
+    "`3.14159`",
+    "`3.142`"
+   ],
+   0,
+   "After the colon comes a format spec; `.2f` means fixed-point with two decimals."
+  ],
+  [
+   "`0.1 + 0.2 == 0.3` is…",
+   [
+    "True",
+    "False: floats are binary approximations",
+    "A TypeError"
+   ],
+   1,
+   "Same as PHP. For money use `decimal.Decimal` or integer cents; compare floats with `math.isclose`."
+  ],
+  [
+   "`s = \"abc\"; s[0] = \"z\"` …",
+   [
+    "Makes s `\"zbc\"`",
+    "Raises TypeError: strings are immutable",
+    "Creates a new variable s[0]"
+   ],
+   1,
+   "Build a new string instead: `\"z\" + s[1:]`."
   ]
  ],
  "py-collections": [
@@ -126,6 +216,36 @@
    ],
    1,
    "`{}` is an empty dict."
+  ],
+  [
+   "Checking many times whether an id is among 10,000 allowed ids. Fastest?",
+   [
+    "`x in list_of_ids`",
+    "`x in set_of_ids`",
+    "`list_of_ids.index(x)`"
+   ],
+   1,
+   "`in` on a set is a hash lookup, constant time. On a list it scans every item."
+  ],
+  [
+   "Which can be a dict key?",
+   [
+    "`[1, 2]`",
+    "`(1, 2)`",
+    "`{1, 2}`"
+   ],
+   1,
+   "Keys must be hashable, which in practice means immutable. A tuple of immutables is; lists and sets aren't."
+  ],
+  [
+   "`counts = {}` then `counts[word] += 1` for a new word…",
+   [
+    "Sets it to 1",
+    "Raises KeyError",
+    "Sets it to None"
+   ],
+   1,
+   "Use `counts.get(word, 0) + 1`, `collections.Counter` or `defaultdict(int)`. PHP would warn and carry on."
   ]
  ],
  "py-loops": [
@@ -158,6 +278,36 @@
    ],
    1,
    "Python sorts by the key function's result; there's no comparator like `usort`."
+  ],
+  [
+   "`for i in range(len(items)): print(items[i])` — the Python way?",
+   [
+    "It's already idiomatic",
+    "`for item in items:`, or `enumerate(items)` when you need i",
+    "A `while` loop with a counter"
+   ],
+   1,
+   "Iterate the items themselves. Index loops are a PHP/C habit that reviewers notice."
+  ],
+  [
+   "`{u.id: u for u in users}` builds…",
+   [
+    "A set of users",
+    "A dict from id to user",
+    "A list of tuples"
+   ],
+   1,
+   "A dict comprehension: `key: value` before the `for`."
+  ],
+  [
+   "`for x in xs: … else: …` — when does the else run?",
+   [
+    "Only when xs is empty",
+    "When the loop ends without hitting `break`",
+    "Never; it's a syntax error"
+   ],
+   1,
+   "Loop-else means \"no break happened\". Handy for searches, often misread, so a comment helps."
   ]
  ],
  "py-functions": [
@@ -190,6 +340,36 @@
    ],
    1,
    "Same trap as mutable defaults: evaluated once at definition."
+  ],
+  [
+   "`def log(*args, **kwargs)` called as `log(1, 2, level=\"x\")`. What are args and kwargs?",
+   [
+    "`(1, 2)` and `{\"level\": \"x\"}`",
+    "`[1, 2, \"x\"]` and `{}`",
+    "`1` and `2`"
+   ],
+   0,
+   "Extra positional arguments arrive as a tuple, extra keyword arguments as a dict."
+  ],
+  [
+   "An inner function reads a variable of the function around it. That's…",
+   [
+    "A global",
+    "A closure",
+    "A decorator"
+   ],
+   1,
+   "Python captures it automatically; PHP needs `use ($x)`. To assign to it from inside, declare it `nonlocal`."
+  ],
+  [
+   "What does `@app.get(\"/\")` above a function do?",
+   [
+    "Renames the function",
+    "Runs `f = app.get(\"/\")(f)`: registers f as a route and returns it",
+    "Makes the function async"
+   ],
+   1,
+   "A decorator is a function that takes a function. `@d` over `def f` means `f = d(f)`."
   ]
  ],
  "py-modules": [
@@ -222,6 +402,36 @@
    ],
    0,
    "The file path is the namespace; the import statement does the loading."
+  ],
+  [
+   "Two modules import each other at the top and one fails with \"partially initialized module\". Why?",
+   [
+    "A typo in the name",
+    "A circular import",
+    "A missing `__init__.py`"
+   ],
+   1,
+   "Move the shared code to a third module, or import inside the function that needs it."
+  ],
+  [
+   "Why avoid `from module import *` in app code?",
+   [
+    "It's slow",
+    "It hides where names come from and can silently shadow others",
+    "It only imports classes"
+   ],
+   1,
+   "Explicit imports are documentation; reviewers flag star imports."
+  ],
+  [
+   "What is `__init__.py` in a folder?",
+   [
+    "Marks it as a regular package; its code runs when the package is first imported",
+    "The app's entry point",
+    "A test configuration file"
+   ],
+   0,
+   "Folders without one can still import as namespace packages, but apps keep it."
   ]
  ],
  "py-errors": [
@@ -254,6 +464,36 @@
    ],
    1,
    "A context manager is a guaranteed cleanup, like a built-in finally."
+  ],
+  [
+   "What does `raise ValueError(\"bad\") from err` add?",
+   [
+    "Nothing",
+    "Records err as the cause, so the traceback shows both",
+    "Silences err"
+   ],
+   1,
+   "Exception chaining keeps the original error visible while raising one that fits your layer."
+  ],
+  [
+   "`except Exception:` placed before `except KeyError:` …",
+   [
+    "Works as intended",
+    "The KeyError branch never runs: the first matching clause wins",
+    "Is a syntax error"
+   ],
+   1,
+   "Order except clauses from most specific to most general."
+  ],
+  [
+   "When does `finally:` run?",
+   [
+    "Only when no exception happened",
+    "Only when an exception happened",
+    "Always, even after a return or an exception"
+   ],
+   2,
+   "That's what makes it right for cleanup; `with` blocks are the tidier form."
   ]
  ],
  "py-classes": [
@@ -286,6 +526,36 @@
    ],
    1,
    "dataclasses forbid mutable defaults for the same reason as functions; `default_factory` makes a fresh one each time."
+  ],
+  [
+   "Two @dataclass instances with equal fields: `a == b` is…",
+   [
+    "False: they're different objects",
+    "True: @dataclass writes an `__eq__` that compares fields",
+    "An error"
+   ],
+   1,
+   "Plain classes compare by identity unless you write `__eq__`; dataclasses generate it."
+  ],
+  [
+   "What is `@property` for?",
+   [
+    "A method read like an attribute: a computed or read-only value",
+    "Making a field private",
+    "Making a static method"
+   ],
+   0,
+   "`order.total` can be computed on access, and you can add it later without changing callers."
+  ],
+  [
+   "`__repr__` versus `__str__`?",
+   [
+    "They're the same",
+    "`__repr__` is the unambiguous developer form (REPL, logs); `__str__` is for display",
+    "`__str__` is only used by exceptions"
+   ],
+   1,
+   "If you write one, write `__repr__`; `str()` falls back to it."
   ]
  ],
  "py-typing": [
@@ -318,6 +588,36 @@
    ],
    0,
    "Annotated attaches extra metadata to a type; FastAPI reads it."
+  ],
+  [
+   "Do type hints check anything at runtime in plain Python?",
+   [
+    "Yes, on every call",
+    "No: tools like mypy read them, and libraries like Pydantic and FastAPI choose to use them",
+    "Only in debug mode"
+   ],
+   1,
+   "Hints are metadata. FastAPI's validation is FastAPI reading them, not Python enforcing them."
+  ],
+  [
+   "`list[int]` versus `List[int]` from typing?",
+   [
+    "Different meanings",
+    "The same; the built-in form works since Python 3.9 and is preferred",
+    "`list[int]` is a syntax error"
+   ],
+   1,
+   "Likewise `dict[str, int]`, and `X | None` instead of `Optional[X]` since 3.10."
+  ],
+  [
+   "`def get(id: int) -> User | None`. The caller should…",
+   [
+    "Assume a User comes back",
+    "Handle None before using the result",
+    "Wrap it in try/except"
+   ],
+   1,
+   "The signature says None is possible; a type checker flags `get(1).name`."
   ]
  ],
  "py-iter": [
@@ -350,6 +650,36 @@
    ],
    1,
    "Lazy iteration keeps memory flat regardless of input size."
+  ],
+  [
+   "`(x * 2 for x in xs)` in round brackets creates…",
+   [
+    "A tuple",
+    "A generator expression, evaluated lazily",
+    "A list"
+   ],
+   1,
+   "Square brackets build a list now; round brackets produce values on demand."
+  ],
+  [
+   "`sum(x * x for x in range(10**8))` uses how much memory?",
+   [
+    "Gigabytes: it builds a list first",
+    "Very little: one value at a time",
+    "It raises MemoryError"
+   ],
+   1,
+   "Both `range` and the generator are lazy, so nothing is stored."
+  ],
+  [
+   "`yield from other()` …",
+   [
+    "Returns other()'s result once",
+    "Yields every item other() yields, in turn",
+    "Runs other() in a thread"
+   ],
+   1,
+   "It delegates to another generator, instead of a `for` loop with `yield`."
   ]
  ],
  "py-stdlib": [
@@ -382,6 +712,36 @@
    ],
    1,
    "`random` is predictable; `secrets.token_urlsafe()` is for security."
+  ],
+  [
+   "Turning a dict into JSON text and back:",
+   [
+    "`json.dumps` and `json.loads`",
+    "`json.encode` and `json.decode`",
+    "`str()` and `eval()`"
+   ],
+   0,
+   "dumps/loads work on strings, dump/load on files. Never `eval` text from outside."
+  ],
+  [
+   "Building a file path portably:",
+   [
+    "String concatenation with \"/\"",
+    "`Path(base) / \"data\" / name` with pathlib",
+    "`os.join(base, name)`"
+   ],
+   1,
+   "pathlib's `/` operator joins correctly on every OS; `os.join` doesn't exist."
+  ],
+  [
+   "In a server, `print()` versus `logging.getLogger(__name__)`?",
+   [
+    "The same",
+    "logging has levels, module names and handlers set up in one place; print has none of that",
+    "print, because it's faster"
+   ],
+   1,
+   "Logs need levels and context to be searchable in production."
   ]
  ],
  "py-runtime": [
@@ -414,6 +774,36 @@
    ],
    1,
    "The engine is a thread-safe connection pool. Sessions and users are per request."
+  ],
+  [
+   "Where should state shared by every worker process live?",
+   [
+    "A module-level dict",
+    "An external store: the database or Redis",
+    "A class attribute"
+   ],
+   1,
+   "Each process has its own memory, so only something outside the processes is shared."
+  ],
+  [
+   "What does the GIL mean in practice?",
+   [
+    "Python can't use more than one core at all",
+    "One thread runs Python bytecode at a time per process, so threads help I/O-bound work, not CPU-bound",
+    "async is disabled"
+   ],
+   1,
+   "Use processes for CPU-heavy work. Python 3.13+ also has an optional free-threaded build."
+  ],
+  [
+   "A handler appends to a module-level list on every request. After a week…",
+   [
+    "It's empty, since each request starts fresh like PHP",
+    "It has grown with every request: a memory leak",
+    "The garbage collector has cleared it"
+   ],
+   1,
+   "The process lives on between requests, and so does everything at module level."
   ]
  ],
  "py-async": [
@@ -446,6 +836,36 @@
    ],
    1,
    "requests is synchronous. Use httpx.AsyncClient."
+  ],
+  [
+   "Three independent HTTP calls in an async endpoint, run concurrently:",
+   [
+    "`await a(); await b(); await c()`",
+    "`await asyncio.gather(a(), b(), c())`",
+    "A `threading.Thread` for each"
+   ],
+   1,
+   "Sequential awaits wait for each in turn; gather runs them together on the event loop."
+  ],
+  [
+   "Calling an `async def` function without `await` …",
+   [
+    "Runs it in the background",
+    "Creates a coroutine that never runs, with a \"never awaited\" warning",
+    "Runs it synchronously"
+   ],
+   1,
+   "To run it in the background on purpose, use `asyncio.create_task` and keep a reference to the task."
+  ],
+  [
+   "A CPU-heavy function (resizing images) inside `async def` …",
+   [
+    "Runs in parallel, because it's async",
+    "Blocks the event loop; move it to a process pool or a worker",
+    "Raises an error"
+   ],
+   1,
+   "async only helps while waiting on I/O. Computation holds the loop the whole time."
   ]
  ],
  "fa-first": [
@@ -478,6 +898,36 @@
    ],
    0,
    "Generated from your code: /docs (Swagger UI) and /redoc."
+  ],
+  [
+   "Routes `/users/me` and `/users/{id}`: in which order?",
+   [
+    "Order doesn't matter",
+    "`/users/me` first, otherwise \"me\" matches `{id}` and fails int validation",
+    "`/users/{id}` first"
+   ],
+   1,
+   "Routes are matched in the order they were declared."
+  ],
+  [
+   "Returning a dict from an endpoint …",
+   [
+    "Needs `json.dumps` first",
+    "Is serialised to JSON by FastAPI",
+    "Is sent as text/plain"
+   ],
+   1,
+   "FastAPI encodes dicts, lists and Pydantic models; return a Response object to control it yourself."
+  ],
+  [
+   "In `uvicorn main:app --reload`, what is `main:app`?",
+   [
+    "The object named app in the file main.py",
+    "A URL path",
+    "A Docker image tag"
+   ],
+   0,
+   "Module path, colon, attribute name. `--reload` is for development only."
   ]
  ],
  "fa-params": [
@@ -510,6 +960,36 @@
    ],
    1,
    "Lists aren't simple types, so FastAPI assumes a body. Wrap in `Query()`."
+  ],
+  [
+   "`q: str | None = None` on a GET endpoint makes q…",
+   [
+    "A required query parameter",
+    "An optional query parameter",
+    "A path parameter"
+   ],
+   1,
+   "A default makes it optional. Not in the path and not a model, so it's read from the query string."
+  ],
+  [
+   "Restricting `limit` to 1-100:",
+   [
+    "An `if` in the handler is the only way",
+    "`limit: Annotated[int, Query(ge=1, le=100)] = 20`",
+    "It can't be done"
+   ],
+   1,
+   "The rule lands in the OpenAPI docs and produces a 422 automatically."
+  ],
+  [
+   "A request with a wrongly typed parameter gets…",
+   [
+    "500",
+    "422, saying which field failed and why",
+    "400 with an empty body"
+   ],
+   1,
+   "FastAPI validates before your code runs."
   ]
  ],
  "fa-pydantic": [
@@ -542,6 +1022,36 @@
    ],
    0,
    "Extra fields are ignored by default; `extra=\"forbid\"` rejects them. Never put such fields on input models."
+  ],
+  [
+   "What is `response_model=UserOut` mainly for?",
+   [
+    "Making the response faster",
+    "Filtering output to the declared fields, so internals like password hashes don't leak",
+    "Validating the request"
+   ],
+   1,
+   "Even if the handler returns the ORM object, only UserOut's fields go out."
+  ],
+  [
+   "The Pydantic v2 way to turn a model into a dict:",
+   [
+    "`.dict()`",
+    "`.model_dump()`",
+    "`.to_dict()`"
+   ],
+   1,
+   "`.dict()` is the old v1 name, deprecated in v2."
+  ],
+  [
+   "When does a `field_validator` run?",
+   [
+    "When the model is built from input",
+    "When the object is saved to the database",
+    "Only if you call it"
+   ],
+   0,
+   "Validation happens on construction, so an invalid model never exists."
   ]
  ],
  "fa-errors": [
@@ -574,6 +1084,36 @@
    ],
    1,
    "Exceptions must be raised to stop the handler."
+  ],
+  [
+   "One place to turn every `ValueError` from your code into a 400:",
+   [
+    "try/except in every handler",
+    "`@app.exception_handler(ValueError)`",
+    "It can't be done"
+   ],
+   1,
+   "Exception handlers map exception types to responses app-wide."
+  ],
+  [
+   "An unhandled exception in a handler gives the client…",
+   [
+    "The traceback",
+    "A 500 with a generic body; the traceback goes to the server log",
+    "A 422"
+   ],
+   1,
+   "Never return tracebacks to clients; log them."
+  ],
+  [
+   "The status code for a successful create:",
+   [
+    "200",
+    "201, set with `status_code=201` on the route decorator",
+    "204"
+   ],
+   1,
+   "204 is for success with no body, such as a delete."
   ]
  ],
  "fa-depends": [
@@ -606,6 +1146,36 @@
    ],
    1,
    "Injection makes it overridable."
+  ],
+  [
+   "In a dependency with `yield`, code after the yield runs…",
+   [
+    "Before the handler",
+    "After the handler: cleanup such as closing the session",
+    "Never"
+   ],
+   1,
+   "Like a `with` block wrapped around the request."
+  ],
+  [
+   "A dependency raises `HTTPException(401)`. The handler…",
+   [
+    "Still runs",
+    "Never runs; the client gets the 401",
+    "Receives None"
+   ],
+   1,
+   "That's why auth fits in a dependency: the handler can assume a user."
+  ],
+  [
+   "A dependency's own parameters, such as `token: str = Header()` …",
+   [
+    "Are ignored",
+    "Are read from the request, exactly like an endpoint's parameters",
+    "Must be passed in by hand"
+   ],
+   1,
+   "Dependencies are resolved the same way as endpoints, recursively."
   ]
  ],
  "fa-async": [
@@ -638,6 +1208,36 @@
    ],
    1,
    "They run in-process after the response; lost on restart. Important work needs a queue."
+  ],
+  [
+   "An `async def` endpoint calling a sync DB driver (plain psycopg2):",
+   [
+    "Fine",
+    "Blocks the event loop on every query; use `def` or an async driver",
+    "Faster than `def`"
+   ],
+   1,
+   "A plain `def` endpoint runs in the threadpool, where blocking is harmless."
+  ],
+  [
+   "What is the lifespan handler for?",
+   [
+    "Per-request setup",
+    "Startup and shutdown: create shared clients and pools, and close them",
+    "Logging requests"
+   ],
+   1,
+   "Code before `yield` runs once at startup, code after it at shutdown."
+  ],
+  [
+   "A job that must survive a restart, such as sending invoices:",
+   [
+    "BackgroundTasks",
+    "A real queue (Celery, RQ, arq) with a broker or database behind it",
+    "`asyncio.create_task`"
+   ],
+   1,
+   "BackgroundTasks and tasks die with the process."
   ]
  ],
  "fa-security": [
@@ -670,6 +1270,36 @@
    ],
    1,
    "CORS is a browser policy, not authentication."
+  ],
+  [
+   "A JWT's payload is…",
+   [
+    "Encrypted",
+    "Base64-encoded and signed: anyone can read it, so no secrets in it",
+    "Hashed"
+   ],
+   1,
+   "The signature stops changes, not reading."
+  ],
+  [
+   "Where should the JWT signing secret come from?",
+   [
+    "A constant in the code",
+    "Settings from the environment, never the source",
+    "The client"
+   ],
+   1,
+   "Secrets in git are leaked secrets."
+  ],
+  [
+   "Login error messages should…",
+   [
+    "Say whether the email exists",
+    "Be the same for an unknown user and a wrong password",
+    "Include the reason the hash didn't match"
+   ],
+   1,
+   "Different messages let an attacker list your users."
   ]
  ],
  "fa-structure": [
@@ -702,6 +1332,36 @@
    ],
    1,
    "create_all doesn't alter existing tables."
+  ],
+  [
+   "`app.include_router(devices.router, prefix=\"/devices\")` …",
+   [
+    "Copies the file",
+    "Mounts that router's routes under /devices",
+    "Creates a separate app with its own docs"
+   ],
+   1,
+   "Routers split an app across modules while sharing one app and one OpenAPI schema."
+  ],
+  [
+   "Why one `Settings` object rather than `os.environ` calls everywhere?",
+   [
+    "It's faster",
+    "Validated once at startup, typed, all config in one place, easy to override in tests",
+    "Python requires it"
+   ],
+   1,
+   "A missing variable fails at boot, not on the first request that needs it."
+  ],
+  [
+   "Where should business logic live in a larger app?",
+   [
+    "In the route handlers",
+    "In service functions the handlers call, testable without HTTP",
+    "In the Pydantic models"
+   ],
+   1,
+   "Handlers stay thin: parse, call, return."
   ]
  ],
  "db-sqlalchemy": [
@@ -734,6 +1394,36 @@
    ],
    1,
    "Identifiers can't be bound parameters."
+  ],
+  [
+   "Is `select(User).where(User.email == email)` open to injection?",
+   [
+    "Yes",
+    "No: the value is sent as a bound parameter",
+    "Only for string values"
+   ],
+   1,
+   "Building SQL from expressions binds values automatically."
+  ],
+  [
+   "`session.execute(select(User)).scalars().all()` returns…",
+   [
+    "A list of row tuples",
+    "A list of User objects",
+    "A count"
+   ],
+   1,
+   "`.scalars()` unwraps each one-column row into the object itself."
+  ],
+  [
+   "`text(\"SELECT * FROM t WHERE id = :id\")` run with `{\"id\": x}` is…",
+   [
+    "Injectable",
+    "Safe: `:id` is a bound parameter",
+    "Invalid syntax"
+   ],
+   1,
+   "Raw SQL is fine with parameters; an f-string with x in it is the injection."
   ]
  ],
  "db-sessions": [
@@ -766,6 +1456,36 @@
    ],
    2,
    "Use `selectinload(Owner.devices)`."
+  ],
+  [
+   "Fixing an N+1 when loading owners and their devices:",
+   [
+    "Cache owners in a dict",
+    "`selectinload(Owner.devices)` (or joinedload) in the query",
+    "Run the loop in threads"
+   ],
+   1,
+   "Eager loading fetches the related rows in one or two queries instead of one per owner."
+  ],
+  [
+   "How long should a session live?",
+   [
+    "The whole process",
+    "One request (one unit of work), never shared between requests",
+    "One per model class"
+   ],
+   1,
+   "A session holds a transaction and an identity map; sharing it mixes requests."
+  ],
+  [
+   "A commit fails with IntegrityError on a unique constraint. Right handling?",
+   [
+    "Ignore it",
+    "Roll back and return 409 to the client",
+    "Retry until it works"
+   ],
+   1,
+   "The constraint is the real guarantee; translate its error into a clear response."
   ]
  ],
  "test-pytest": [
@@ -798,6 +1518,36 @@
    ],
    0,
    "Optionally with `match=` to check the message."
+  ],
+  [
+   "`@pytest.mark.parametrize(\"a,b\", [(1, 2), (3, 4)])` …",
+   [
+    "Runs the test once with both pairs",
+    "Runs the test once per pair, each reported separately",
+    "Skips the test"
+   ],
+   1,
+   "One test function, many cases, each with its own pass or fail."
+  ],
+  [
+   "In a fixture with `yield`, code after the yield is…",
+   [
+    "Never run",
+    "Teardown, run after the test",
+    "Run before the test"
+   ],
+   1,
+   "Same shape as a FastAPI yield dependency."
+  ],
+  [
+   "What does the `tmp_path` fixture give?",
+   [
+    "A temporary directory unique to that test",
+    "The project root",
+    "A path string to /tmp"
+   ],
+   0,
+   "It's a pathlib.Path, so tests don't touch real files."
   ]
  ],
  "test-fastapi": [
@@ -830,6 +1580,36 @@
    ],
    1,
    "It exercises your real client code: URLs, headers, error handling."
+  ],
+  [
+   "Using `TestClient(app)` in a `with` block…",
+   [
+    "Is required for any request",
+    "Runs the app's lifespan startup and shutdown",
+    "Starts a real server on a port"
+   ],
+   1,
+   "Without `with`, startup code (like creating tables) doesn't run."
+  ],
+  [
+   "Why clear `app.dependency_overrides` after a test?",
+   [
+    "It doesn't matter",
+    "Overrides live on the app object and would leak into other tests",
+    "It makes tests faster"
+   ],
+   1,
+   "A fixture that sets them before and clears them after keeps tests independent."
+  ],
+  [
+   "Testing that a non-owner can't read a device needs…",
+   [
+    "One user",
+    "Two users: create the device as A, request it as B",
+    "A mocked database"
+   ],
+   1,
+   "Authorisation bugs only show up across users."
   ]
  ],
  "iv-review": [
@@ -862,6 +1642,36 @@
    ],
    1,
    "Judgement is what's scored; docs are allowed."
+  ],
+  [
+   "You've found five issues. In what order do you raise them?",
+   [
+    "In line order",
+    "Worst first: security and data loss, then correctness, then performance, then style",
+    "Easiest first"
+   ],
+   1,
+   "If time runs out, the important ones are already said."
+  ],
+  [
+   "Not sure a line is a bug. Best move?",
+   [
+    "Stay quiet",
+    "Say what you suspect and how you'd check it",
+    "State it as a bug anyway"
+   ],
+   1,
+   "Reasoning out loud is what's being assessed."
+  ],
+  [
+   "A minute left: a style nit and an unmentioned race condition remain. Which?",
+   [
+    "The style nit",
+    "The race condition",
+    "Neither; wrap up"
+   ],
+   1,
+   "Severity first, every time."
   ]
  ]
 }
