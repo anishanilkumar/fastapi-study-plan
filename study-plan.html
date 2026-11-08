@@ -373,6 +373,14 @@ a.btn { text-decoration: none; }
 .need .mark { width: 0.75rem; height: 0.75rem; border: var(--rule) solid var(--arc-dim); }
 .need [data-ok="true"] .mark { background: var(--arc); border-color: var(--arc); }
 .need [data-ok="true"] { color: var(--ink-dim); }
+.need li + li { border-top: var(--rule) solid var(--engrave); padding-top: 0.5rem; }
+.need .mark { align-self: start; margin-top: 0.4rem; }
+.need-say { display: block; margin-top: 0.125rem; }
+.need-go { display: grid; gap: 0.125rem; margin-top: 0.25rem; }
+.need-go a { display: flex; align-items: center; min-height: 44px; color: var(--arc); text-decoration: none; border-bottom: var(--rule) solid var(--engrave); }
+.need-go a:hover { color: var(--ink); }
+.need-go a.first { font-weight: 600; }
+body[data-mentor] .need-go a { pointer-events: none; color: var(--ink-dim); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1rem 1.5rem; }
 .stats div { display: grid; gap: 0.25rem; }
 .stats dd { margin: 0; }
@@ -771,23 +779,55 @@ body[data-focus="on"] .park { display: flex; }
   function partPassed(n) {
     return LESSONS.filter(function (l) { return l.part.n === n && l.day; }).every(function (l) { return state.done[readId(l.id)] && passed(l.id); });
   }
+  // What's left for a requirement: a count, and links straight to each thing.
+  // Each is [label, met(s), todo(s) -> { say, go: [[text, href], ...] }].
+  function lessonsTodo(parts) {
+    var all = LESSONS.filter(function (l) { return parts.indexOf(l.part.n) >= 0 && l.day; });
+    var left = all.filter(function (l) { return !(state.done[readId(l.id)] && passed(l.id)); });
+    return { say: (all.length - left.length) + " of " + all.length + " done",
+      go: left.map(function (l) { return state.done[readId(l.id)] ? ["Pass the check: " + l.title, "#/lesson/" + l.id + "/check"] : ["Read: " + l.title, "#/lesson/" + l.id]; }) };
+  }
+  function drillsTodo(s, want) {
+    var left = (drills || []).filter(function (d) { return !drillTried(d); });
+    left.sort(function (a, b) { return drillReady(b) - drillReady(a); });   // unlocked ones first
+    return { say: s.drillsDone + " of " + want + " done",
+      go: left.map(function (d) { return ["Drill: " + d.title + (drillReady(d) ? "" : " (after " + (BY_ID[d.after] || {}).title + ")"), "#/drill/" + d.id]; }) };
+  }
+  function worstTodo(s, want) {
+    var missed = (drills || []).filter(function (d) { return drillTried(d) && !state.done["drill-" + d.id + "-0"]; });
+    var fresh = (drills || []).filter(function (d) { return !drillTried(d); });
+    return { say: "Found in " + s.worst + " of " + want + (missed.length ? " · missed in " + missed.length + " you've done" : ""),
+      go: fresh.map(function (d) { return ["Drill: " + d.title, "#/drill/" + d.id]; })
+        .concat(missed.map(function (d) { return ["Look again: " + d.title, "#/drill/" + d.id]; })) };
+  }
   var RANKS = [
     { xp: 0, t: "Novice", need: [] },
-    { xp: 200, t: "Scripter", need: [["Read 3 lessons", function (s) { return s.read >= 3; }]] },
-    { xp: 700, t: "Pythonista", need: [["Every Python lesson in the plan read, its check passed", function () { return partPassed(1); }]] },
-    { xp: 1300, t: "Router", need: [["Every FastAPI lesson in the plan read, its check passed", function () { return partPassed(2); }]] },
+    { xp: 200, t: "Scripter", need: [["Read 3 lessons", function (s) { return s.read >= 3; },
+      function (s) { return { say: s.read + " of 3 read", go: LESSONS.filter(function (l) { return !state.done[readId(l.id)]; }).map(function (l) { return ["Read: " + l.title, "#/lesson/" + l.id]; }) }; }]] },
+    { xp: 700, t: "Pythonista", need: [["Every Python lesson in the plan read, its check passed", function () { return partPassed(1); }, function () { return lessonsTodo([1]); }]] },
+    { xp: 1300, t: "Router", need: [["Every FastAPI lesson in the plan read, its check passed", function () { return partPassed(2); }, function () { return lessonsTodo([2]); }]] },
     { xp: 1900, t: "Tester", need: [
-      ["Every data and testing lesson read, its check passed", function () { return partPassed(3); }],
-      ["4 drills done", function (s) { return s.drillsDone >= 4; }]] },
+      ["Every data and testing lesson read, its check passed", function () { return partPassed(3); }, function () { return lessonsTodo([3]); }],
+      ["4 drills done", function (s) { return s.drillsDone >= 4; }, function (s) { return drillsTodo(s, 4); }]] },
     { xp: 2600, t: "Reviewer", need: [
-      ["10 drills done", function (s) { return s.drillsDone >= 10; }],
-      ["The worst bug found in 7 drills", function (s) { return s.worst >= 7; }]] },
+      ["10 drills done", function (s) { return s.drillsDone >= 10; }, function (s) { return drillsTodo(s, 10); }],
+      ["The worst bug found in 7 drills", function (s) { return s.worst >= 7; }, function (s) { return worstTodo(s, 7); }]] },
     { xp: 3300, t: "Interview-ready", need: [
-      ["Every lesson in the plan read, its check passed", function () { return partPassed(1) && partPassed(2) && partPassed(3) && partPassed(4); }],
-      ["Every drill done, the worst bug found in all but 3", function (s) { return drills && s.drillsDone >= drills.length && s.worst >= drills.length - 3; }],
-      ["120 questions answered, 85% of them right the last time", function (s) { return s.seen >= 120 && s.lastRight >= 0.85 * s.seen; }],
-      ["No weak lesson (under 60% over 3+ answers)", function (s) { return s.weak === 0; }],
-      ["No missed questions waiting for review", function (s) { return s.due === 0; }]] }
+      ["Every lesson in the plan read, its check passed", function () { return partPassed(1) && partPassed(2) && partPassed(3) && partPassed(4); }, function () { return lessonsTodo([1, 2, 3, 4]); }],
+      ["Every drill done, the worst bug found in all but 3", function (s) { return drills && s.drillsDone >= drills.length && s.worst >= drills.length - 3; },
+        function (s) { var n = drills ? drills.length : 0, w = worstTodo(s, Math.max(0, n - 3)); return { say: s.drillsDone + " of " + n + " done · worst bug " + w.say.toLowerCase(), go: w.go }; }],
+      ["120 questions answered, 85% of them right the last time", function (s) { return s.seen >= 120 && s.lastRight >= 0.85 * s.seen; },
+        function (s) {
+          return { say: s.seen + " of 120 answered · " + pct(s.lastRight, s.seen) + "% right the last time",
+            go: (s.seen && s.lastRight < 0.85 * s.seen ? [["Quiz your weak spots", "#/quiz/weak"]] : []).concat(s.seen < 120 ? [["Quiz round", "#/quiz/mix"]] : []) };
+        }],
+      ["No weak lesson (under 60% over 3+ answers)", function (s) { return s.weak === 0; },
+        function (s) {
+          var weak = LESSONS.filter(function (l) { var st = lessonStats(l.id); return st.n >= 3 && st.ok / st.n < 0.6; });
+          return { say: s.weak + " weak", go: weak.map(function (l) { var st = lessonStats(l.id); return ["Quiz: " + l.title + " (" + pct(st.ok, st.n) + "%)", "#/quiz/" + l.id]; }) };
+        }],
+      ["No missed questions waiting for review", function (s) { return s.due === 0; },
+        function (s) { return { say: s.due + " due", go: [["Review " + s.due + " now", "#/review"]] }; }]] }
   ];
   function rankMet(x, s) { return s.xp >= x.xp && x.need.every(function (n) { return n[1](s); }); }
   var DRILL_ID = /^drill-([a-z0-9]+)-(\d+)$/;
@@ -1139,9 +1179,19 @@ body[data-focus="on"] .park { display: flex; }
     var h = analysisHtml(s) + '<section class="instrument"><div class="section-head"><span class="label">Rank ' + (r + 1) + " of " + RANKS.length + "</span><h2 class=\"rank-name\">" + esc(RANKS[r].t) + "</h2>" +
       '<span class="stamp">' + num(s.xp) + " XP · " + num(s.max) + " XP possible · a rank needs its XP and everything listed under it</span></div>";
     if (nextR) {
-      h += '<div class="section-head"><span class="label">For ' + esc(nextR.t) + "</span></div><ul class=\"need\">" +
-        [[num(nextR.xp) + " XP" + (s.xp < nextR.xp ? " (" + num(nextR.xp - s.xp) + " to go)" : ""), s.xp >= nextR.xp]].concat(nextR.need.map(function (n) { return [esc(n[0]), n[1](s)]; })).map(function (n) {
-          return '<li data-ok="' + n[1] + '"><span class="mark" aria-hidden="true"></span><span>' + n[0] + '</span><span class="visually-hidden">' + (n[1] ? "(done)" : "(not yet)") + "</span></li>";
+      var blocked = nextR.need.filter(function (n) { return !n[1](s); }).length + (s.xp < nextR.xp ? 1 : 0);
+      h += '<div class="section-head" id="next-rank"><span class="label">What stands between you and ' + esc(nextR.t) + "</span>" +
+        '<span class="stamp">' + (blocked ? blocked + " thing" + (blocked === 1 ? "" : "s") + " left" : "Everything met") + "</span></div><ul class=\"need\">" +
+        '<li data-ok="' + (s.xp >= nextR.xp) + '"><span class="mark" aria-hidden="true"></span><span>' + num(nextR.xp) + " XP" +
+        '<span class="stamp need-say">' + (s.xp >= nextR.xp ? "Done · " + num(s.xp) + " XP" : num(nextR.xp - s.xp) + " to go: every tick, lesson, check and drill earns some") + "</span></span></li>" +
+        nextR.need.map(function (n) {
+          var ok = n[1](s), td = !ok && n[2] ? n[2](s) : null, go = td ? td.go : [];
+          return '<li data-ok="' + ok + '"><span class="mark" aria-hidden="true"></span><span>' + esc(n[0]) + '<span class="visually-hidden">' + (ok ? " (done)" : " (not yet)") + "</span>" +
+            (td ? '<span class="stamp need-say">' + esc(td.say) + "</span>" : ok ? '<span class="stamp need-say">Done</span>' : "") +
+            (go.length ? '<span class="need-go">' + go.slice(0, 5).map(function (g, gi) {
+              return '<a href="' + g[1] + '"' + (gi === 0 ? ' class="first"' : "") + ">" + esc(g[0]) + " ›</a>";
+            }).join("") + (go.length > 5 ? '<span class="stamp">and ' + (go.length - 5) + " more after these</span>" : "") + "</span>" : "") +
+            "</span></li>";
         }).join("") + "</ul>";
     }
     h += '<ol class="ladder">' + RANKS.map(function (x, i) {
@@ -2152,6 +2202,7 @@ body[data-focus="on"] .park { display: flex; }
   function renderView() {
     var hash = location.hash.replace(/^#\/?/, "") || "plan";
     var m = /^lesson\/([a-z0-9-]+)(\/check)?$/.exec(hash), focus = /^plan\/([a-z0-9-]+)$/.exec(hash), dr = /^drill\/([a-z0-9]+)$/.exec(hash);
+    var toRank = hash === "record/rank"; if (toRank) hash = "record";
     var qz = /^quiz(?:\/([a-z0-9-]+))?$/.exec(hash);
     if (qz) { quizScope = qz[1] || quizScope || "mix"; hash = "quiz"; }
     if (m && !BY_ID[m[1]]) { m = null; hash = "syllabus"; }
@@ -2190,14 +2241,16 @@ body[data-focus="on"] .park { display: flex; }
     else if (focus) {
       var row = document.querySelector('[data-item="' + focus[1] + '"]');
       if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600); }
-    } else window.scrollTo(0, hash === "plan" ? planScroll : 0);
+    } else if (toRank && document.getElementById("next-rank")) document.getElementById("next-rank").scrollIntoView({ block: "start" });
+    else window.scrollTo(0, hash === "plan" ? planScroll : 0);
   }
 
   function setText(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
   function updateCounts() {
     var s = score(), r = s.rank, nextR = RANKS[r + 1];
     setText("rank", RANKS[r].t);
-    setText("xp", num(s.xp) + " XP" + (!nextR ? " · top rank" : s.xp < nextR.xp ? " · next at " + num(nextR.xp) : " · " + nextR.t + ": see Record"));
+    var xpEl = document.getElementById("xp");
+    if (xpEl) xpEl.innerHTML = num(s.xp) + " XP" + (!nextR ? " · top rank" : ' · <a href="#/record/rank">next: ' + esc(nextR.t) + " ›</a>");
     document.getElementById("today").innerHTML = num(s.today) + " <small>XP</small>";
     setText("goal", s.today >= GOAL ? "Goal met" : "Goal " + GOAL);
     var lit = Math.min(30, Math.floor(30 * s.today / GOAL));
