@@ -441,6 +441,14 @@ body[data-mentor] .need-go a { pointer-events: none; color: var(--ink-dim); }
 .dl-break li { display: flex; justify-content: space-between; gap: 1rem; min-height: 40px; align-items: center; }
 .dl-break li + li { border-top: var(--rule) solid var(--engrave); }
 .dl-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.today-list { list-style: none; display: grid; margin: 0.75rem 0 0; counter-reset: t; }
+.today-list li { display: grid; gap: 0.125rem; padding: 0.5rem 0; border-top: var(--rule) solid var(--engrave); }
+.today-list a { color: var(--ink); text-decoration: none; min-height: 32px; display: flex; align-items: center; }
+.today-list a:hover { color: var(--arc); }
+.today-list a.first { color: var(--arc); font-weight: 600; }
+.today-box .chips { margin-top: 0.75rem; }
+.today-left { margin-top: 0.75rem; }
+.linkish { background: none; border: 0; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--arc); text-decoration: underline; cursor: pointer; }
 .setup-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
 .setup-form label { display: grid; gap: 0.25rem; }
 .setup-form .field { color-scheme: dark; width: 100%; }
@@ -1116,7 +1124,109 @@ body[data-focus="on"] .park { display: flex; }
   // The single next thing to do. Due reviews first (they're short and they
   // fix what you got wrong), then in plan order: read the lesson behind the
   // next unticked item, pass its check, tick the item.
+  // ==== Today: what fits in the time you have, best first. ====
+  // You say how long you have (kept per device, for today only). The list is
+  // rebuilt from what's left every time anything changes, so finishing early
+  // pulls more in and overrunning drops the last things off. Breaks count:
+  // 25 minutes on, 5 off, so only five sixths of the time is work.
+  var TKEY = LS + "-today";
+  function todayUntil() {
+    try { var v = JSON.parse(localStorage.getItem(TKEY) || "null"); return v && v.date === today() ? v.until : null; } catch (e) { return null; }
+  }
+  function setTodayUntil(ms) {
+    try { if (ms) localStorage.setItem(TKEY, JSON.stringify({ date: today(), until: ms })); else localStorage.removeItem(TKEY); } catch (e) {}
+  }
+  function todayBudget() { var u = todayUntil(); return u ? Math.max(0, (u - Date.now()) / 60000 * 5 / 6) : null; }
+  function lessonLeft(l) {
+    var items = allItems().filter(function (i) { return i.lesson === l.id && !state.done[i.id]; });
+    var read = !!state.done[readId(l.id)], ok = passed(l.id);
+    var min = (read ? 0 : l.min) + (ok ? 0 : EST.check) + items.reduce(function (a, i) { return a + itemMin(i, false); }, 0);
+    var steps = (read ? [] : ["read " + l.min + " min"]).concat(ok ? [] : ["check"]).concat(items.length ? [items.length + " plan item" + (items.length === 1 ? "" : "s")] : []);
+    var href = !read ? "#/lesson/" + l.id : !ok ? "#/lesson/" + l.id + "/check" : "#/plan/" + items[0].id;
+    return { min: min, steps: steps, href: href, read: read, ok: ok, items: items, started: read || ok || items.length < allItems().filter(function (i) { return i.lesson === l.id; }).length };
+  }
+  function todayTasks(budget) {
+    var cands = [], t = today();
+    var due = dueReviews().length;
+    if (due) cands.push({ kind: "Review", t: due + " missed question" + (due === 1 ? "" : "s"), min: Math.max(2, due), href: "#/review", act: { kind: "review", n: due } });
+    var planLessons = LESSONS.filter(function (l) { return l.day; });
+    var open = planLessons.map(function (l) { return [l, lessonLeft(l)]; }).filter(function (p) { return p[1].min > 0; });
+    var lessonTask = function (p) {
+      var l = p[0], x = p[1];
+      return { kind: "Lesson", t: l.title, sub: x.steps.join(" · "), min: x.min, href: x.href, lesson: l.id,
+        act: !x.read ? { kind: "read", lesson: l } : !x.ok ? { kind: "check", lesson: l } : { kind: "tick", item: x.items[0] } };
+    };
+    var drillTask = function (d) { return { kind: "Drill", t: d.title, min: d.minutes + EST.drillExtra, href: "#/drill/" + d.id, after: d.after, act: { kind: "drill", drill: d } }; };
+    var undone = (drills || []).filter(function (d) { return !drillTried(d); });
+    // Lessons read and passed with only plan ticks left: one task, not one each.
+    var tickOnly = open.filter(function (p) { return p[1].read && p[1].ok; });
+    if (tickOnly.length) {
+      var ti = [].concat.apply([], tickOnly.map(function (p) { return p[1].items; }));
+      cands.push({ kind: "Plan items", t: "Tick " + ti.length + " plan item" + (ti.length === 1 ? "" : "s") + " from lessons you've done", sub: "Each is a one-line check that you can explain it",
+        min: ti.reduce(function (a, i) { return a + itemMin(i, false); }, 0), href: "#/plan/" + ti[0].id, act: { kind: "tick", item: ti[0] } });
+    }
+    open = open.filter(function (p) { return !(p[1].read && p[1].ok); });
+    // Started lessons first: finishing them is cheap and the reading is fresh.
+    open.filter(function (p) { return p[1].started; }).forEach(function (p) { cands.push(lessonTask(p)); });
+    undone.filter(drillReady).forEach(function (d) { cands.push(drillTask(d)); });
+    open.filter(function (p) { return !p[1].started; }).forEach(function (p) {
+      cands.push(lessonTask(p));
+      undone.filter(function (d) { return d.after === p[0].id; }).forEach(function (d) { cands.push(drillTask(d)); });
+    });
+    LESSONS.forEach(function (l) {
+      var st = lessonStats(l.id);
+      if (st.n >= 3 && st.ok / st.n < 0.6) cands.push({ kind: "Quiz", t: l.title + " (" + pct(st.ok, st.n) + "% so far)", min: 8, href: "#/quiz/" + l.id, act: { kind: "quiz", scope: l.id, label: l.title } });
+    });
+    PLAN.forEach(function (d) {
+      if (START && dayKey(planDate(d.n)) > t) return;           // later days wait for their day
+      dayItems(d).forEach(function (i) {
+        if (!i.lesson && !state.done[i.id] && i.min !== 0) cands.push({ kind: "Plan item", t: i.t, html: true, min: itemMin(i, d.checks.indexOf(i) >= 0), href: "#/plan/" + i.id, act: { kind: "tick", item: i } });
+      });
+    });
+    // Pick in order. Lessons keep the plan's order: once one doesn't fit,
+    // later ones (and their drills) wait for tomorrow. Others fill gaps.
+    var picked = [], used = 0, lessonStop = false, skipped = 0, skippedMin = 0;
+    cands.forEach(function (c) {
+      var blocked = (c.kind === "Lesson" && lessonStop) || (c.after && !state.done[readId(c.after)] && !picked.some(function (p) { return p.lesson === c.after; }));
+      if (!blocked && used + c.min <= budget) { picked.push(c); used += c.min; }
+      else { if (c.kind === "Lesson") lessonStop = true; skipped++; skippedMin += c.min; }
+    });
+    // Time to spare: quiz rounds on what you've read.
+    while (budget - used >= 8 && lessonsRead().length && picked.filter(function (p) { return p.kind === "Quiz round"; }).length < 3) {
+      picked.push({ kind: "Quiz round", t: "10 questions on what you've read", min: 8, href: "#/quiz/mix", act: { kind: "quiz", scope: "mix", label: "a quiz round" } }); used += 8;
+    }
+    return { picked: picked, used: used, skipped: skipped, skippedMin: skippedMin };
+  }
+  function todayHtml() {
+    if (MENTOR) return "";
+    var until = todayUntil(), b = todayBudget(), now = new Date();
+    var chips = [[60, "1 h"], [120, "2 h"], [180, "3 h"]].map(function (x) { return '<button type="button" class="chip" data-act="today-set" data-min="' + x[0] + '">' + x[1] + "</button>"; }).join("");
+    var bed = new Date(); bed.setHours(SLEEP, 0, 0, 0);
+    if (bed - now > 30 * 60000) chips += '<button type="button" class="chip" data-act="today-set" data-until="' + bed.getTime() + '">Until ' + SLEEP + ":00</button>";
+    var h = '<section class="instrument today-box"><div class="section-head"><span class="label">Today</span>';
+    if (until == null) {
+      return h + "<h2>How long do you have today?</h2>" +
+        '<p class="why">The best things to do in that time, in order: missed questions, lessons you started, drills, then the next lessons. What doesn\'t fit waits, and it reflows as you go.</p></div>' +
+        '<div class="chips" role="group" aria-label="Time today">' + chips + "</div></section>";
+    }
+    var r = todayTasks(b), untilD = new Date(until);
+    h += "<h2>" + (b < 5 ? "Time's up for today" : hm(b) + " of work left") + "</h2>" +
+      '<span class="stamp">Until ' + esc(untilD.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })) + ", breaks taken out · " + num(score().today) + ' XP today · <button type="button" class="linkish" data-act="today-change">change</button></span></div>';
+    if (b < 5) return h + '<p class="why">Stop here. Rest is part of it.</p><div class="chips">' + chips + "</div></section>";
+    if (!r.picked.length) h += '<p class="why">Nothing left that fits. Take a break, or pick more time.</p>';
+    h += '<ol class="today-list">' + r.picked.map(function (c, i) {
+      return '<li><span class="stamp">' + esc(c.kind) + " · " + Math.round(c.min) + " min</span>" +
+        '<a href="' + c.href + '"' + (i === 0 ? ' class="first"' : "") + ">" + (c.html ? c.t : esc(c.t)) + " ›</a>" +
+        (c.sub ? '<span class="why">' + esc(c.sub) + "</span>" : "") + "</li>";
+    }).join("") + "</ol>";
+    if (r.skipped) h += '<p class="stamp today-left">Not today: ' + r.skipped + " thing" + (r.skipped === 1 ? "" : "s") + ", about " + hm(r.skippedMin) + ". Optional lessons and extra questions aren't counted.</p>";
+    return h + '<div class="chips today-change" hidden>' + chips + '<button type="button" class="chip" data-act="today-clear">Clear</button></div></section>';
+  }
+
   function nextAction() {
+    // With a time set for today, Next up is the top of today's list.
+    var tb = todayBudget();
+    if (tb != null && tb >= 5) { var tt = todayTasks(tb).picked[0]; if (tt) return tt.act; }
     var due = dueReviews().length;
     if (due) return { kind: "review", n: due };
     var pd = pendingDrill();
@@ -1149,6 +1259,9 @@ body[data-focus="on"] .park { display: flex; }
     if (a.kind === "review") {
       title = "Review " + a.n + " missed question" + (a.n === 1 ? "" : "s"); href = "#/review"; btn = "Review now";
       meta = "+" + XP.cleared + " XP each one you get right";
+    } else if (a.kind === "quiz") {
+      title = "Quiz: " + esc(a.label); href = "#/quiz/" + a.scope; btn = "Start the quiz";
+      meta = "10 questions · misses come back for review";
     } else if (a.kind === "drill") {
       var dl = BY_ID[a.drill.after];
       title = "Code review: " + esc(a.drill.title); href = "#/drill/" + a.drill.id; btn = "Start the drill";
@@ -1170,7 +1283,7 @@ body[data-focus="on"] .park { display: flex; }
   }
 
   function planHtml() {
-    var h = (needSetup() ? setupHtml(true) : "") + '<div class="next-box" data-next></div>';
+    var h = (needSetup() ? setupHtml(true) : "") + '<div class="next-box" data-next></div><div data-today></div>';
     h += '<section class="callout"><span class="label">The one big mental shift</span>' +
       "<p>PHP starts fresh for every request and throws everything away at the end. A Python server is one long-running process that handles thousands of requests. Anything at module level (a variable, a list, a database session) lives across requests and is shared between them.</p>" +
       "<p>When you review a snippet, ask: what here is shared that PHP would have thrown away? And what here waits without <code>await</code>?</p></section>";
@@ -2170,6 +2283,9 @@ body[data-focus="on"] .park { display: flex; }
       else (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast("Link copied", "Send it to your mentor. It's read-only."); },
         function () { location.hash = "#/record"; setTimeout(function () { var mu = document.getElementById("mentor-url"); if (mu) { mu.scrollIntoView({ block: "center" }); mu.select(); } }, 50); });
     }
+    else if (act === "today-set") { setTodayUntil(b.dataset.until ? +b.dataset.until : Date.now() + (+b.dataset.min) * 60000); updateCounts(); }
+    else if (act === "today-clear") { setTodayUntil(null); updateCounts(); }
+    else if (act === "today-change") { var tc = b.closest(".today-box").querySelector(".today-change"); if (tc) tc.hidden = !tc.hidden; }
     else if (act === "profile-skip") { state.profile = { start: null, target: null }; queueSave(); applyProfile(); redrawAll(); }
     else if (act === "copy-mentor") {
       var mu = document.getElementById("mentor-url");
@@ -2326,6 +2442,9 @@ body[data-focus="on"] .park { display: flex; }
           }).join("") + "</ul></section>";
       }
       if (el._h !== lh) { el.innerHTML = lh; el._h = lh; }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-today]"), function (el) {
+      var th = todayHtml(); if (el._h !== th) { el.innerHTML = th; el._h = th; }
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-next]"), function (el) {
       var nh = nextHtml(); if (el._h !== nh) { el.innerHTML = nh; el._h = nh; }

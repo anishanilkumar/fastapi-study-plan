@@ -19,6 +19,10 @@ teaches) serving one page:
   per lesson (162 in all), weighted towards what you get wrong and haven't
   seen. Rounds can cover everything you've read, your weak spots, one part
   or one lesson. Keys 1-4 answer, Enter moves on.
+- **Today**: say how long you have (1–3 h, or until 23:00) and the plan
+  fills it with the most useful things left, in order: missed questions,
+  lessons you started, drills, the next lessons, weak spots. It reflows as
+  you go, and Next up (and focus mode) follows it.
 - **Drills**: fourteen timed code reviews of realistic snippets with planted
   bugs, and a ranked answer key. Each unlocks with a lesson; once you've read
   it, Next up asks you for that drill.
