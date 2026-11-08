@@ -23,6 +23,7 @@ learner's progress in SQLite.
     marks    highlighted passages per lesson, as the text that was selected
     answers  every answer per question, for the analysis: {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": true}}
     perday   answers per local day: {"2026-11-08": {"n": 20, "ok": 15}}
+    deadline when everything should be done, set on the page; null falls back to config's finish_by
 
 A PUT that leaves a field out keeps what's stored for it, so a tab still
 running an older page (which doesn't know about notes) can't wipe them.
@@ -84,7 +85,16 @@ class Config(BaseModel):
     title: str = Field("Python and FastAPI, from the basics", max_length=120)
     start: date | None = None                # day 1 of the plan; None shows "Day 1"
     target: Target | None = None             # the date you're working towards
+    finish_by: datetime | None = None        # default deadline for all the work; the page can change it
     overrides: dict[str, dict[str, str]] = Field(default_factory=dict)  # plan item id -> {"t"/"why": html}
+
+
+    @field_validator("finish_by")
+    @classmethod
+    def finish_aware(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("finish_by needs a UTC offset, e.g. +01:00")
+        return v
 
 
 def load_config() -> Config:
@@ -149,6 +159,14 @@ class Progress(BaseModel):
     marks: dict[str, list[Mark]] = Field(default_factory=dict)
     answers: dict[str, Tally] = Field(default_factory=dict)
     perday: dict[str, DayTally] = Field(default_factory=dict)
+    deadline: datetime | None = None
+
+    @field_validator("deadline")
+    @classmethod
+    def deadline_aware(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("deadline needs a UTC offset")
+        return v
 
     @field_validator("quiz")
     @classmethod

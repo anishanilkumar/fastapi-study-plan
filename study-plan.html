@@ -406,6 +406,24 @@ a.btn { text-decoration: none; }
 .worst { font-family: var(--face-mono); font-size: var(--t-min); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-right: 0.375rem; }
 @media (max-width: 480px) { .tabs a span { display: none; } }
 
+/* ==== Deadline: work left against usable time left. Arc while it fits,
+   gold when it's tight or you're behind, red only when it can't fit. ==== */
+.deadline { display: grid; gap: 0.375rem; padding-top: 0.75rem; border-top: var(--rule) solid var(--engrave); }
+.dl-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; align-items: baseline; }
+.dl-nums { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; }
+.deadline[data-v="tight"] #dl-left, .deadline[data-v="tight"] .label { color: var(--gold); }
+.deadline[data-v="short"] #dl-left, .deadline[data-v="over"] #dl-left, .deadline[data-v="short"] .label, .deadline[data-v="over"] .label { color: var(--alert); }
+.deadline[data-v="done"] #dl-left { color: var(--arc); }
+[data-ahead="false"] { color: var(--gold) !important; }
+/* The tick where you should be by now is outlined gold: lit up to it or past it means on schedule. */
+.dl-ticks > i.due { outline: var(--rule) solid var(--gold); outline-offset: calc(-1 * var(--rule)); }
+.dl-line { display: block; }
+.dl-break { list-style: none; }
+.dl-break li { display: flex; justify-content: space-between; gap: 1rem; min-height: 40px; align-items: center; }
+.dl-break li + li { border-top: var(--rule) solid var(--engrave); }
+.dl-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.dl-form .field { flex: 1 1 14rem; color-scheme: dark; }
+
 /* ==== Quiz rounds and the analysis ==== */
 .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 .chip { min-height: 44px; padding: 0 0.875rem; border: var(--rule) solid var(--engrave); border-radius: 2px; background: transparent; color: var(--ink-dim);
@@ -593,9 +611,9 @@ body[data-focus="on"] .park { display: flex; }
     ]},
     { id: "eve", n: 2, part: "evening", title: "Practice and rest", groups: [
       { items: [
-        { id: "eve-practice", lesson: "iv-review", t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has six to start with." },
-        { id: "eve-deepdive", t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
-        { id: "eve-rest", t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
+        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has six to start with." },
+        { id: "eve-deepdive", min: 20, t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
+        { id: "eve-rest", min: 0, t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
       ]}
     ], checks: [] },
     { id: "tue", n: 3, part: "morning", title: "The day itself", groups: [
@@ -895,6 +913,9 @@ body[data-focus="on"] .park { display: flex; }
       (TARGET ? '<div class="right"><span class="label">To ' + esc(TARGET.label.toLowerCase()) + '</span><span class="readout" id="countdown"></span><span class="stamp">' + esc(targetText()) + "</span></div>" : "") +
       "</div>" +
       '<div class="ticks" id="ticks" aria-hidden="true"></div>' +
+      '<div class="deadline" id="deadline" hidden><div class="dl-row"><span class="label" id="dl-label"></span><span class="stamp" id="dl-diff"></span></div>' +
+      '<div class="dl-nums"><span class="readout" id="dl-left"></span><span class="stamp" id="dl-avail"></span></div>' +
+      '<div class="ticks dl-ticks" id="dl-ticks" aria-hidden="true"></div><span class="stamp" id="dl-today"></span></div>' +
       '<div class="status" id="status" data-state="syncing"><span class="dot"></span><span class="stamp" id="status-text">Connecting</span></div>' +
       '<div class="status offline" id="offline" hidden><span class="dot"></span><span class="stamp" id="offline-text"></span>' +
       '<button type="button" class="btn btn-quiet" data-act="save-offline" id="offline-btn" hidden>Save the rest</button></div></div>';
@@ -912,6 +933,7 @@ body[data-focus="on"] .park { display: flex; }
     for (var i = 0; i < 20; i++) ticks += "<i></i>";
     document.getElementById("ticks").innerHTML = ticks;
     document.getElementById("fb-ticks").innerHTML = ticks;
+    document.getElementById("dl-ticks").innerHTML = ticks;
     updateCountdown();
   }
 
@@ -938,7 +960,7 @@ body[data-focus="on"] .park { display: flex; }
   function nextHtml() {
     var a = nextAction();
     var enter = '<button type="button" class="btn focus-hide" data-act="focus-on">Focus mode</button>';
-    var calm = '<p class="why focus-only">One thing at a time. When it\'s done, the next one shows up here.</p>';
+    var calm = '<p class="why focus-only">One thing at a time. When it\'s done, the next one shows up here.</p>' + deadlineLine();
     if (!a) return '<section class="callout next"><span class="label">Next up</span><h2>Everything done</h2><p class="why">Plan ticked, every lesson read, every check passed. Keep it fresh with a quiz round, or the drills against the clock, then rest.</p><div class="next-actions"><a class="btn btn-primary" href="#/quiz">Quiz round ›</a></div></section>';
     if (a.kind === "tick") {
       // Tickable right here, so focus mode never has to show the whole plan.
@@ -1187,6 +1209,124 @@ body[data-focus="on"] .park { display: flex; }
     });
   }
 
+  // ==== Deadline: how much work is left, in minutes, against how much
+  // usable time is left. Estimates, and labelled as such: each lesson's
+  // reading time, plus a few minutes per check, plan item and drill.
+  // Usable time is 07:00-23:00; nights don't count. ====
+  var WAKE = 7, SLEEP = 23;
+  var EST = { check: 3, selfCheck: 5, linked: 2, item: 10, drillExtra: 5, extraQ: 0.75, review: 0.5 };
+  function deadline() {
+    var v = state.deadline || CONFIG.finish_by, t = v ? new Date(v) : null;
+    return t && !isNaN(t) ? t : null;
+  }
+  function awake(a, b) {
+    if (!(b > a)) return 0;
+    var t = 0, day = new Date(a); day.setHours(0, 0, 0, 0);
+    while (day < b) {
+      var s = new Date(day), e = new Date(day); s.setHours(WAKE, 0, 0, 0); e.setHours(SLEEP, 0, 0, 0);
+      var lo = Math.max(a, s), hi = Math.min(b, e);
+      if (hi > lo) t += hi - lo;
+      day.setDate(day.getDate() + 1);
+    }
+    return t / 60000;
+  }
+  function itemMin(i, isCheck) { return i.min != null ? i.min : isCheck ? EST.selfCheck : i.lesson ? EST.linked : EST.item; }
+  // Minutes of work left in a state. Plan days that start after the deadline
+  // (the morning of the day itself) aren't part of it.
+  function work(st, dl) {
+    var w = { reading: 0, checks: 0, plan: 0, drills: 0, quiz: 0, review: 0 };
+    LESSONS.forEach(function (l) {
+      if (!st.done[readId(l.id)]) w.reading += l.min;
+      var q = st.quiz[l.id]; if (!q || q.best < q.of - 1) w.checks += EST.check;
+    });
+    PLAN.forEach(function (d) {
+      if (dl && START) { var ds = planDate(d.n); ds.setHours(0, 0, 0, 0); if (ds > dl) return; }
+      d.groups.forEach(function (g) { g.items.forEach(function (i) { if (!st.done[i.id]) w.plan += itemMin(i, false); }); });
+      d.checks.forEach(function (i) { if (!st.done[i.id]) w.plan += itemMin(i, true); });
+    });
+    if (drills) drills.forEach(function (d) {
+      if (!d.findings.some(function (f, n) { return st.done["drill-" + d.id + "-" + n]; })) w.drills += d.minutes + EST.drillExtra;
+    });
+    if (quizzes) Object.keys(quizzes).forEach(function (k) {
+      quizzes[k].forEach(function (q, qi) { var a = st.answers[k + "." + qi]; if (qi >= CHECK_N && !(a && a.ok)) w.quiz += EST.extraQ; });
+    });
+    w.review = Object.keys(st.review).length * EST.review;
+    w.total = w.reading + w.checks + w.plan + w.drills + w.quiz + w.review;
+    return w;
+  }
+  function pace() {
+    var dl = deadline(); if (!dl) return null;
+    var now = new Date(), left = work(state, dl), all = work(blank(), dl);
+    var r = { dl: dl, w: left, left: left.total, all: all.total, avail: awake(now, dl) };
+    r.doneFrac = all.total ? Math.max(0, 1 - left.total / all.total) : 1;
+    // Where you should be by now: the share of usable time since day 1 that has gone.
+    if (START) {
+      var from = new Date(START); from.setHours(WAKE, 0, 0, 0);
+      var span = awake(from, dl);
+      if (span > 0 && now > from) { r.dueFrac = Math.min(1, awake(from, now) / span); r.diff = (r.doneFrac - r.dueFrac) * all.total; }
+    }
+    var eod = new Date(now); eod.setHours(SLEEP, 0, 0, 0); if (eod > dl) eod = dl;
+    r.today = r.avail ? left.total * awake(now, eod) / r.avail : left.total;
+    r.eod = eod;
+    r.v = left.total < 1 ? "done" : now >= dl ? "over" : left.total > r.avail ? "short" : left.total > 0.8 * r.avail ? "tight" : "ok";
+    return r;
+  }
+  function hm(min) {
+    min = Math.round(min);
+    if (min < 60) return min + " m";
+    return Math.floor(min / 60) + " h" + (min % 60 ? " " + (min % 60) + " m" : "");
+  }
+  function fmtWhen(t) {
+    return t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + ", " + hhmm(t);
+  }
+  function aheadText(r) {
+    if (r.diff == null) return "";
+    return Math.abs(r.diff) < 10 ? "On schedule" : r.diff > 0 ? "Ahead by " + hm(r.diff) : "Behind by " + hm(-r.diff);
+  }
+  function paintDeadline() {
+    var el = document.getElementById("deadline"); if (!el) return;
+    var r = pace(); el.hidden = !r; if (!r) return;
+    el.dataset.v = r.v;
+    setText("dl-label", "Finish by " + fmtWhen(r.dl));
+    var diff = document.getElementById("dl-diff");
+    diff.textContent = r.v === "done" ? "" : aheadText(r);
+    if (r.diff != null && r.diff <= -10) diff.dataset.ahead = "false"; else delete diff.dataset.ahead;
+    if (r.v === "done") { setText("dl-left", "All done"); setText("dl-avail", ""); setText("dl-today", ""); }
+    else {
+      document.getElementById("dl-left").innerHTML = esc(hm(r.left)) + " <small>of work left</small>";
+      setText("dl-avail", r.v === "over" ? "Deadline passed" : hm(r.avail) + " usable before then");
+      setText("dl-today", r.v === "over" ? "" : r.v === "short" ? "More work than time: cut the quiz-only questions and drills first" :
+        "Today: about " + hm(r.today) + " more, by " + hhmm(r.eod));
+    }
+    var lit = Math.floor(r.doneFrac * 20), due = r.dueFrac == null ? -1 : Math.min(19, Math.floor(r.dueFrac * 20));
+    Array.prototype.forEach.call(document.querySelectorAll("#dl-ticks i"), function (t, i) { t.className = (i < lit ? "on" : "") + (i === due ? " due" : ""); });
+  }
+  function deadlineLine() {
+    var r = pace(); if (!r || r.v === "done") return "";
+    var a = aheadText(r);
+    return '<span class="stamp dl-line">' + hm(r.left) + " of work left · " + (r.v === "over" ? "deadline passed" : hm(r.avail) + " usable until " + esc(fmtWhen(r.dl))) +
+      (a ? ' · <span' + (r.diff <= -10 ? ' data-ahead="false"' : "") + ">" + a.toLowerCase() + "</span>" : "") + "</span>";
+  }
+  function deadlineHtml() {
+    var r = pace(), dl = deadline();
+    var local = dl ? new Date(dl.getTime() - dl.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+    var h = '<section class="instrument"><div class="section-head"><span class="label">Deadline</span><h2>' +
+      (r ? (r.v === "done" ? "Everything done" : hm(r.left) + " of work left") : "No deadline set") + "</h2>" +
+      (r && r.v !== "done" ? '<span class="stamp">' + (r.v === "over" ? "The deadline has passed" : hm(r.avail) + " usable before " + esc(fmtWhen(r.dl))) + (aheadText(r) ? " · " + aheadText(r) : "") + "</span>" : "") + "</div>";
+    if (r && r.v !== "done") {
+      var rows = [["Reading", r.w.reading], ["Lesson checks", r.w.checks], ["Plan items and self-checks", r.w.plan], ["Drills", r.w.drills], ["Quiz-only questions", r.w.quiz], ["Reviews waiting", r.w.review]];
+      h += '<ul class="dl-break">' + rows.filter(function (x) { return x[1] >= 1; }).map(function (x) {
+        return "<li><span>" + x[0] + '</span><span class="stamp">' + hm(x[1]) + "</span></li>";
+      }).join("") + "</ul>";
+    }
+    h += '<form class="dl-form" data-deadline><input class="field" type="datetime-local" name="at" required value="' + local + '" aria-label="Finish everything by">' +
+      '<button class="btn" type="submit">Set deadline</button>' +
+      (state.deadline && CONFIG.finish_by ? '<button type="button" class="btn btn-quiet" data-act="dl-reset">Back to default</button>' : "") + "</form>" +
+      '<p class="stamp" style="margin-top:0.75rem">Estimates: each lesson\'s reading time, ' + EST.check + " min a check, " + EST.selfCheck + " min a self-check, " + EST.item +
+      " min other plan items, a drill's time plus " + EST.drillExtra + " min, 45 s per quiz-only question. Usable time is " + pad2(WAKE) + ":00–" + SLEEP + ":00; nights don't count.</p></section>";
+    return h;
+  }
+
   // ---- Every answer, from a check, a review or a quiz round, is counted
   // here: the analysis is built from these, not from best scores. ----
   function record(key, right) {
@@ -1394,7 +1534,7 @@ body[data-focus="on"] .park { display: flex; }
         body += '<span class="stamp">' + Math.ceil(minsLeft / days) + " min of reading a day gets it all read before " + esc(TARGET.label.toLowerCase()) + "</span>";
       }
     }
-    return h + '><div class="section-head" style="margin:0"><span class="label">Pace</span></div>' + body + "</section>";
+    return h + '><div class="section-head" style="margin:0"><span class="label">Pace</span></div>' + body + "</section>" + deadlineHtml();
   }
 
   // ---- Drills: timed code reviews with a ranked answer key ----
@@ -1721,6 +1861,7 @@ body[data-focus="on"] .park { display: flex; }
     else if (act === "stop") stopBlock();
     else if (act === "unpark") { state.later.splice(+b.dataset.i, 1); queueSave(); updateCounts(); renderNotebook(); }
     else if (act === "save-offline") saveOffline();
+    else if (act === "dl-reset") { state.deadline = null; queueSave(); updateCounts(); var y = window.scrollY; renderView(); window.scrollTo(0, y); }
     else if (act === "next-q") { round.i++; renderRound(); window.scrollTo(0, 0); }
     else if (act === "new-round") { round = null; renderRound(); window.scrollTo(0, 0); }
     else if (act === "unmark") { changeMarks(b.dataset.lesson, function (list) { list.splice(+b.dataset.i, 1); }); renderNotebook(); }
@@ -1728,7 +1869,17 @@ body[data-focus="on"] .park { display: flex; }
   // Keep the selection when the button is pressed with a mouse.
   document.addEventListener("mousedown", function (ev) { if (ev.target.closest && ev.target.closest("#selbar")) ev.preventDefault(); });
   document.addEventListener("submit", function (ev) {
-    var f = ev.target; if (!f.hasAttribute || !f.hasAttribute("data-park")) return;
+    var f = ev.target;
+    if (f.hasAttribute && f.hasAttribute("data-deadline")) {
+      ev.preventDefault();
+      var t = new Date(f.elements.at.value);
+      if (isNaN(t)) return;
+      state.deadline = t.toISOString(); queueSave(); updateCounts();
+      if (route === "record") { var y = window.scrollY; renderView(); window.scrollTo(0, y); }
+      toast("Deadline set", fmtWhen(t));
+      return;
+    }
+    if (!f.hasAttribute || !f.hasAttribute("data-park")) return;
     ev.preventDefault();
     if (park(f.elements.t.value)) { f.elements.t.value = ""; if (route === "notes") renderNotebook(); }
   });
@@ -1807,6 +1958,7 @@ body[data-focus="on"] .park { display: flex; }
       var nh = nextHtml(); if (el._h !== nh) { el.innerHTML = nh; el._h = nh; }
     });
     setText("fb-sub", fzSub(s));
+    paintDeadline();
     PLAN.forEach(function (d) {
       var el = document.getElementById("count-" + d.id); if (!el) return;
       var all = dayItems(d), k = all.filter(function (i) { return state.done[i.id]; }).length;
@@ -1941,7 +2093,7 @@ body[data-focus="on"] .park { display: flex; }
   window.addEventListener("online", retry);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { retry(); updateCounts(); } });
   setInterval(retry, 30000);
-  setInterval(updateCountdown, 60000);
+  setInterval(function () { updateCountdown(); updateCounts(); }, 60000);   // the deadline moves with the clock
 
   // ---- Load: local copy first (instant), then the server's. ----
   var local = readLocal();

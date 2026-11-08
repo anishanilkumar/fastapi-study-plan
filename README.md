@@ -27,6 +27,10 @@ teaches) serving one page:
   by day, each lesson rated weak, shaky or solid (no verdict under three
   answers), the questions you miss most, and whether you're on pace for
   your target date.
+- **Deadline**: set a finish-by time and the progress strip shows how many
+  hours of work are left (estimated from each lesson's reading time and a few
+  minutes per check, plan item and drill), how many usable hours remain,
+  whether you're ahead of or behind schedule, and how much to do today.
 - **Focus mode**: hides everything except the next thing to do, a 25-minute
   (or 15-minute) block timer with a 5-minute break, and a box to park
   stray thoughts so you can get back to the task. Built for people who
@@ -69,6 +73,7 @@ Copy `config.example.json` to `config.json` (gitignored) and edit it:
 |---|---|
 | `title` | The page heading |
 | `start` | Day 1 of the plan (`YYYY-MM-DD`), so days show as dates. Leave it out for "Day 1, Day 2…" |
+| `finish_by` | When all the work should be done, e.g. `"2026-01-12T21:00:00+01:00"`. The page then shows hours of work left against usable hours left (07:00–23:00), whether you're ahead or behind, and today's share. It can be changed on the Record page. |
 | `target` | What you're counting down to: `{"label": "Interview", "at": "2026-01-13T14:00:00+01:00"}`. The time needs a UTC offset. Leave it out for no countdown |
 | `overrides` | Replace a plan item's text by id, e.g. your own project for the `eve-deepdive` item |
 

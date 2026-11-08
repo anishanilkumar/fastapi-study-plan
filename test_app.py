@@ -19,7 +19,7 @@ def client(tmp_path, monkeypatch):
 def test_empty_then_roundtrip(client):
     assert client.get("/state").json() == {"done": {}, "quiz": {}, "log": {}, "review": {}, "cleared": 0,
                                            "blocks": {}, "later": [], "notes": {}, "marks": {},
-                                           "answers": {}, "perday": {}, "updated_at": None}
+                                           "answers": {}, "perday": {}, "deadline": None, "updated_at": None}
     r = client.put("/state", json={"done": {"sat-is": True, "b-setup": False}})
     assert r.status_code == 200
     got = client.get("/state").json()
@@ -41,6 +41,7 @@ def test_rejects_bad_input(client):
     assert client.put("/state", json={"answers": {"py-types": {"n": 1, "ok": 1, "last": "2026-11-08", "r": True}}}).status_code == 422
     assert client.put("/state", json={"answers": {"py-types.1": {"n": 1, "ok": 2, "last": "2026-11-08", "r": True}}}).status_code == 422
     assert client.put("/state", json={"perday": {"2026-11-08": {"n": 1, "ok": 5}}}).status_code == 422
+    assert client.put("/state", json={"deadline": "2026-11-09T21:00:00"}).status_code == 422   # no offset
 
 
 def test_put_keeps_fields_it_leaves_out(client):
@@ -59,7 +60,7 @@ def test_full_state_roundtrip(client):
             "blocks": {"2026-11-07": 2}, "later": [{"t": "Laravel queues?", "at": "2026-11-07"}],
             "notes": {"py-types": "is vs ==: identity"}, "marks": {"py-types": ["None is a singleton"]},
             "answers": {"py-types.4": {"n": 3, "ok": 2, "last": "2026-11-08", "r": True}},
-            "perday": {"2026-11-08": {"n": 20, "ok": 15}}}
+            "perday": {"2026-11-08": {"n": 20, "ok": 15}}, "deadline": "2026-11-09T20:00:00Z"}
     assert client.put("/state", json=body).status_code == 200
     got = client.get("/state").json()
     del got["updated_at"]
