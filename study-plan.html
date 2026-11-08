@@ -633,7 +633,7 @@ body[data-focus="on"] .park { display: flex; }
     ]},
     { id: "eve", n: 2, part: "evening", title: "Practice and rest", groups: [
       { items: [
-        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has six to start with." },
+        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has fourteen; do any you haven't." },
         { id: "eve-deepdive", min: 20, t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
         { id: "eve-rest", min: 0, t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
       ]}
@@ -790,6 +790,20 @@ body[data-focus="on"] .park { display: flex; }
   function dayKey(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
   function today() { return dayKey(new Date()); }
   function tomorrow() { var d = new Date(); d.setDate(d.getDate() + 1); return dayKey(d); }
+  // A drill is tried once its key is revealed or anything in it is ticked.
+  function drillTried(d, st) {
+    st = st || state;
+    return !!st.done["drill-" + d.id + "-tried"] || d.findings.some(function (f, n) { return st.done["drill-" + d.id + "-" + n]; });
+  }
+  function drillReady(d) { return !d.after || !!state.done[readId(d.after)]; }
+  // "Not now" on a drill: it isn't asked for again until tomorrow (this device only).
+  var DLATER = LS + "-drill-later";
+  function drillLater() { try { return JSON.parse(localStorage.getItem(DLATER) || "{}"); } catch (e) { return {}; } }
+  function pendingDrill() {
+    if (!drills) return null;
+    var later = drillLater(), t = today();
+    return drills.filter(function (d) { return drillReady(d) && !drillTried(d) && later[d.id] !== t; })[0] || null;
+  }
   function passed(lessonId) { var q = state.quiz[lessonId]; return !!q && q.best >= q.of - 1; }
   function dueReviews() { var t = today(); return Object.keys(state.review).filter(function (k) { return state.review[k] <= t; }).sort(); }
 
@@ -966,6 +980,8 @@ body[data-focus="on"] .park { display: flex; }
   function nextAction() {
     var due = dueReviews().length;
     if (due) return { kind: "review", n: due };
+    var pd = pendingDrill();
+    if (pd) return { kind: "drill", drill: pd };
     var items = allItems();
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
@@ -994,6 +1010,12 @@ body[data-focus="on"] .park { display: flex; }
     if (a.kind === "review") {
       title = "Review " + a.n + " missed question" + (a.n === 1 ? "" : "s"); href = "#/review"; btn = "Review now";
       meta = "+" + XP.cleared + " XP each one you get right";
+    } else if (a.kind === "drill") {
+      var dl = BY_ID[a.drill.after];
+      title = "Code review: " + esc(a.drill.title); href = "#/drill/" + a.drill.id; btn = "Start the drill";
+      meta = (dl ? "You've read " + esc(dl.title) + ", so test it · " : "") + a.drill.minutes + " min · " + a.drill.findings.length + " planted bugs · up to +" + (a.drill.findings.length * XP.finding + XP.worst) + " XP";
+      return '<section class="callout next"><span class="label">Next up · test what you read</span><h2>' + title + '</h2><span class="stamp">' + meta + "</span>" + calm +
+        '<div class="next-actions"><a class="btn btn-primary" href="' + href + '">' + btn + ' ›</a><button type="button" class="btn btn-quiet" data-act="drill-later" data-id="' + a.drill.id + '">Not now</button>' + enter + "</div></section>";
     } else if (a.kind === "read") {
       title = "Read: " + esc(a.lesson.title); href = "#/lesson/" + a.lesson.id; btn = "Start reading";
       meta = "Lesson " + (LESSONS.indexOf(a.lesson) + 1) + " · " + a.lesson.min + " min · +" + XP.read + " XP, then a check worth up to +" + (3 * XP.correct + XP.perfect);
@@ -1099,6 +1121,7 @@ body[data-focus="on"] .park { display: flex; }
       '<textarea data-note="' + l.id + '" rows="4" placeholder="In your own words: what to remember, what to ask">' + esc(state.notes[l.id] || "") + "</textarea></label>" +
       '<span class="stamp">Select any text above to highlight it · tap a highlight to write a note on it · find it all later under Notes</span></div>' +
       '<ul class="read-done">' + itemHtml({ id: readId(l.id), t: "I've read this" }, false, true) + "</ul></article>";
+    h += '<div data-ldrills="' + l.id + '"></div>';
     h += '<section class="instrument quiz" id="check"><div class="day-head"><div><span class="label">Check · 3 questions</span><h2>What stuck?</h2></div><span class="stamp" id="qbest"></span></div><div id="quiz"></div></section>';
     if (covers.length) {
       h += '<section class="instrument"><div class="section-head"><span class="label">In the plan</span><h2>Items this lesson covers</h2></div><ul>' +
@@ -1268,7 +1291,7 @@ body[data-focus="on"] .park { display: flex; }
       d.checks.forEach(function (i) { if (!st.done[i.id]) w.plan += itemMin(i, true); });
     });
     if (drills) drills.forEach(function (d) {
-      if (!d.findings.some(function (f, n) { return st.done["drill-" + d.id + "-" + n]; })) w.drills += d.minutes + EST.drillExtra;
+      if (!drillTried(d, st)) w.drills += d.minutes + EST.drillExtra;
     });
     if (quizzes) Object.keys(quizzes).forEach(function (k) {
       quizzes[k].forEach(function (q, qi) { var a = st.answers[k + "." + qi]; if (qi >= CHECK_N && !(a && a.ok)) w.quiz += EST.extraQ; });
@@ -1563,14 +1586,15 @@ body[data-focus="on"] .park { display: flex; }
   // ---- Drills: timed code reviews with a ranked answer key ----
   function drillsHtml() {
     return '<section class="section-head syl-head"><span class="label">Drills · timed code reviews</span>' +
-      '<p class="lede">Each drill is a short snippet with several planted bugs. Start the timer, write down every problem you see, worst first, then reveal the answer key and tick what you found. Finding the worst bug is worth the most.</p></section><div id="drill-list"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div>';
+      '<p class="lede">Each drill is a short snippet with several planted bugs, and unlocks with a lesson: once you\'ve read it, Next up asks you for the drill. Start the timer, write down every problem you see, worst first, then reveal the answer key and tick what you found. Finding the worst bug is worth the most.</p></section><div id="drill-list"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div>';
   }
   function renderDrillList() {
     loadDrills().then(function (ds) {
       var box = document.getElementById("drill-list"); if (!box || route !== "drills") return;
       box.innerHTML = '<section class="instrument"><ol class="lessons">' + ds.map(function (d, i) {
-        var found = d.findings.filter(function (f, n) { return state.done["drill-" + d.id + "-" + n]; }).length;
-        return '<li><a href="#/drill/' + d.id + '" data-read="' + (found > 0) + '"><span class="mark" aria-hidden="true"></span><span class="num stamp">' + pad2(i + 1) + '</span><span class="ltitle">' + esc(d.title) + '</span><span class="stamp meta">' + (found ? found + "/" + d.findings.length + " found · " : "") + d.minutes + " min</span></a></li>";
+        var found = d.findings.filter(function (f, n) { return state.done["drill-" + d.id + "-" + n]; }).length, tried = drillTried(d);
+        var when = tried ? "" : drillReady(d) ? "ready · " : BY_ID[d.after] ? "after lesson " + (LESSONS.indexOf(BY_ID[d.after]) + 1) + " · " : "";
+        return '<li><a href="#/drill/' + d.id + '" data-read="' + tried + '"><span class="mark" aria-hidden="true"></span><span class="num stamp">' + pad2(i + 1) + '</span><span class="ltitle">' + esc(d.title) + '</span><span class="stamp meta">' + (tried ? found + "/" + d.findings.length + " found · " : when) + d.minutes + " min</span></a></li>";
       }).join("") + "</ol></section>";
     }).catch(function () {
       var box = document.getElementById("drill-list"); if (box) box.innerHTML = '<div class="empty"><span class="label">Drills unavailable</span><p>They come from the server, which can\'t be reached.</p></div>';
@@ -1584,7 +1608,7 @@ body[data-focus="on"] .park { display: flex; }
       var d = ds.filter(function (x) { return x.id === id; })[0], box = document.getElementById("drill");
       if (!box || route !== "drill/" + id) return;
       if (!d) { location.hash = "#/drills"; return; }
-      var revealed = d.findings.some(function (f, n) { return state.done["drill-" + d.id + "-" + n]; }) || box.dataset.revealed === "true";
+      var revealed = drillTried(d) || box.dataset.revealed === "true";
       var h = '<article class="instrument lesson"><header class="lesson-head"><span class="label">Drill · ' + d.minutes + " minutes · " + d.findings.length + " planted problems</span><h2>" + esc(d.title) + '</h2><p class="why">' + codeish(d.context) + "</p></header>" +
         '<div class="drill-timer"><span class="readout" id="clock">' + d.minutes + ':00</span><button type="button" class="btn" id="clock-btn">Start timer</button></div>' +
         '<div class="reading"><pre><code>' + esc(d.code) + "</code></pre></div>" +
@@ -1602,7 +1626,11 @@ body[data-focus="on"] .park { display: flex; }
       try { notes.value = localStorage.getItem("study-plan-notes-" + d.id) || ""; } catch (e) {}
       notes.oninput = function () { try { localStorage.setItem("study-plan-notes-" + d.id, notes.value); } catch (e) {} };
       var reveal = document.getElementById("reveal");
-      if (reveal) reveal.onclick = function () { stopClock(); box.dataset.revealed = "true"; renderDrill(id); };
+      if (reveal) reveal.onclick = function () {
+        stopClock(); box.dataset.revealed = "true";
+        state.done["drill-" + d.id + "-tried"] = true; queueSave(); updateCounts();
+        renderDrill(id);
+      };
       document.getElementById("clock-btn").onclick = function () { drillTimer.id === d.id && drillTimer.handle ? stopClock() : startClock(d); };
       paintClock(d);
     });
@@ -1961,6 +1989,11 @@ body[data-focus="on"] .park { display: flex; }
     else if (act === "focus-off") setFocus(false);
     else if (act === "start") startBlock(+b.dataset.len || 25);
     else if (act === "pause") pauseBlock();
+    else if (act === "drill-later") {
+      var dlt = drillLater(); dlt[b.dataset.id] = today();
+      try { localStorage.setItem(DLATER, JSON.stringify(dlt)); } catch (e) {}
+      updateCounts();
+    }
     else if (act === "fb-top") window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     else if (act === "resume") resumeBlock();
     else if (act === "stop") stopBlock();
@@ -2081,6 +2114,17 @@ body[data-focus="on"] .park { display: flex; }
     setText("tab-rec", s.badges.length + "/" + BADGES.length);
     var nn = notebookCount();
     setText("tab-notes", nn ? String(nn) : "");
+    Array.prototype.forEach.call(document.querySelectorAll("[data-ldrills]"), function (el) {
+      var mine = (drills || []).filter(function (d) { return d.after === el.dataset.ldrills; }), lh = "";
+      if (mine.length) {
+        lh = '<section class="instrument"><div class="section-head"><span class="label">Test what you read · code review</span>' +
+          '<p class="why">' + (state.done[readId(el.dataset.ldrills)] ? "Unlocked. Find the bugs before you look at the key." : "Unlocks when you tick \u201cI\u2019ve read this\u201d. Find the bugs before you look at the key.") + "</p></div><ul>" +
+          mine.map(function (d) {
+            return '<li class="next-actions"><a class="btn' + (drillTried(d) ? "" : " btn-primary") + '" href="#/drill/' + d.id + '">' + esc(d.title) + " · " + d.minutes + " min ›</a>" + (drillTried(d) ? '<span class="stamp">Done</span>' : "") + "</li>";
+          }).join("") + "</ul></section>";
+      }
+      if (el._h !== lh) { el.innerHTML = lh; el._h = lh; }
+    });
     Array.prototype.forEach.call(document.querySelectorAll("[data-next]"), function (el) {
       var nh = nextHtml(); if (el._h !== nh) { el.innerHTML = nh; el._h = nh; }
     });

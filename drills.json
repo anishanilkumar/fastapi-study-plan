@@ -1,105 +1,97 @@
 [
  {
-  "id": "login",
-  "title": "A login endpoint",
-  "minutes": 8,
-  "context": "Users log in with email and password and get a token for the API. Assume `db`, `User` and `SECRET` exist.",
-  "code": "import hashlib, random, string, jwt\n\n@app.post(\"/login\")\ndef login(email: str, password: str):\n    user = db.query(User).filter(User.email == email).first()\n    if user is None:\n        raise HTTPException(404, \"no such user\")\n    if user.password_hash != hashlib.sha256(password.encode()).hexdigest():\n        raise HTTPException(401, \"wrong password\")\n    token = jwt.encode({\"sub\": user.id}, SECRET)\n    session_id = \"\".join(random.choice(string.ascii_letters) for _ in range(16))\n    return {\"token\": token, \"session\": session_id, \"user\": user}",
+  "id": "tags",
+  "after": "py-loops",
+  "title": "Top tags",
+  "minutes": 5,
+  "context": "Given a list of posts (dicts from a JSON API), return the `limit` most used tags, case-insensitive.",
+  "code": "def top_tags(posts, limit=10):\n    counts = {}\n    for i in range(len(posts)):\n        post = posts[i]\n        for tag in post[\"tags\"]:\n            tag = tag.lower\n            if counts[tag]:\n                counts[tag] += 1\n            else:\n                counts[tag] = 1\n    ranked = sorted(counts, key=counts.get)\n    return ranked[:limit]",
   "findings": [
    {
-    "t": "Passwords hashed with plain SHA-256",
-    "d": "Fast and unsalted, so leaked hashes are cracked in bulk. Use a slow, salted hash (argon2 via pwdlib, or bcrypt) and its verify function."
+    "t": "`counts[tag]` on a new key raises KeyError",
+    "d": "PHP gives null and a notice; Python stops. The first tag ever seen crashes it. Use `counts.get(tag, 0) + 1`, or `collections.Counter`."
    },
    {
-    "t": "Returns the whole user object",
-    "d": "`\"user\": user` serialises every column, password_hash included. Add a response model (UserOut) with only safe fields."
+    "t": "`tag.lower` without parentheses",
+    "d": "That's the method itself, not its result: nothing is lowercased and the keys are method objects. `tag.lower()`."
    },
    {
-    "t": "Different errors reveal which emails exist",
-    "d": "404 \"no such user\" vs 401 \"wrong password\" lets anyone enumerate accounts. Return the same 401 for both."
+    "t": "Sorted ascending: returns the least used",
+    "d": "`sorted` is smallest first. `sorted(..., reverse=True)`, or simply `Counter(...).most_common(limit)`."
    },
    {
-    "t": "Token never expires",
-    "d": "No `exp` claim: a leaked token works forever. Add `exp` and decode with explicit `algorithms=[...]`."
+    "t": "`post[\"tags\"]` fails on a post without tags",
+    "d": "API data is often missing keys. `post.get(\"tags\", [])`."
    },
    {
-    "t": "Session id from `random`",
-    "d": "`random` is predictable. Use `secrets.token_urlsafe(32)`."
-   },
-   {
-    "t": "Credentials in the query string",
-    "d": "Simple-typed params are query params, so the password lands in URLs and access logs. Take a Pydantic body (or OAuth2 form) instead. Also: no rate limit on login."
+    "t": "`range(len(...))` and indexing",
+    "d": "Iterate the list directly: `for post in posts`. The index is never used. Use `enumerate` when it is."
    }
   ]
  },
  {
-  "id": "report",
-  "title": "An async report",
-  "minutes": 8,
-  "context": "Fetches the status of each of a customer's devices from a vendor API and returns a summary.",
-  "code": "import requests, time\nfrom datetime import datetime\n\n@app.get(\"/report/{customer_id}\")\nasync def report(customer_id: int):\n    devices = get_devices(customer_id)          # sync DB call\n    results = []\n    for d in devices:\n        try:\n            r = requests.get(f\"{VENDOR}/status/{d.serial}\")\n            results.append(r.json())\n        except:\n            pass\n        time.sleep(0.1)                          # be nice to the vendor\n    return {\"generated\": datetime.now(), \"devices\": results}",
+  "id": "config",
+  "after": "py-errors",
+  "title": "Loading a config file",
+  "minutes": 5,
+  "context": "Called once at startup to read the app's JSON config.",
+  "code": "import json\n\ndef load_config(path):\n    try:\n        f = open(path)\n        data = json.load(f)\n        port = int(data[\"port\"])\n    except Exception:\n        print(\"bad config\")\n        return {}\n    f.close()\n    if data[\"debug\"] == \"true\":\n        data[\"debug\"] = True\n    return data | {\"port\": port}",
   "findings": [
    {
-    "t": "Blocking calls inside `async def`",
-    "d": "requests.get, time.sleep and the sync DB call all block the event loop: one slow report stalls every request on the worker. Use httpx.AsyncClient and asyncio.sleep (and an async DB), or make the handler plain `def`."
+    "t": "Every error swallowed into an empty config",
+    "d": "A missing file, broken JSON or bad port all become `{}`, and the app starts with no config. At startup, fail loudly: catch only what you can handle (`FileNotFoundError`, `json.JSONDecodeError`), add context and re-raise."
    },
    {
-    "t": "No timeout on the vendor call",
-    "d": "requests has no default timeout; a hung vendor hangs the request (and with the bug above, the worker). Always pass a timeout."
+    "t": "File not closed on the error path",
+    "d": "If `json.load` raises, `f.close()` never runs. `with open(path, encoding=\"utf-8\") as f:` closes it either way."
    },
    {
-    "t": "Bare `except: pass` hides failures",
-    "d": "Vendor errors, JSON errors and typos all vanish; the report silently omits devices. Catch httpx/requests errors, log them, and mark the device as unknown."
+    "t": "`print` instead of logging, without the cause",
+    "d": "\"bad config\" doesn't say which file or what was wrong. `logger.exception(...)` keeps the traceback."
    },
    {
-    "t": "Sequential calls",
-    "d": "N devices × (latency + 0.1 s). With an async client, run them concurrently with asyncio.gather and a semaphore to stay polite."
+    "t": "`data[\"debug\"]` crashes when the key is missing",
+    "d": "And only the string \"true\" is handled; JSON has real booleans. Validate the whole thing with a Pydantic model (or pydantic-settings) instead of hand-checking keys."
    },
    {
-    "t": "No authorization on customer_id",
-    "d": "Anyone can request any customer's report (IDOR). Depend on the current user and check ownership."
-   },
-   {
-    "t": "Naive `datetime.now()`",
-    "d": "Server-local time with no zone. Use `datetime.now(timezone.utc)`."
+    "t": "`open` without an encoding",
+    "d": "The default depends on the machine's locale. Always pass `encoding=\"utf-8\"` for text files."
    }
   ]
  },
  {
-  "id": "orders",
-  "title": "Listing orders",
-  "minutes": 8,
-  "context": "Returns a user's orders with item counts, optionally sorted by a column the client chooses.",
-  "code": "db = SessionLocal()\n\n@app.get(\"/users/{user_id}/orders\")\ndef orders(user_id: int, sort: str = \"created_at\"):\n    rows = db.execute(text(\n        f\"SELECT * FROM orders WHERE user_id = {user_id} ORDER BY {sort}\"\n    )).fetchall()\n    out = []\n    for row in rows:\n        order = db.get(Order, row.id)\n        out.append({\"id\": order.id, \"total\": float(order.total),\n                    \"items\": len(order.items)})\n    return out",
+  "id": "cart",
+  "after": "py-classes",
+  "title": "A shopping cart class",
+  "minutes": 6,
+  "context": "One `Cart` per logged-in user, kept for the length of a request.",
+  "code": "class Cart:\n    items = []\n    discount = 0\n\n    def __init__(self, user):\n        self.user = user\n\n    def add(self, sku, price, qty=1):\n        self.items.append({\"sku\": sku, \"price\": price, \"qty\": qty})\n\n    def total(self):\n        total = 0\n        for item in self.items:\n            total += item[\"price\"] * item[\"qty\"]\n        return total * (1 - self.discount / 100)\n\n    def __eq__(self, other):\n        return self.user == other.user",
   "findings": [
    {
-    "t": "SQL injection through `sort`",
-    "d": "`sort` is pasted into the SQL. Identifiers can't be bound parameters, so map it through an allow-list: `{\"created_at\": Order.created_at, ...}[sort]`, else 422."
-   },
-   {
-    "t": "Module-level shared session",
-    "d": "`db = SessionLocal()` is shared by all requests and threads; one error poisons it for everyone. Use a per-request session via Depends(get_db) with yield."
-   },
-   {
-    "t": "No ownership check",
-    "d": "Any caller can list any user's orders. Derive the user from auth, or check `user_id == current_user.id`."
-   },
-   {
-    "t": "N+1 queries",
-    "d": "One get() and one lazy load of items per row. Query Orders with `selectinload(Order.items)` (or a COUNT with GROUP BY)."
-   },
-   {
-    "t": "No limit",
-    "d": "Returns every order ever. Add limit/offset with a capped maximum."
+    "t": "`items = []` is shared by every cart",
+    "d": "A class attribute, not one per instance: `self.items.append` mutates the one list, so every user sees everyone's items. Set `self.items = []` in `__init__`, or a dataclass with `field(default_factory=list)`."
    },
    {
     "t": "Money as float",
-    "d": "`float(order.total)` introduces rounding errors. Keep Decimal and serialise as a string, or use integer cents."
+    "d": "`19.99 * 3` isn't exact. Use `Decimal` or integer cents, and round once at the end."
+   },
+   {
+    "t": "`__eq__` without `__hash__`, and no type check",
+    "d": "Defining `__eq__` sets `__hash__` to None, so carts can't go in a set or be dict keys. Comparing with a non-Cart raises AttributeError; return `NotImplemented` instead."
+   },
+   {
+    "t": "No validation",
+    "d": "`qty=0`, a negative qty or a discount over 100 give zero or negative totals. Check in `add` (or use Pydantic)."
+   },
+   {
+    "t": "Items as loose dicts",
+    "d": "A typo like `item[\"prcie\"]` is only found at runtime. A small `@dataclass CartItem` gives names, types and a readable repr."
    }
   ]
  },
  {
   "id": "cache",
+  "after": "py-stdlib",
   "title": "Settings and a cache",
   "minutes": 6,
   "context": "A small helper module imported by several routers.",
@@ -132,7 +124,230 @@
   ]
  },
  {
+  "id": "prices",
+  "after": "py-async",
+  "title": "Fetching prices",
+  "minutes": 6,
+  "context": "Gets current prices for a list of SKUs from the shop's API.",
+  "code": "import asyncio, httpx\n\nasync def fetch_prices(skus):\n    prices = {}\n    async with httpx.AsyncClient(base_url=SHOP) as client:\n        for sku in skus:\n            r = await client.get(f\"/price/{sku}\")\n            prices[sku] = r.json()[\"price\"]\n    return prices\n\ndef price_report(skus):\n    prices = fetch_prices(skus)\n    return {sku: prices[sku] for sku in skus}\n\nasync def warm_cache(skus):\n    asyncio.create_task(fetch_prices(skus))",
+  "findings": [
+   {
+    "t": "Coroutine called without `await`",
+    "d": "`fetch_prices(skus)` in a plain `def` returns a coroutine object, never run; `prices[sku]` raises TypeError and Python warns \"never awaited\". Make `price_report` async and `await` it (or `asyncio.run` at the very top)."
+   },
+   {
+    "t": "One request at a time",
+    "d": "Awaiting in a loop is sequential: 100 SKUs, 100 round trips. `asyncio.gather(...)`, bounded by an `asyncio.Semaphore` so the shop isn't flooded."
+   },
+   {
+    "t": "No status check",
+    "d": "A 404 or 500 has no `price`, so it surfaces as a KeyError. `r.raise_for_status()`, and decide what a missing SKU means."
+   },
+   {
+    "t": "Task from `create_task` not kept",
+    "d": "The loop holds only a weak reference: the task can be garbage-collected mid-flight, and its exceptions are never seen. Keep a reference (a set), or use `asyncio.TaskGroup`."
+   }
+  ]
+ },
+ {
+  "id": "devices",
+  "after": "fa-errors",
+  "title": "Creating a device",
+  "minutes": 6,
+  "context": "Clients register a device they own. `DeviceRow` is the SQLAlchemy model; `serial` is unique in the table.",
+  "code": "class Device(BaseModel):\n    serial: str\n    owner_email: str\n    notes: str = None\n    is_admin_device: bool = False\n\n@app.post(\"/devices\")\ndef create_device(device: Device, db: DB):\n    row = DeviceRow(**device.dict())\n    db.add(row)\n    db.commit()\n    return row",
+  "findings": [
+   {
+    "t": "Mass assignment: the client sets `is_admin_device`",
+    "d": "Everything in the model goes straight into the row, so anyone can register an admin device. Split models: `DeviceIn` with only what a client may send, the server sets the rest."
+   },
+   {
+    "t": "No `response_model`",
+    "d": "Returning the ORM row exposes every column (now and any added later). `response_model=DeviceOut`."
+   },
+   {
+    "t": "Duplicate serial is a 500",
+    "d": "The unique constraint raises IntegrityError. Catch it, roll back, return 409."
+   },
+   {
+    "t": "201 for a create",
+    "d": "`@app.post(..., status_code=201)`."
+   },
+   {
+    "t": "Types that lie, no constraints",
+    "d": "`notes: str = None` should be `str | None = None`. `serial` can be empty and `owner_email` anything: `Field(min_length=1, max_length=64)`, `EmailStr`."
+   },
+   {
+    "t": "`.dict()` is Pydantic v1",
+    "d": "Deprecated in v2: `model_dump()`."
+   }
+  ]
+ },
+ {
+  "id": "admin",
+  "after": "fa-depends",
+  "title": "Admin dependencies",
+  "minutes": 6,
+  "context": "Admins can delete users. Clients send their token in a `token` header.",
+  "code": "def get_db():\n    db = SessionLocal()\n    return db\n\ndef current_user(token: str = Header()):\n    return db_lookup_user(token)        # None if unknown\n\ndef require_admin(user = Depends(current_user)):\n    if user.role == \"admin\":\n        return user\n\n@app.delete(\"/users/{user_id}\")\ndef delete_user(user_id: int, db = Depends(get_db), admin = Depends(require_admin)):\n    db.query(User).filter(User.id == user_id).delete()\n    db.commit()\n    return {\"deleted\": user_id}",
+  "findings": [
+   {
+    "t": "`require_admin` never refuses",
+    "d": "For a non-admin it returns None and the route runs anyway: anyone with a token can delete users. `raise HTTPException(403)`; a dependency stops a request only by raising."
+   },
+   {
+    "t": "Sessions are never closed",
+    "d": "`return` instead of `yield`: nothing closes the session, connections leak until the pool runs out. `db = SessionLocal(); try: yield db; finally: db.close()`."
+   },
+   {
+    "t": "Unknown token becomes a 500",
+    "d": "`current_user` returns None, then `user.role` raises AttributeError. Raise 401 there."
+   },
+   {
+    "t": "Deleting a missing user says it worked",
+    "d": "Check the row count (or fetch first) and return 404."
+   },
+   {
+    "t": "Untyped dependencies",
+    "d": "`admin = Depends(...)` hides what it is. `admin: Annotated[User, Depends(require_admin)]` (or a type alias) makes it readable and checkable."
+   }
+  ]
+ },
+ {
+  "id": "report",
+  "after": "fa-async",
+  "title": "An async report",
+  "minutes": 8,
+  "context": "Fetches the status of each of a customer's devices from a vendor API and returns a summary.",
+  "code": "import requests, time\nfrom datetime import datetime\n\n@app.get(\"/report/{customer_id}\")\nasync def report(customer_id: int):\n    devices = get_devices(customer_id)          # sync DB call\n    results = []\n    for d in devices:\n        try:\n            r = requests.get(f\"{VENDOR}/status/{d.serial}\")\n            results.append(r.json())\n        except:\n            pass\n        time.sleep(0.1)                          # be nice to the vendor\n    return {\"generated\": datetime.now(), \"devices\": results}",
+  "findings": [
+   {
+    "t": "Blocking calls inside `async def`",
+    "d": "requests.get, time.sleep and the sync DB call all block the event loop: one slow report stalls every request on the worker. Use httpx.AsyncClient and asyncio.sleep (and an async DB), or make the handler plain `def`."
+   },
+   {
+    "t": "No timeout on the vendor call",
+    "d": "requests has no default timeout; a hung vendor hangs the request (and with the bug above, the worker). Always pass a timeout."
+   },
+   {
+    "t": "Bare `except: pass` hides failures",
+    "d": "Vendor errors, JSON errors and typos all vanish; the report silently omits devices. Catch httpx/requests errors, log them, and mark the device as unknown."
+   },
+   {
+    "t": "Sequential calls",
+    "d": "N devices × (latency + 0.1 s). With an async client, run them concurrently with asyncio.gather and a semaphore to stay polite."
+   },
+   {
+    "t": "No authorization on customer_id",
+    "d": "Anyone can request any customer's report (IDOR). Depend on the current user and check ownership."
+   },
+   {
+    "t": "Naive `datetime.now()`",
+    "d": "Server-local time with no zone. Use `datetime.now(timezone.utc)`."
+   }
+  ]
+ },
+ {
+  "id": "signup",
+  "after": "fa-async",
+  "title": "Signup with a welcome email",
+  "minutes": 6,
+  "context": "`DB` is a sync SQLAlchemy session; `hash_pw` is argon2 (about 100 ms of CPU); `send_welcome_email` talks SMTP and takes about 2 s.",
+  "code": "@app.post(\"/signup\", status_code=201)\nasync def signup(body: SignupIn, db: DB, background: BackgroundTasks):\n    user = User(email=body.email, password_hash=hash_pw(body.password))\n    db.add(user)\n    db.commit()\n    send_welcome_email(user.email)\n    background.add_task(sync_to_crm, user)\n    return {\"id\": user.id}",
+  "findings": [
+   {
+    "t": "Blocking SMTP inside `async def`",
+    "d": "Two seconds where the event loop serves nobody else on that worker. Send it as a background task (or queue it), and don't block in async code."
+   },
+   {
+    "t": "Sync DB and CPU-heavy hashing in `async def`",
+    "d": "These block the loop too. With a sync session, make the endpoint plain `def` so FastAPI runs it in the threadpool."
+   },
+   {
+    "t": "ORM object handed to a background task",
+    "d": "The task runs after the response, when the request's session is closed: lazy loads fail or the data is stale. Pass `user.id` and load it in the task."
+   },
+   {
+    "t": "Duplicate email is a 500",
+    "d": "Unique constraint → IntegrityError. Roll back and return 409."
+   },
+   {
+    "t": "Email failure after the commit",
+    "d": "If SMTP fails the client gets a 500 though the account exists, retries, and hits the duplicate. Side effects go after the response (or in an outbox)."
+   }
+  ]
+ },
+ {
+  "id": "login",
+  "after": "fa-security",
+  "title": "A login endpoint",
+  "minutes": 8,
+  "context": "Users log in with email and password and get a token for the API. Assume `db`, `User` and `SECRET` exist.",
+  "code": "import hashlib, random, string, jwt\n\n@app.post(\"/login\")\ndef login(email: str, password: str):\n    user = db.query(User).filter(User.email == email).first()\n    if user is None:\n        raise HTTPException(404, \"no such user\")\n    if user.password_hash != hashlib.sha256(password.encode()).hexdigest():\n        raise HTTPException(401, \"wrong password\")\n    token = jwt.encode({\"sub\": user.id}, SECRET)\n    session_id = \"\".join(random.choice(string.ascii_letters) for _ in range(16))\n    return {\"token\": token, \"session\": session_id, \"user\": user}",
+  "findings": [
+   {
+    "t": "Passwords hashed with plain SHA-256",
+    "d": "Fast and unsalted, so leaked hashes are cracked in bulk. Use a slow, salted hash (argon2 via pwdlib, or bcrypt) and its verify function."
+   },
+   {
+    "t": "Returns the whole user object",
+    "d": "`\"user\": user` serialises every column, password_hash included. Add a response model (UserOut) with only safe fields."
+   },
+   {
+    "t": "Different errors reveal which emails exist",
+    "d": "404 \"no such user\" vs 401 \"wrong password\" lets anyone enumerate accounts. Return the same 401 for both."
+   },
+   {
+    "t": "Token never expires",
+    "d": "No `exp` claim: a leaked token works forever. Add `exp` and decode with explicit `algorithms=[...]`."
+   },
+   {
+    "t": "Session id from `random`",
+    "d": "`random` is predictable. Use `secrets.token_urlsafe(32)`."
+   },
+   {
+    "t": "Credentials in the query string",
+    "d": "Simple-typed params are query params, so the password lands in URLs and access logs. Take a Pydantic body (or OAuth2 form) instead. Also: no rate limit on login."
+   }
+  ]
+ },
+ {
+  "id": "orders",
+  "after": "db-sqlalchemy",
+  "title": "Listing orders",
+  "minutes": 8,
+  "context": "Returns a user's orders with item counts, optionally sorted by a column the client chooses.",
+  "code": "db = SessionLocal()\n\n@app.get(\"/users/{user_id}/orders\")\ndef orders(user_id: int, sort: str = \"created_at\"):\n    rows = db.execute(text(\n        f\"SELECT * FROM orders WHERE user_id = {user_id} ORDER BY {sort}\"\n    )).fetchall()\n    out = []\n    for row in rows:\n        order = db.get(Order, row.id)\n        out.append({\"id\": order.id, \"total\": float(order.total),\n                    \"items\": len(order.items)})\n    return out",
+  "findings": [
+   {
+    "t": "SQL injection through `sort`",
+    "d": "`sort` is pasted into the SQL. Identifiers can't be bound parameters, so map it through an allow-list: `{\"created_at\": Order.created_at, ...}[sort]`, else 422."
+   },
+   {
+    "t": "Module-level shared session",
+    "d": "`db = SessionLocal()` is shared by all requests and threads; one error poisons it for everyone. Use a per-request session via Depends(get_db) with yield."
+   },
+   {
+    "t": "No ownership check",
+    "d": "Any caller can list any user's orders. Derive the user from auth, or check `user_id == current_user.id`."
+   },
+   {
+    "t": "N+1 queries",
+    "d": "One get() and one lazy load of items per row. Query Orders with `selectinload(Order.items)` (or a COUNT with GROUP BY)."
+   },
+   {
+    "t": "No limit",
+    "d": "Returns every order ever. Add limit/offset with a capped maximum."
+   },
+   {
+    "t": "Money as float",
+    "d": "`float(order.total)` introduces rounding errors. Keep Decimal and serialise as a string, or use integer cents."
+   }
+  ]
+ },
+ {
   "id": "transfer",
+  "after": "db-sessions",
   "title": "Transferring credit",
   "minutes": 8,
   "context": "Moves credit between two accounts the caller owns.",
@@ -165,7 +380,38 @@
   ]
  },
  {
+  "id": "discount",
+  "after": "test-pytest",
+  "title": "Tests for a discount helper",
+  "minutes": 5,
+  "context": "`apply_discount(price, percent)` should raise ValueError for a percent outside 0–100.",
+  "code": "from shop import apply_discount\n\ncart = []\n\ndef test_discount():\n    assert apply_discount(100, 10) == 90\n    assert apply_discount(100, 0) == 100\n    assert apply_discount(19.99, 15) == 16.9915\n\ndef test_negative():\n    try:\n        apply_discount(100, -5)\n        assert False\n    except Exception:\n        pass\n\ndef test_add_to_cart():\n    cart.append(1)\n    assert len(cart) == 1",
+  "findings": [
+   {
+    "t": "`test_negative` can never fail",
+    "d": "`assert False` raises AssertionError, which `except Exception` catches: it passes even when no error is raised. `with pytest.raises(ValueError, match=\"percent\"):` (PHPUnit's `expectException`)."
+   },
+   {
+    "t": "Float compared with `==`",
+    "d": "`19.99 * 0.85` isn't exactly 16.9915. `pytest.approx(...)`, or better, money in Decimal or cents."
+   },
+   {
+    "t": "Module-level `cart` shared between tests",
+    "d": "Passes alone, fails when another test touches it or it runs twice. Give each test its own data with a fixture."
+   },
+   {
+    "t": "Several cases in one test",
+    "d": "The first failing assert hides the rest. `@pytest.mark.parametrize` (PHPUnit's data providers) runs and reports each case."
+   },
+   {
+    "t": "The edges aren't tested",
+    "d": "100%, just over 100, rounding to cents: where the bugs are. And a failure message per case comes free with parametrize."
+   }
+  ]
+ },
+ {
   "id": "tests",
+  "after": "test-fastapi",
   "title": "A test file",
   "minutes": 6,
   "context": "Tests for a certificate-expiry endpoint that also calls a vendor revocation API.",

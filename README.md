@@ -19,8 +19,9 @@ teaches) serving one page:
   per lesson (162 in all), weighted towards what you get wrong and haven't
   seen. Rounds can cover everything you've read, your weak spots, one part
   or one lesson. Keys 1-4 answer, Enter moves on.
-- **Drills**: six timed code reviews of realistic snippets with planted bugs,
-  and a ranked answer key.
+- **Drills**: fourteen timed code reviews of realistic snippets with planted
+  bugs, and a ranked answer key. Each unlocks with a lesson; once you've read
+  it, Next up asks you for that drill.
 - **Record**: XP, ranks, a daily goal, a streak and badges. All of it is
   computed from what you've actually done, so unticking takes XP back.
   Above it, an analysis of every answer you've given: accuracy overall and
