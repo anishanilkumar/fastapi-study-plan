@@ -1149,7 +1149,7 @@ body[data-focus="on"] .park { display: flex; }
     var read = !!state.done[readId(l.id)], ok = passed(l.id);
     var min = (read ? 0 : l.min) + (ok ? 0 : EST.check) + items.reduce(function (a, i) { return a + itemMin(i, false); }, 0);
     var steps = (read ? [] : ["read " + l.min + " min"]).concat(ok ? [] : ["check"]).concat(items.length ? [items.length + " plan item" + (items.length === 1 ? "" : "s")] : []);
-    var href = !read ? "#/lesson/" + l.id : !ok ? "#/lesson/" + l.id + "/check" : "#/plan/" + items[0].id;
+    var href = !read ? "#/lesson/" + l.id : !ok ? "#/lesson/" + l.id + "/check" : items.length ? "#/plan/" + items[0].id : "#/lesson/" + l.id;
     return { min: min, steps: steps, href: href, read: read, ok: ok, items: items, started: read || ok || items.length < allItems().filter(function (i) { return i.lesson === l.id; }).length };
   }
   function todayTasks(budget) {
