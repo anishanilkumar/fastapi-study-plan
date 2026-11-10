@@ -17,8 +17,8 @@ teaches) serving one page:
   each answer. Questions you miss come back the next day for review.
 - **Quiz**: 10-question rounds, one question at a time, from a bank of six
   per lesson (168 in all), weighted towards what you get wrong and haven't
-  seen. Rounds can cover everything you've read, your weak spots, one part
-  or one lesson. Keys 1-4 answer, Enter moves on.
+  seen. Rounds can cover everything you've read, your weak spots, only
+  questions you've never answered, one part or one lesson. Keys 1-4 answer, Enter moves on.
 - **Today**: say how long you have (1–3 h, or until 23:00) and the plan
   fills it with the most useful things left, in order: missed questions,
   lessons you started, drills, the next lessons, weak spots. It reflows as

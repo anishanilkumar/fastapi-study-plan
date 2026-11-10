@@ -1670,7 +1670,7 @@ body[data-focus="on"] .park { display: flex; }
   // ==== Quiz rounds: ten questions, one at a time, weighted towards what
   // you get wrong and what you haven't seen. ====
   var ROUND = 10, quizScope = null, round = null;
-  var SCOPES = [["mix", "Smart mix"], ["weak", "Weak spots"], ["part-1", "Python"], ["part-2", "FastAPI"], ["part-3", "Data and tests"], ["part-4", "Interview"]];
+  var SCOPES = [["mix", "Smart mix"], ["weak", "Weak spots"], ["unseen", "Unseen"], ["part-1", "Python"], ["part-2", "FastAPI"], ["part-3", "Data and tests"], ["part-4", "Interview"]];
   function lessonsRead() { return LESSONS.filter(function (l) { return state.done[readId(l.id)] || state.quiz[l.id]; }); }
   function lessonStats(id) {
     var n = 0, ok = 0, seen = 0;
@@ -1691,9 +1691,20 @@ body[data-focus="on"] .park { display: flex; }
     var read = lessonsRead();
     return read.length >= 2 ? read : LESSONS;
   }
+  // Unseen: only questions never answered, from the lessons you've read; once
+  // those are used up, from any lesson.
+  function unseenKeys(all, lessons) {
+    var out = [];
+    lessons.forEach(function (l) { (all[l.id] || []).forEach(function (q, qi) { if (!state.answers[l.id + "." + qi]) out.push(l.id + "." + qi); }); });
+    return out;
+  }
   function pickRound(all, scope) {
     var pool = [];
-    scopeLessons(scope).forEach(function (l) {
+    if (scope === "unseen") {
+      var ks = unseenKeys(all, lessonsRead());
+      if (!ks.length) ks = unseenKeys(all, LESSONS);
+      ks.forEach(function (k) { pool.push([k, 1]); });
+    } else scopeLessons(scope).forEach(function (l) {
       (all[l.id] || []).forEach(function (q, qi) {
         var k = l.id + "." + qi, a = state.answers[k], w;
         if (!a) w = 3;                                   // never seen
@@ -1733,7 +1744,7 @@ body[data-focus="on"] .park { display: flex; }
     go.then(function () { return loadQuizzes(); }).then(function (all) {
       if (route !== "quiz" || !document.getElementById("round")) return;
       var keys = round.keys, n = keys.length;
-      if (!n) { box.innerHTML = '<div class="empty"><span class="label">No questions here</span><p>Nothing to ask in this scope yet.</p></div>'; return; }
+      if (!n) { box.innerHTML = '<div class="empty"><span class="label">No questions here</span><p>' + (round.scope === "unseen" ? "You've answered every question at least once. Try a smart mix or your weak spots." : "Nothing to ask in this scope yet.") + '</p></div>'; return; }
       var ticks = '<div class="ticks" aria-hidden="true">' + keys.map(function (k, i) {
         var p = round.picks[k], q = all[k.split(".")[0]][+k.split(".")[1]];
         return "<i" + (p == null ? "" : p === q[2] ? ' class="on"' : ' class="miss"') + "></i>";
