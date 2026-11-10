@@ -443,7 +443,18 @@ body[data-mentor] .need-go a { pointer-events: none; color: var(--ink-dim); }
 .dl-line { display: block; }
 .dl-break { list-style: none; }
 .dl-break li { display: flex; justify-content: space-between; gap: 1rem; min-height: 40px; align-items: center; }
-.dl-break li + li { border-top: var(--rule) solid var(--engrave); }
+.dl-break > li + li { border-top: var(--rule) solid var(--engrave); }
+.dl-break summary { display: flex; justify-content: space-between; gap: 1rem; min-height: 40px; align-items: center; cursor: pointer; list-style: none; }
+.dl-break summary::-webkit-details-marker { display: none; }
+.dl-break summary > span:first-child::before { content: "› "; display: inline-block; color: var(--arc); transition: transform 0.15s; }
+.dl-break details[open] summary > span:first-child::before { transform: rotate(90deg); }
+.dl-break details { flex: 1; }
+.dl-items { list-style: none; padding: 0 0 0.5rem 1rem; }
+.dl-items li { display: flex; justify-content: space-between; gap: 1rem; min-height: 36px; align-items: center; }
+.dl-items a { color: var(--ink); text-decoration: none; }
+.dl-items a:hover { color: var(--arc); }
+#dl-left a, .dl-line a { color: inherit; text-decoration: none; }
+#dl-left a:hover, .dl-line a:hover { text-decoration: underline; }
 .dl-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 .today-list { list-style: none; display: grid; margin: 0.75rem 0 0; counter-reset: t; }
 .today-list li { display: grid; gap: 0.125rem; padding: 0.5rem 0; border-top: var(--rule) solid var(--engrave); }
@@ -1217,7 +1228,7 @@ body[data-focus="on"] .park { display: flex; }
         '<div class="chips" role="group" aria-label="Time today">' + chips + "</div></section>";
     }
     var r = todayTasks(b), untilD = new Date(until);
-    h += "<h2>" + (b < 5 ? "Time's up for today" : hm(b) + " of work left") + "</h2>" +
+    h += "<h2>" + (b < 5 ? "Time's up for today" : hm(b) + " left today") + "</h2>" +
       '<span class="stamp">Until ' + esc(untilD.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })) + ", breaks taken out · " + num(score().today) + ' XP today · <button type="button" class="linkish" data-act="today-change">change</button></span></div>';
     if (b < 5) return h + '<p class="why">Stop here. Rest is part of it.</p><div class="chips">' + chips + "</div></section>";
     if (!r.picked.length) h += '<p class="why">Nothing left that fits. Take a break, or pick more time.</p>';
@@ -1562,23 +1573,28 @@ body[data-focus="on"] .park { display: flex; }
   // Minutes of work left in a state. Plan days that start after the deadline
   // (the morning of the day itself) aren't part of it.
   function work(st, dl) {
-    var w = { reading: 0, checks: 0, plan: 0, drills: 0, quiz: 0, review: 0 };
+    // w.list keeps what each total is made of, as [label, minutes, link, html?].
+    var w = { reading: 0, checks: 0, plan: 0, drills: 0, quiz: 0, review: 0, list: { reading: [], checks: [], plan: [], drills: [], quiz: [], review: [] } };
+    function add(cat, label, min, href, html) { w[cat] += min; w.list[cat].push([label, min, href, html]); }
     LESSONS.forEach(function (l) {
-      if (!st.done[readId(l.id)]) w.reading += l.min;
-      var q = st.quiz[l.id]; if (!q || q.best < q.of - 1) w.checks += EST.check;
+      if (!st.done[readId(l.id)]) add("reading", l.title, l.min, "#/lesson/" + l.id);
+      var q = st.quiz[l.id]; if (!q || q.best < q.of - 1) add("checks", l.title, EST.check, "#/lesson/" + l.id + "/check");
     });
     PLAN.forEach(function (d) {
       if (dl && START) { var ds = planDate(d.n); ds.setHours(0, 0, 0, 0); if (ds > dl) return; }
-      d.groups.forEach(function (g) { g.items.forEach(function (i) { if (!st.done[i.id]) w.plan += itemMin(i, false); }); });
-      d.checks.forEach(function (i) { if (!st.done[i.id]) w.plan += itemMin(i, true); });
+      d.groups.forEach(function (g) { g.items.forEach(function (i) { if (!st.done[i.id]) add("plan", i.t, itemMin(i, false), "#/plan/" + i.id, true); }); });
+      d.checks.forEach(function (i) { if (!st.done[i.id]) add("plan", i.t, itemMin(i, true), "#/plan/" + i.id, true); });
     });
     if (drills) drills.forEach(function (d) {
-      if (!drillTried(d, st)) w.drills += d.minutes + EST.drillExtra;
+      if (!drillTried(d, st)) add("drills", d.title, d.minutes + EST.drillExtra, "#/drill/" + d.id);
     });
     if (quizzes) Object.keys(quizzes).forEach(function (k) {
-      quizzes[k].forEach(function (q, qi) { var a = st.answers[k + "." + qi]; if (qi >= CHECK_N && !(a && a.ok)) w.quiz += EST.extraQ; });
+      var n = 0;
+      quizzes[k].forEach(function (q, qi) { var a = st.answers[k + "." + qi]; if (qi >= CHECK_N && !(a && a.ok)) n++; });
+      if (n) add("quiz", n + " in " + (BY_ID[k] ? BY_ID[k].title : k), n * EST.extraQ, "#/quiz/" + k);
     });
-    w.review = Object.keys(st.review).length * EST.review;
+    var rv = Object.keys(st.review).length;
+    if (rv) add("review", rv + " missed question" + (rv === 1 ? "" : "s"), rv * EST.review, "#/review");
     w.total = w.reading + w.checks + w.plan + w.drills + w.quiz + w.review;
     return w;
   }
@@ -1621,7 +1637,7 @@ body[data-focus="on"] .park { display: flex; }
     if (r.diff != null && r.diff <= -10) diff.dataset.ahead = "false"; else delete diff.dataset.ahead;
     if (r.v === "done") { setText("dl-left", "All done"); setText("dl-avail", ""); setText("dl-today", ""); }
     else {
-      document.getElementById("dl-left").innerHTML = esc(hm(r.left)) + " <small>of work left</small>";
+      document.getElementById("dl-left").innerHTML = '<a href="#/record/left">' + esc(hm(r.left)) + " <small>of work left ›</small></a>";
       setText("dl-avail", r.v === "over" ? "Deadline passed" : hm(r.avail) + " usable before then");
       setText("dl-today", r.v === "over" ? "" : r.v === "short" ? "More work than time: cut the quiz-only questions and drills first" :
         "Today: about " + hm(r.today) + " more, by " + hhmm(r.eod));
@@ -1632,7 +1648,7 @@ body[data-focus="on"] .park { display: flex; }
   function deadlineLine() {
     var r = pace(); if (!r || r.v === "done") return "";
     var a = aheadText(r);
-    return '<span class="stamp dl-line">' + hm(r.left) + " of work left · " + (r.v === "over" ? "deadline passed" : hm(r.avail) + " usable until " + esc(fmtWhen(r.dl))) +
+    return '<span class="stamp dl-line"><a href="#/record/left">' + hm(r.left) + " of work left</a> · " + (r.v === "over" ? "deadline passed" : hm(r.avail) + " usable until " + esc(fmtWhen(r.dl))) +
       (a ? ' · <span' + (r.diff <= -10 ? ' data-ahead="false"' : "") + ">" + a.toLowerCase() + "</span>" : "") + "</span>";
   }
   function deadlineHtml() {
@@ -1643,8 +1659,12 @@ body[data-focus="on"] .park { display: flex; }
       (r && r.v !== "done" ? '<span class="stamp">' + (r.v === "over" ? "The deadline has passed" : hm(r.avail) + " usable before " + esc(fmtWhen(r.dl))) + (aheadText(r) ? " · " + aheadText(r) : "") + "</span>" : "") + "</div>";
     if (r && r.v !== "done") {
       var rows = [["Reading", r.w.reading], ["Lesson checks", r.w.checks], ["Plan items and self-checks", r.w.plan], ["Drills", r.w.drills], ["Quiz-only questions", r.w.quiz], ["Reviews waiting", r.w.review]];
-      h += '<ul class="dl-break">' + rows.filter(function (x) { return x[1] >= 1; }).map(function (x) {
-        return "<li><span>" + x[0] + '</span><span class="stamp">' + hm(x[1]) + "</span></li>";
+      var cats = ["reading", "checks", "plan", "drills", "quiz", "review"];
+      h += '<ul class="dl-break" id="work-left">' + rows.map(function (x, i) { return [x[0], x[1], r.w.list[cats[i]]]; }).filter(function (x) { return x[2].length; }).map(function (x) {
+        return '<li><details><summary><span>' + x[0] + " · " + x[2].length + '</span><span class="stamp">' + hm(x[1]) + "</span></summary>" +
+          '<ul class="dl-items">' + x[2].map(function (it) {
+            return '<li><a href="' + it[2] + '">' + (it[3] ? it[0] : esc(it[0])) + ' ›</a><span class="stamp">' + (it[1] < 1 ? Math.round(it[1] * 60) + " s" : hm(it[1])) + "</span></li>";
+          }).join("") + "</ul></details></li>";
       }).join("") + "</ul>";
     }
     h += '<form class="dl-form" data-deadline><input class="field" type="datetime-local" name="at" required value="' + local + '" aria-label="Finish everything by">' +
@@ -2385,7 +2405,7 @@ body[data-focus="on"] .park { display: flex; }
   function renderView() {
     var hash = location.hash.replace(/^#\/?/, "") || "plan";
     var m = /^lesson\/([a-z0-9-]+)(\/check)?$/.exec(hash), focus = /^plan\/([a-z0-9-]+)$/.exec(hash), dr = /^drill\/([a-z0-9]+)$/.exec(hash);
-    var toRank = hash === "record/rank"; if (toRank) hash = "record";
+    var toRank = hash === "record/rank", toLeft = hash === "record/left"; if (toRank || toLeft) hash = "record";
     var qz = /^quiz(?:\/([a-z0-9-]+))?$/.exec(hash);
     if (qz) { quizScope = qz[1] || quizScope || "mix"; hash = "quiz"; }
     if (m && !BY_ID[m[1]]) { m = null; hash = "syllabus"; }
@@ -2425,6 +2445,11 @@ body[data-focus="on"] .park { display: flex; }
       var row = document.querySelector('[data-item="' + focus[1] + '"]');
       if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(function () { row.classList.remove("flash"); }, 1600); }
     } else if (toRank && document.getElementById("next-rank")) document.getElementById("next-rank").scrollIntoView({ block: "start" });
+    else if (toLeft && document.getElementById("work-left")) {
+      var wl = document.getElementById("work-left"), ds = wl.querySelectorAll("details");
+      if (ds.length === 1) ds[0].open = true;                    // one kind of thing left: show it straight away
+      wl.scrollIntoView({ block: "center" });
+    }
     else window.scrollTo(0, hash === "plan" ? planScroll : 0);
   }
 
