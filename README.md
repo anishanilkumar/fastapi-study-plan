@@ -23,8 +23,10 @@ teaches) serving one page:
   fills it with the most useful things left, in order: missed questions,
   lessons you started, drills, the next lessons, weak spots. It reflows as
   you go, and Next up (and focus mode) follows it.
-- **Drills**: fifteen timed code reviews of realistic snippets with planted
-  bugs, and a ranked answer key. Each unlocks with a lesson; once you've read
+- **Drills**: 28 timed code reviews of realistic snippets with planted
+  bugs, and a ranked answer key. Each has a level, very easy to
+  moderate-hard, and the list filters by it. Thirteen are optional practice:
+  no XP, and they don't count towards progress, ranks or the deadline. Each unlocks with a lesson; once you've read
   it, Next up asks you for that drill.
 - **Record**: XP, ranks, a daily goal, a streak and badges. All of it is
   computed from what you've actually done, so unticking takes XP back.
@@ -152,8 +154,9 @@ and an aware-datetime check on the config.
   same id in `quizzes.json` (the first three form its check; any more appear
   in quiz rounds), and an entry in `PARTS` in `study-plan.html`. The tests
   check that all three agree.
-- **A drill**: append to `drills.json`. Put the worst finding first; it's the
-  one worth the most XP.
+- **A drill**: add it to `drills.json` with a `level` from 1 (very easy) to 4
+  (moderate-hard). Put the worst finding first; it's the one worth the most XP.
+  `"optional": true` makes it practice only.
 
 ### Tests
 

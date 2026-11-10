@@ -137,6 +137,7 @@ def test_drills_are_well_formed():
     assert len({d["id"] for d in drills}) == len(drills)
     for d in drills:
         assert re.fullmatch(r"[a-z0-9]+", d["id"]) and d["code"] and len(d["findings"]) >= 3
+        assert d["level"] in (1, 2, 3, 4)
 
 
 def test_demo_mode_keeps_nothing(tmp_path, monkeypatch):

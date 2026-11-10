@@ -1,7 +1,84 @@
 [
  {
+  "id": "average",
+  "after": "py-syntax",
+  "level": 1,
+  "title": "An average",
+  "minutes": 3,
+  "context": "Returns the mean of a list of numbers.",
+  "code": "def average(values):\n    sum = 0\n    for v in values:\n        sum =+ v\n    return sum / len(values)",
+  "findings": [
+   {
+    "t": "`=+` is not `+=`",
+    "d": "`sum =+ v` is `sum = +v`: it keeps only the last value, so the result is silently wrong, never an error. `sum += v`."
+   },
+   {
+    "t": "An empty list raises ZeroDivisionError",
+    "d": "`len([])` is 0. Decide what an empty input means (return None, or raise a clear ValueError) and say so."
+   },
+   {
+    "t": "`sum` shadows the built-in",
+    "d": "Inside the function `sum()` no longer works. The whole loop is `sum(values) / len(values)`, or `statistics.mean(values)`."
+   }
+  ],
+  "optional": true
+ },
+ {
+  "id": "describe",
+  "after": "py-types",
+  "level": 1,
+  "title": "Describing a user",
+  "minutes": 3,
+  "context": "`user` is a dict like `{\"name\": \"Asha\", \"age\": 34}`; `name` may be None.",
+  "code": "def describe(user):\n    if user[\"age\"] > 18:\n        status = \"adult\"\n    if user[\"name\"] == None:\n        name = \"guest\"\n    else:\n        name = user[\"name\"]\n    return \"Hello \" + name + \", you are \" + status + \" and \" + user[\"age\"] + \" years old\"",
+  "findings": [
+   {
+    "t": "`str + int` fails on every call",
+    "d": "`\" and \" + user[\"age\"]` raises TypeError: Python never converts an int to a string for you (PHP's `.` does). Use an f-string: `f\"... {user['age']} years old\"`."
+   },
+   {
+    "t": "`status` is unset for anyone 18 or under",
+    "d": "No `else`, so the variable doesn't exist and you get UnboundLocalError. Give it a value on every path. And check whether 18 itself counts as an adult: `>=`."
+   },
+   {
+    "t": "`== None` instead of `is None`",
+    "d": "None is a single object; compare by identity. `==` can be overridden by a class and linters flag it."
+   },
+   {
+    "t": "Concatenation instead of an f-string",
+    "d": "Four `+` and manual spacing. `f\"Hello {name}, you are {status} and {age} years old\"` is shorter and can't hit the TypeError above."
+   }
+  ],
+  "optional": true
+ },
+ {
+  "id": "emails",
+  "after": "py-collections",
+  "level": 1,
+  "title": "Unique emails",
+  "minutes": 3,
+  "context": "Builds a mailing list from user records, one entry per person, in sign-up order.",
+  "code": "def unique_emails(users):\n    seen = []\n    for u in users:\n        email = u[\"email\"].strip()\n        if email not in seen:\n            seen.append(email)\n    return seen",
+  "findings": [
+   {
+    "t": "Case isn't normalised",
+    "d": "`Asha@x.com` and `asha@x.com` both get in, so the same person is mailed twice. `.strip().lower()` (strictly, only the domain is case-insensitive, but lowering the whole address is the usual choice)."
+   },
+   {
+    "t": "`in` on a list is a linear scan",
+    "d": "Each check walks the whole list: O(n\u00b2) for n users. Keep a `set` for the check and the list for order, or `list(dict.fromkeys(emails))`."
+   },
+   {
+    "t": "A missing or None email crashes",
+    "d": "`u[\"email\"]` raises KeyError and `None.strip()` raises AttributeError. `u.get(\"email\")` and skip empties."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "tags",
   "after": "py-loops",
+  "level": 2,
   "title": "Top tags",
   "minutes": 5,
   "context": "Given a list of posts (dicts from a JSON API), return the `limit` most used tags, case-insensitive.",
@@ -32,6 +109,7 @@
  {
   "id": "config",
   "after": "py-errors",
+  "level": 2,
   "title": "Loading a config file",
   "minutes": 5,
   "context": "Called once at startup to read the app's JSON config.",
@@ -60,8 +138,41 @@
   ]
  },
  {
+  "id": "retry",
+  "after": "py-errors",
+  "level": 2,
+  "title": "Retrying a request",
+  "minutes": 5,
+  "context": "Fetches JSON from a partner API, retrying when it's flaky.",
+  "code": "import time, httpx\n\ndef fetch_with_retry(url, retries=3):\n    for attempt in range(retries):\n        try:\n            return httpx.get(url, timeout=5).json()\n        except Exception as e:\n            print(f\"attempt {attempt} failed: {e}\")\n            time.sleep(1)\n    return None",
+  "findings": [
+   {
+    "t": "No status check: errors come back as data",
+    "d": "httpx doesn't raise on 4xx/5xx. A 404 or 500 with a JSON body is returned as if it were the answer. Call `r.raise_for_status()` before `.json()`."
+   },
+   {
+    "t": "Retries everything, including bugs",
+    "d": "`except Exception` retries a typo, a 401 or a bad URL three times. Retry only what can heal: `httpx.TransportError` (timeouts, resets) and 5xx/429. Let the rest raise at once."
+   },
+   {
+    "t": "Gives up silently with None",
+    "d": "The caller can't tell \"failed\" from \"empty\" and will crash later, far from the cause. Re-raise the last error after the final attempt."
+   },
+   {
+    "t": "Fixed one-second wait, even after the last try",
+    "d": "Every client retries in lockstep, and the last sleep is wasted. Exponential backoff with jitter, and don't sleep after the final attempt."
+   },
+   {
+    "t": "`print` instead of logging",
+    "d": "Lost in production, no level, no traceback. `log.warning(..., exc_info=True)`."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "cart",
   "after": "py-classes",
+  "level": 2,
   "title": "A shopping cart class",
   "minutes": 6,
   "context": "One `Cart` per logged-in user, kept for the length of a request.",
@@ -90,8 +201,41 @@
   ]
  },
  {
+  "id": "interval",
+  "after": "py-classes",
+  "level": 3,
+  "title": "Booking intervals",
+  "minutes": 6,
+  "context": "Room bookings. Two bookings clash if their times overlap. Times come from the API with a time zone.",
+  "code": "from dataclasses import dataclass\nfrom datetime import datetime\n\n@dataclass\nclass Booking:\n    start: datetime\n    end: datetime\n    tags: list = []\n\n    def overlaps(self, other):\n        return self.start < other.end or other.start < self.end\n\n    def hours(self):\n        return (self.end - self.start).seconds / 3600",
+  "findings": [
+   {
+    "t": "`overlaps` uses `or`: almost everything clashes",
+    "d": "Two intervals overlap when *both* hold: `self.start < other.end and other.start < self.end`. With `or`, a booking next month clashes with today's. It's silent and wrong, so it's the worst."
+   },
+   {
+    "t": "`tags: list = []` stops the class from loading",
+    "d": "dataclasses refuse a mutable default and raise ValueError at import. `tags: list[str] = field(default_factory=list)`."
+   },
+   {
+    "t": "`.seconds` ignores whole days",
+    "d": "`timedelta.seconds` is only the part under a day: a 26-hour booking reports 2 hours. `.total_seconds() / 3600`."
+   },
+   {
+    "t": "No check that end is after start",
+    "d": "A booking that ends before it starts is accepted and breaks `overlaps`. Validate in `__post_init__`."
+   },
+   {
+    "t": "Naive and aware datetimes can't be compared",
+    "d": "If one side has a time zone and the other doesn't, `<` raises TypeError. Require aware datetimes (and store UTC)."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "cache",
   "after": "py-stdlib",
+  "level": 3,
   "title": "Settings and a cache",
   "minutes": 6,
   "context": "A small helper module imported by several routers.",
@@ -126,6 +270,7 @@
  {
   "id": "prices",
   "after": "py-async",
+  "level": 3,
   "title": "Fetching prices",
   "minutes": 6,
   "context": "Gets current prices for a list of SKUs from the shop's API.",
@@ -150,8 +295,69 @@
   ]
  },
  {
+  "id": "checks",
+  "after": "py-async",
+  "level": 3,
+  "title": "Checking many URLs",
+  "minutes": 6,
+  "context": "A nightly job checks up to 20,000 customer URLs and reports each one's status.",
+  "code": "import asyncio, httpx\n\nasync def check_all(urls):\n    async with httpx.AsyncClient(timeout=5) as client:\n        results = await asyncio.gather(*[client.get(u) for u in urls])\n    return {u: r.status_code for u, r in zip(urls, results)}",
+  "findings": [
+   {
+    "t": "One failure throws away every result",
+    "d": "`gather` raises the first exception, and the 19,999 other answers are lost. One dead host is guaranteed in 20,000. `return_exceptions=True` and report errors per URL, or catch inside a small per-URL function."
+   },
+   {
+    "t": "No limit on concurrency",
+    "d": "20,000 coroutines start at once. httpx's pool holds 100 connections, so the rest queue, and the 5 s timeout includes waiting for a connection: healthy sites time out. Use an `asyncio.Semaphore` (say 50) around each request."
+   },
+   {
+    "t": "Redirects aren't followed",
+    "d": "httpx doesn't follow redirects by default, so every site that moved to https reports 301. `follow_redirects=True` if you want the final status."
+   },
+   {
+    "t": "Duplicate URLs collapse in the dict",
+    "d": "If the list repeats a URL, the dict keeps only the last result. De-duplicate first, or return a list of pairs."
+   },
+   {
+    "t": "Everything is held in memory until the end",
+    "d": "No progress, and a crash at 19,000 loses it all. Process in batches (or `asyncio.as_completed`) and write results as they come."
+   }
+  ],
+  "optional": true
+ },
+ {
+  "id": "users",
+  "after": "fa-pydantic",
+  "level": 2,
+  "title": "Creating a user",
+  "minutes": 5,
+  "context": "Sign-up endpoint. `UserRow` is the SQLAlchemy model with the same columns.",
+  "code": "class UserIn(BaseModel):\n    email: str\n    password: str\n    age: int\n    role: str = \"user\"\n\nclass UserOut(UserIn):\n    id: int\n\n@app.post(\"/users\", response_model=UserOut, status_code=201)\ndef create_user(user: UserIn, db: DB):\n    row = UserRow(**user.model_dump())\n    db.add(row)\n    db.commit()\n    return row",
+  "findings": [
+   {
+    "t": "The password is stored as plain text",
+    "d": "`model_dump()` copies `password` straight into the row. Hash it (argon2 or bcrypt) and store only the hash: `UserRow(**user.model_dump(exclude={\"password\"}), password_hash=hash_pw(user.password))`."
+   },
+   {
+    "t": "`UserOut` inherits the password, so it's sent back",
+    "d": "The response model is the filter, and this one lets the password through. Build `UserOut` from a shared base without it: `UserBase` \u2192 `UserIn(UserBase)` + password, `UserOut(UserBase)` + id."
+   },
+   {
+    "t": "The client chooses its own role",
+    "d": "Mass assignment: send `\"role\": \"admin\"` and you are one. Leave `role` out of the input model; the server sets it."
+   },
+   {
+    "t": "No constraints on the fields",
+    "d": "Any string is an email, any int an age (\u22125, 10\u2079). `EmailStr`, `Field(ge=13, le=130)`, a minimum password length. A duplicate email is also a 500; catch IntegrityError and return 409."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "devices",
   "after": "fa-errors",
+  "level": 2,
   "title": "Creating a device",
   "minutes": 6,
   "context": "Clients register a device they own. `DeviceRow` is the SQLAlchemy model; `serial` is unique in the table.",
@@ -186,6 +392,7 @@
  {
   "id": "admin",
   "after": "fa-depends",
+  "level": 2,
   "title": "Admin dependencies",
   "minutes": 6,
   "context": "Admins can delete users. Clients send their token in a `token` header.",
@@ -214,42 +421,9 @@
   ]
  },
  {
-  "id": "report",
-  "after": "fa-async",
-  "title": "An async report",
-  "minutes": 8,
-  "context": "Fetches the status of each of a customer's devices from a vendor API and returns a summary.",
-  "code": "import requests, time\nfrom datetime import datetime\n\n@app.get(\"/report/{customer_id}\")\nasync def report(customer_id: int):\n    devices = get_devices(customer_id)          # sync DB call\n    results = []\n    for d in devices:\n        try:\n            r = requests.get(f\"{VENDOR}/status/{d.serial}\")\n            results.append(r.json())\n        except:\n            pass\n        time.sleep(0.1)                          # be nice to the vendor\n    return {\"generated\": datetime.now(), \"devices\": results}",
-  "findings": [
-   {
-    "t": "Blocking calls inside `async def`",
-    "d": "requests.get, time.sleep and the sync DB call all block the event loop: one slow report stalls every request on the worker. Use httpx.AsyncClient and asyncio.sleep (and an async DB), or make the handler plain `def`."
-   },
-   {
-    "t": "No timeout on the vendor call",
-    "d": "requests has no default timeout; a hung vendor hangs the request (and with the bug above, the worker). Always pass a timeout."
-   },
-   {
-    "t": "Bare `except: pass` hides failures",
-    "d": "Vendor errors, JSON errors and typos all vanish; the report silently omits devices. Catch httpx/requests errors, log them, and mark the device as unknown."
-   },
-   {
-    "t": "Sequential calls",
-    "d": "N devices × (latency + 0.1 s). With an async client, run them concurrently with asyncio.gather and a semaphore to stay polite."
-   },
-   {
-    "t": "No authorization on customer_id",
-    "d": "Anyone can request any customer's report (IDOR). Depend on the current user and check ownership."
-   },
-   {
-    "t": "Naive `datetime.now()`",
-    "d": "Server-local time with no zone. Use `datetime.now(timezone.utc)`."
-   }
-  ]
- },
- {
   "id": "signup",
   "after": "fa-async",
+  "level": 3,
   "title": "Signup with a welcome email",
   "minutes": 6,
   "context": "`DB` is a sync SQLAlchemy session; `hash_pw` is argon2 (about 100 ms of CPU); `send_welcome_email` talks SMTP and takes about 2 s.",
@@ -269,7 +443,7 @@
    },
    {
     "t": "Duplicate email is a 500",
-    "d": "Unique constraint → IntegrityError. Roll back and return 409."
+    "d": "Unique constraint \u2192 IntegrityError. Roll back and return 409."
    },
    {
     "t": "Email failure after the commit",
@@ -278,8 +452,76 @@
   ]
  },
  {
+  "id": "report",
+  "after": "fa-async",
+  "level": 4,
+  "title": "An async report",
+  "minutes": 8,
+  "context": "Fetches the status of each of a customer's devices from a vendor API and returns a summary.",
+  "code": "import requests, time\nfrom datetime import datetime\n\n@app.get(\"/report/{customer_id}\")\nasync def report(customer_id: int):\n    devices = get_devices(customer_id)          # sync DB call\n    results = []\n    for d in devices:\n        try:\n            r = requests.get(f\"{VENDOR}/status/{d.serial}\")\n            results.append(r.json())\n        except:\n            pass\n        time.sleep(0.1)                          # be nice to the vendor\n    return {\"generated\": datetime.now(), \"devices\": results}",
+  "findings": [
+   {
+    "t": "Blocking calls inside `async def`",
+    "d": "requests.get, time.sleep and the sync DB call all block the event loop: one slow report stalls every request on the worker. Use httpx.AsyncClient and asyncio.sleep (and an async DB), or make the handler plain `def`."
+   },
+   {
+    "t": "No timeout on the vendor call",
+    "d": "requests has no default timeout; a hung vendor hangs the request (and with the bug above, the worker). Always pass a timeout."
+   },
+   {
+    "t": "Bare `except: pass` hides failures",
+    "d": "Vendor errors, JSON errors and typos all vanish; the report silently omits devices. Catch httpx/requests errors, log them, and mark the device as unknown."
+   },
+   {
+    "t": "Sequential calls",
+    "d": "N devices \u00d7 (latency + 0.1 s). With an async client, run them concurrently with asyncio.gather and a semaphore to stay polite."
+   },
+   {
+    "t": "No authorization on customer_id",
+    "d": "Anyone can request any customer's report (IDOR). Depend on the current user and check ownership."
+   },
+   {
+    "t": "Naive `datetime.now()`",
+    "d": "Server-local time with no zone. Use `datetime.now(timezone.utc)`."
+   }
+  ]
+ },
+ {
+  "id": "upload",
+  "after": "fa-security",
+  "level": 3,
+  "title": "Uploading an avatar",
+  "minutes": 7,
+  "context": "Users upload a profile picture. `static/` is served from the same domain as the app.",
+  "code": "@app.post(\"/avatar\")\nasync def upload_avatar(file: UploadFile, user: CurrentUser):\n    data = await file.read()\n    path = f\"static/avatars/{file.filename}\"\n    with open(path, \"wb\") as f:\n        f.write(data)\n    user.avatar = path\n    return {\"url\": \"/\" + path}",
+  "findings": [
+   {
+    "t": "Path traversal through the filename",
+    "d": "The filename comes from the client. `../../app/main.py` overwrites your code. Never use it for the path: generate one (`f\"{uuid4().hex}.png\"`)."
+   },
+   {
+    "t": "Any file type, served from your domain",
+    "d": "An `.html` or `.svg` file with script in it runs as your site (stored XSS). Check the real type (open it with Pillow), allow only images, re-encode, and serve uploads from a separate domain."
+   },
+   {
+    "t": "Users overwrite each other's files",
+    "d": "Two people uploading `me.jpg` share one file. The generated name above fixes this too."
+   },
+   {
+    "t": "No size limit; it's all read into memory",
+    "d": "`await file.read()` on a 2 GB upload. Cap the size (at the proxy and in the code) and stream to disk in chunks."
+   },
+   {
+    "t": "`user.avatar` is never saved",
+    "d": "No session, no commit: the change vanishes with the request. And `open`/`write` in `async def` block the event loop; use plain `def` or run them in a thread."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "login",
   "after": "fa-security",
+  "level": 4,
   "title": "A login endpoint",
   "minutes": 8,
   "context": "Users log in with email and password and get a token for the API. Assume `db`, `User` and `SECRET` exist.",
@@ -312,8 +554,73 @@
   ]
  },
  {
+  "id": "webhook",
+  "after": "fa-security",
+  "level": 4,
+  "title": "A payment webhook",
+  "minutes": 8,
+  "context": "The payment provider POSTs events, signed with HMAC-SHA256 of the raw body in `X-Signature`. It retries anything that isn't 2xx, and may deliver an event twice.",
+  "code": "@app.post(\"/webhooks/payments\")\nasync def payment_webhook(request: Request, db: DB):\n    body = await request.json()\n    sig = request.headers.get(\"X-Signature\")\n    expected = hmac.new(SECRET, json.dumps(body).encode(), \"sha256\").hexdigest()\n    if sig != expected:\n        raise HTTPException(401)\n    order = db.get(Order, body[\"order_id\"])\n    order.status = \"paid\"\n    db.commit()\n    return {\"ok\": True}",
+  "findings": [
+   {
+    "t": "Every signed event marks the order paid",
+    "d": "The event type and amount are never checked: a `payment.failed` or a refund, correctly signed, sets status to paid. Check `body[\"type\"]`, the amount and the currency against the order."
+   },
+   {
+    "t": "Signs re-serialised JSON, not the raw body",
+    "d": "`json.dumps(body)` won't match the provider's bytes (spacing, key order, unicode escapes), so real events fail, and the usual \"fix\" is to turn the check off. HMAC `await request.body()`, then parse."
+   },
+   {
+    "t": "Not idempotent: duplicates and replays",
+    "d": "The provider may send the same event twice, and a captured request can be replayed forever. Store processed event ids (unique column) and reject old timestamps if the provider signs one."
+   },
+   {
+    "t": "`!=` on a signature leaks timing",
+    "d": "Use `hmac.compare_digest(sig or \"\", expected)`. A missing header is also None here."
+   },
+   {
+    "t": "An unknown order is a 500, retried forever",
+    "d": "`db.get` returns None, then `.status` crashes. The provider retries for days. Log it and return 2xx (or 404) deliberately."
+   },
+   {
+    "t": "Sync DB in `async def`",
+    "d": "The sync session blocks the event loop while it waits on Postgres. Keep `async def` for reading the raw body and run the DB part with `run_in_threadpool`, or use an async session."
+   }
+  ],
+  "optional": true
+ },
+ {
+  "id": "paging",
+  "after": "db-sqlalchemy",
+  "level": 2,
+  "title": "A paged list",
+  "minutes": 5,
+  "context": "Lists products 20 at a time. The UI asks for `page=1` first. The table has 2 million rows.",
+  "code": "@app.get(\"/products\")\ndef list_products(db: DB, page: int = 1, size: int = 20):\n    items = db.scalars(select(Product)).all()\n    start = page * size\n    return items[start:start + size]",
+  "findings": [
+   {
+    "t": "Loads the whole table to return 20 rows",
+    "d": "`.all()` pulls 2 million rows into memory on every request, then slices in Python. Page in SQL: `.offset((page - 1) * size).limit(size)`."
+   },
+   {
+    "t": "Page 1 skips the first page",
+    "d": "Pages start at 1 but `start = page * size`, so the first 20 products are never shown. `(page - 1) * size`."
+   },
+   {
+    "t": "No order, so pages overlap",
+    "d": "Without ORDER BY the database may return rows in any order, so items repeat or vanish between pages. `.order_by(Product.id)` (or a column plus the id as a tie-break)."
+   },
+   {
+    "t": "`size` and `page` aren't bounded",
+    "d": "`size=1000000` or `page=-3` are accepted. `Query(ge=1, le=100)` and `Query(ge=1)`. For deep pages, keyset paging (`WHERE id > last_id`) beats a large OFFSET."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "orders",
   "after": "db-sqlalchemy",
+  "level": 3,
   "title": "Listing orders",
   "minutes": 8,
   "context": "Returns a user's orders with item counts, optionally sorted by a column the client chooses.",
@@ -348,6 +655,7 @@
  {
   "id": "import",
   "after": "db-session-model",
+  "level": 3,
   "title": "Importing readings",
   "minutes": 7,
   "context": "Devices send batches of meter readings as JSON. `SessionLocal = sessionmaker(engine)`; `Reading.device_id` is NOT NULL.",
@@ -380,8 +688,73 @@
   ]
  },
  {
+  "id": "tokens",
+  "after": "db-session-model",
+  "level": 4,
+  "title": "Caching the current user",
+  "minutes": 8,
+  "context": "To save a query per request, the token lookup is cached. Runs under 4 uvicorn workers. Clients send `Authorization: Bearer <token>`.",
+  "code": "from functools import lru_cache\n\n@lru_cache\ndef user_for_token(token: str):\n    with SessionLocal() as db:\n        return db.scalar(select(User).where(User.token == token))\n\ndef current_user(authorization: str = Header()):\n    user = user_for_token(authorization.removeprefix(\"Bearer \"))\n    if user is None:\n        raise HTTPException(401)\n    return user\n\n@app.post(\"/logout\")\ndef logout(db: DB, user: User = Depends(current_user)):\n    user.token = None\n    db.commit()\n    return {\"ok\": True}",
+  "findings": [
+   {
+    "t": "Revoked tokens keep working",
+    "d": "The cache never expires: after logout, a ban or a role change, the old token still returns the old user, in each of 4 workers separately. Cache with a short TTL in a shared store (Redis) and delete on logout, or don't cache auth at all."
+   },
+   {
+    "t": "Logout doesn't save anything",
+    "d": "`user` came from another, closed session, so it's detached: `db` doesn't track it and the commit writes nothing. Load the user in `db` (`db.get(User, user.id)`) or `db.merge(user)`, then change it."
+   },
+   {
+    "t": "One User object shared by every request",
+    "d": "The cached instance is returned to every request with that token, on every thread. A change made in one request leaks into others, and lazy-loaded attributes raise DetachedInstanceError."
+   },
+   {
+    "t": "Tokens stored in plain text",
+    "d": "A database leak hands over every live session. Store a hash of the token (SHA-256 is fine for random tokens) and look up by the hash."
+   },
+   {
+    "t": "A missing or malformed header is a 422, not a 401",
+    "d": "`Header()` makes it required, so FastAPI answers 422. `removeprefix` also accepts a token without `Bearer`. Use `HTTPBearer`, which returns 401/403 properly."
+   }
+  ],
+  "optional": true
+ },
+ {
+  "id": "search",
+  "after": "db-sessions",
+  "level": 3,
+  "title": "Product search",
+  "minutes": 6,
+  "context": "A search box on the shop. Each product has a category (a relationship). Postgres.",
+  "code": "@app.get(\"/search\")\ndef search(q: str, db: DB):\n    rows = db.scalars(\n        select(Product).where(Product.name.like(f\"%{q}%\"))\n    ).all()\n    return [{\"name\": p.name, \"category\": p.category.name, \"price\": str(p.price)}\n            for p in rows]",
+  "findings": [
+   {
+    "t": "N+1: one query per product's category",
+    "d": "`p.category` lazy-loads, so 500 results are 501 queries. `.options(selectinload(Product.category))` (or joinedload)."
+   },
+   {
+    "t": "No limit",
+    "d": "`q=a` matches most of the table and returns it all. `.limit(50)` and paging."
+   },
+   {
+    "t": "`%` and `_` in the search act as wildcards",
+    "d": "Not SQL injection: the value is bound as a parameter, so calling it injection would be wrong. But `q=%` matches everything. `Product.name.contains(q, autoescape=True)` escapes them."
+   },
+   {
+    "t": "`%...%` can't use a normal index",
+    "d": "A leading wildcard means a full table scan each keystroke. A trigram index (pg_trgm) or full-text search."
+   },
+   {
+    "t": "Case-sensitive in Postgres",
+    "d": "`like` is case-sensitive there, so `shoe` misses `Shoe`. `ilike` (which also needs the trigram index to be fast). And require a minimum length for `q`."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "transfer",
   "after": "db-sessions",
+  "level": 4,
   "title": "Transferring credit",
   "minutes": 8,
   "context": "Moves credit between two accounts the caller owns.",
@@ -414,11 +787,48 @@
   ]
  },
  {
+  "id": "jobs",
+  "after": "db-sessions",
+  "level": 4,
+  "title": "A job queue in a table",
+  "minutes": 8,
+  "context": "Several worker processes run this loop against the same Postgres table of jobs.",
+  "code": "def claim_next_job(db, worker):\n    job = db.scalars(\n        select(Job).where(Job.status == \"pending\").order_by(Job.created_at)\n    ).first()\n    if job is None:\n        return None\n    job.status = \"running\"\n    job.worker = worker\n    db.commit()\n    return job\n\ndef run(db, worker):\n    while True:\n        job = claim_next_job(db, worker)\n        if job is None:\n            time.sleep(1)\n            continue\n        try:\n            handle(job)\n            job.status = \"done\"\n        except Exception:\n            job.status = \"failed\"\n        db.commit()",
+  "findings": [
+   {
+    "t": "Two workers claim the same job",
+    "d": "Both SELECT the same pending row before either commits, so the job runs twice (two emails, two charges). `.with_for_update(skip_locked=True)` on the select, or one `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`."
+   },
+   {
+    "t": "A crashed worker leaves jobs running forever",
+    "d": "If the process dies mid-job, nothing ever resets the row. Store a lease (`locked_until`) and let other workers reclaim expired ones; make `handle` safe to run twice."
+   },
+   {
+    "t": "A DB error inside `handle` breaks the loop",
+    "d": "If `handle` uses this session and a statement fails, the session needs a rollback; `db.commit()` then raises PendingRollbackError and the worker dies. `db.rollback()` in the except before recording the failure."
+   },
+   {
+    "t": "Failures are recorded without a reason or a retry",
+    "d": "`except Exception` drops the error. Save the message, count attempts, and retry with backoff up to a limit."
+   },
+   {
+    "t": "One session for the worker's whole life",
+    "d": "Its identity map keeps every job it has touched. A session per job (`with SessionLocal() as db:`) keeps memory flat and failures contained."
+   },
+   {
+    "t": "No index for the claim query",
+    "d": "Every poll scans for pending rows. An index on `(status, created_at)`, ideally partial: `WHERE status = 'pending'`."
+   }
+  ],
+  "optional": true
+ },
+ {
   "id": "discount",
   "after": "test-pytest",
+  "level": 2,
   "title": "Tests for a discount helper",
   "minutes": 5,
-  "context": "`apply_discount(price, percent)` should raise ValueError for a percent outside 0–100.",
+  "context": "`apply_discount(price, percent)` should raise ValueError for a percent outside 0\u2013100.",
   "code": "from shop import apply_discount\n\ncart = []\n\ndef test_discount():\n    assert apply_discount(100, 10) == 90\n    assert apply_discount(100, 0) == 100\n    assert apply_discount(19.99, 15) == 16.9915\n\ndef test_negative():\n    try:\n        apply_discount(100, -5)\n        assert False\n    except Exception:\n        pass\n\ndef test_add_to_cart():\n    cart.append(1)\n    assert len(cart) == 1",
   "findings": [
    {
@@ -446,6 +856,7 @@
  {
   "id": "tests",
   "after": "test-fastapi",
+  "level": 3,
   "title": "A test file",
   "minutes": 6,
   "context": "Tests for a certificate-expiry endpoint that also calls a vendor revocation API.",

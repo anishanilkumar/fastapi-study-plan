@@ -462,6 +462,8 @@ body[data-mentor] .need-go a { pointer-events: none; color: var(--ink-dim); }
 .today-list a:hover { color: var(--arc); }
 .today-list a.first { color: var(--arc); font-weight: 600; }
 .today-box .chips { margin-top: 0.75rem; }
+.drill-levels { margin-bottom: 0.75rem; }
+.drill-opt { display: block; margin-bottom: 0.75rem; }
 .today-left { margin-top: 0.75rem; }
 .linkish { background: none; border: 0; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--arc); text-decoration: underline; cursor: pointer; }
 .setup-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
@@ -689,7 +691,7 @@ body[data-focus="on"] .park { display: flex; }
     ]},
     { id: "eve", n: 2, part: "evening", title: "Practice and rest", groups: [
       { items: [
-        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has fifteen; do any you haven't." },
+        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has more than two dozen, very easy to moderate-hard; do any you haven't." },
         { id: "eve-deepdive", min: 20, t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
         { id: "eve-rest", min: 0, t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
       ]}
@@ -890,6 +892,15 @@ body[data-focus="on"] .park { display: flex; }
   function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, marknotes: {}, answers: {}, perday: {}, deadline: null, profile: null }; }
   var state = blank();
   var dirty = false, seq = 0, timer = null, inflight = false;
+  // `drills` is the drills that count; `allDrills` adds the optional ones,
+  // which are practice only: no XP, no ranks or badges, not in work left,
+  // Today or Next up.
+  var allDrills = null, OPTIONAL = {};
+  function setDrills(d) {
+    allDrills = d; OPTIONAL = {};
+    d.forEach(function (x) { if (x.optional) OPTIONAL[x.id] = true; });
+    drills = d.filter(function (x) { return !x.optional; });
+  }
   var lessonCache = {}, quizzes = null, drills = null, quizRuns = {}, reviewRun = {}, planScroll = 0, route = null;
   var drillTimer = { id: null, end: 0, handle: null };
 
@@ -933,7 +944,7 @@ body[data-focus="on"] .park { display: flex; }
     });
     var tried = {};
     Object.keys(state.done).forEach(function (k) {
-      var m = DRILL_ID.exec(k); if (!m) return;
+      var m = DRILL_ID.exec(k); if (!m || OPTIONAL[m[1]]) return;
       s.found++; tried[m[1]] = true; if (m[2] === "0") s.worst++;
     });
     s.drillsTried = Object.keys(tried).length;
@@ -1283,7 +1294,7 @@ body[data-focus="on"] .park { display: flex; }
     } else if (a.kind === "drill") {
       var dl = BY_ID[a.drill.after];
       title = "Code review: " + esc(a.drill.title); href = "#/drill/" + a.drill.id; btn = "Start the drill";
-      meta = (dl ? "You've read " + esc(dl.title) + ", so test it · " : "") + a.drill.minutes + " min · " + a.drill.findings.length + " planted bugs · up to +" + (a.drill.findings.length * XP.finding + XP.worst) + " XP";
+      meta = (dl ? "You've read " + esc(dl.title) + ", so test it · " : "") + (levelName(a.drill) ? levelName(a.drill) + " · " : "") + a.drill.minutes + " min · " + a.drill.findings.length + " planted bugs · up to +" + (a.drill.findings.length * XP.finding + XP.worst) + " XP";
       return '<section class="callout next"><span class="label">Next up · test what you read</span><h2>' + title + '</h2><span class="stamp">' + meta + "</span>" + calm +
         '<div class="next-actions"><a class="btn btn-primary" href="' + href + '">' + btn + ' ›</a><button type="button" class="btn btn-quiet" data-act="drill-later" data-id="' + a.drill.id + '">Not now</button>' + enter + "</div></section>";
     } else if (a.kind === "read") {
@@ -1466,7 +1477,7 @@ body[data-focus="on"] .park { display: flex; }
 
   function loadJson(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }); }
   function loadQuizzes() { return quizzes ? Promise.resolve(quizzes) : loadJson("/quizzes.json").then(function (q) { return (quizzes = q); }); }
-  function loadDrills() { return drills ? Promise.resolve(drills) : loadJson("/drills.json").then(function (d) { drills = d; updateCounts(); return d; }); }
+  function loadDrills() { return allDrills ? Promise.resolve(allDrills) : loadJson("/drills.json").then(function (d) { setDrills(d); updateCounts(); return d; }); }
 
   function renderQuiz(l) {
     var box = document.getElementById("quiz"); if (!box) return;
@@ -1897,18 +1908,29 @@ body[data-focus="on"] .park { display: flex; }
   }
 
   // ---- Drills: timed code reviews with a ranked answer key ----
+  var LEVELS = ["", "Very easy", "Easy", "Moderate", "Moderate-hard"], drillLevel = 0;
+  function levelName(d) { return LEVELS[d.level] || ""; }
   function drillsHtml() {
     return '<section class="section-head syl-head"><span class="label">Drills · timed code reviews</span>' +
-      '<p class="lede">Each drill is a short snippet with several planted bugs, and unlocks with a lesson: once you\'ve read it, Next up asks you for the drill. Start the timer, write down every problem you see, worst first, then reveal the answer key and tick what you found. Finding the worst bug is worth the most.</p></section><div id="drill-list"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div>';
+      '<p class="lede">Each drill is a short snippet with several planted bugs, and unlocks with a lesson: once you\'ve read it, Next up asks you for the drill. Start the timer, write down every problem you see, worst first, then reveal the answer key and tick what you found. Finding the worst bug is worth the most. Drills marked optional are extra practice: they earn no XP and don\'t count towards your progress.</p></section><div id="drill-list"><div class="placeholder"><i></i><i></i><i class="short"></i></div></div>';
   }
   function renderDrillList() {
     loadDrills().then(function (ds) {
       var box = document.getElementById("drill-list"); if (!box || route !== "drills") return;
-      box.innerHTML = '<section class="instrument"><ol class="lessons">' + ds.map(function (d, i) {
+      var chips = '<div class="chips drill-levels" role="group" aria-label="Difficulty">' + LEVELS.map(function (name, lv) {
+        var n = lv ? ds.filter(function (d) { return d.level === lv; }).length : ds.length;
+        return n ? '<button type="button" class="chip" data-level="' + lv + '"' + (drillLevel === lv ? ' aria-current="true"' : "") + ">" + (lv ? name : "All") + " · " + n + "</button>" : "";
+      }).join("") + "</div>";
+      box.innerHTML = chips + '<section class="instrument"><ol class="lessons">' + ds.map(function (d, i) {
+        if (drillLevel && d.level !== drillLevel) return "";
         var found = d.findings.filter(function (f, n) { return state.done["drill-" + d.id + "-" + n]; }).length, tried = drillTried(d);
         var when = tried ? "" : drillReady(d) ? "ready · " : BY_ID[d.after] ? "after lesson " + (LESSONS.indexOf(BY_ID[d.after]) + 1) + " · " : "";
-        return '<li><a href="#/drill/' + d.id + '" data-read="' + tried + '"><span class="mark" aria-hidden="true"></span><span class="num stamp">' + pad2(i + 1) + '</span><span class="ltitle">' + esc(d.title) + '</span><span class="stamp meta">' + (tried ? found + "/" + d.findings.length + " found · " : when) + d.minutes + " min</span></a></li>";
+        return '<li><a href="#/drill/' + d.id + '" data-read="' + tried + '"><span class="mark" aria-hidden="true"></span><span class="num stamp">' + pad2(i + 1) + '</span><span class="ltitle">' + esc(d.title) + '</span><span class="stamp meta">' + (tried ? found + "/" + d.findings.length + " found · " : when) + (d.optional ? "optional · " : "") + (levelName(d) ? levelName(d).toLowerCase() + " · " : "") + d.minutes + " min</span></a></li>";
       }).join("") + "</ol></section>";
+      box.querySelector(".drill-levels").onclick = function (ev) {
+        var b = ev.target.closest("[data-level]"); if (!b) return;
+        drillLevel = +b.dataset.level; renderDrillList();
+      };
     }).catch(function () {
       var box = document.getElementById("drill-list"); if (box) box.innerHTML = '<div class="empty"><span class="label">Drills unavailable</span><p>They come from the server, which can\'t be reached.</p></div>';
     });
@@ -1922,10 +1944,11 @@ body[data-focus="on"] .park { display: flex; }
       if (!box || route !== "drill/" + id) return;
       if (!d) { location.hash = "#/drills"; return; }
       var revealed = !!MENTOR || drillTried(d) || box.dataset.revealed === "true";
-      var h = '<article class="instrument lesson"><header class="lesson-head"><span class="label">Drill · ' + d.minutes + " minutes · " + d.findings.length + " planted problems</span><h2>" + esc(d.title) + '</h2><p class="why">' + codeish(d.context) + "</p></header>" +
+      var h = '<article class="instrument lesson"><header class="lesson-head"><span class="label">' + (d.optional ? "Optional drill · " : "Drill · ") + (levelName(d) ? levelName(d) + " · " : "") + d.minutes + " minutes · " + d.findings.length + " planted problems</span><h2>" + esc(d.title) + '</h2><p class="why">' + codeish(d.context) + "</p></header>" +
         '<div class="drill-timer"><span class="readout" id="clock">' + d.minutes + ':00</span><button type="button" class="btn" id="clock-btn">Start timer</button></div>' +
         '<div class="reading"><pre><code>' + esc(d.code) + "</code></pre></div>" +
         '<label class="notes drill-own"><span class="label">Your findings, worst first</span><textarea id="notes" rows="6" placeholder="1. …"></textarea></label>';
+      if (d.optional) h += '<p class="stamp drill-opt">Optional practice: no XP, and it doesn\'t count towards your progress, ranks or deadline.</p>';
       if (!revealed) h += '<button type="button" class="btn btn-primary" id="reveal">Reveal the answer key</button>';
       else {
         h += '<div class="section-head key-head"><span class="label">' + (MENTOR ? "Answer key · ticked = found" : "Answer key · tick what you found") + '</span></div><ul>' +
@@ -2476,12 +2499,12 @@ body[data-focus="on"] .park { display: flex; }
     var nn = notebookCount();
     setText("tab-notes", nn ? String(nn) : "");
     Array.prototype.forEach.call(document.querySelectorAll("[data-ldrills]"), function (el) {
-      var mine = (drills || []).filter(function (d) { return d.after === el.dataset.ldrills; }), lh = "";
+      var mine = (allDrills || []).filter(function (d) { return d.after === el.dataset.ldrills; }), lh = "";
       if (mine.length) {
         lh = '<section class="instrument"><div class="section-head"><span class="label">Test what you read · code review</span>' +
           '<p class="why">' + (state.done[readId(el.dataset.ldrills)] ? "Unlocked. Find the bugs before you look at the key." : "Unlocks when you tick \u201cI\u2019ve read this\u201d. Find the bugs before you look at the key.") + "</p></div><ul>" +
           mine.map(function (d) {
-            return '<li class="next-actions"><a class="btn' + (drillTried(d) ? "" : " btn-primary") + '" href="#/drill/' + d.id + '">' + esc(d.title) + " · " + d.minutes + " min ›</a>" + (drillTried(d) ? '<span class="stamp">Done</span>' : "") + "</li>";
+            return '<li class="next-actions"><a class="btn' + (drillTried(d) ? "" : " btn-primary") + '" href="#/drill/' + d.id + '">' + esc(d.title) + " · " + (d.optional ? "optional · " : "") + d.minutes + " min ›</a>" + (drillTried(d) ? '<span class="stamp">Done</span>' : "") + "</li>";
           }).join("") + "</ul></section>";
       }
       if (el._h !== lh) { el.innerHTML = lh; el._h = lh; }
@@ -2634,7 +2657,7 @@ body[data-focus="on"] .park { display: flex; }
   // ---- Load: local copy first (instant), then the server's. ----
   var local = MENTOR ? null : readLocal();
   if (local) { adopt(local); dirty = !!local.dirty; }
-  if (MENTOR) { adopt(MENTOR.state); quizzes = MENTOR.quizzes; drills = MENTOR.drills; document.body.dataset.mentor = "on"; }
+  if (MENTOR) { adopt(MENTOR.state); quizzes = MENTOR.quizzes; setDrills(MENTOR.drills); document.body.dataset.mentor = "on"; }
   renderShell();
   // Every field a mentor sees is read-only, wherever a view draws one.
   if (MENTOR && window.MutationObserver) new MutationObserver(function () {
