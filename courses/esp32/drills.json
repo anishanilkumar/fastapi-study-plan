@@ -1,0 +1,82 @@
+[
+ {"id": "wiring", "after": "es-gpio", "level": 1, "title": "A first circuit", "minutes": 4,
+  "context": "An original ESP32 DevKit: an LED, a button, and a 5 V PIR motion sensor module.",
+  "code": "LED anode   -> GPIO 2, cathode -> GND          (no resistor)\nButton      -> between GPIO 34 and GND\nPIR VCC     -> 5V,  PIR OUT -> GPIO 12,  PIR GND -> separate 5 V adapter's GND\n\nbutton = Pin(34, Pin.IN, Pin.PULL_UP)",
+  "findings": [
+   {"t": "No resistor on the LED", "d": "The LED draws as much current as the pin can give: it can damage the pin or the LED. 220 Ω to 1 kΩ in series."},
+   {"t": "GPIO 34 has no internal pull-up", "d": "34 to 39 are input only, without pulls: `PULL_UP` does nothing and the input floats. Use another pin, or an external 10 kΩ pull-up."},
+   {"t": "PIR on GPIO 12, a strapping pin", "d": "If the sensor holds 12 high at reset, the flash voltage is set wrong and the board won't boot. Use a non-strapping pin."},
+   {"t": "No shared ground with the PIR", "d": "Its GND is on another adapter, so its output means nothing to the ESP32. Connect the grounds."},
+   {"t": "Check the PIR's output level", "d": "Many PIR modules output 3.3 V even on 5 V supply, but check: a 5 V output into the pin can damage it."}
+  ]},
+ {"id": "mainloop", "after": "es-mpy", "level": 2, "title": "A main loop", "minutes": 5,
+  "context": "Reads a sensor every 10 s and keeps the readings to send when the network's back.",
+  "code": "import time\nreadings = []\nstart = time.ticks_ms()\n\nwhile True:\n    t = sensor.read()\n    readings.append((time.time(), t))\n    if network_ok():\n        for r in readings:\n            send(r)\n    if time.ticks_ms() - start > 3600_000:\n        print(\"an hour\")\n        start = time.ticks_ms()\n    time.sleep(10)",
+  "findings": [
+   {"t": "The readings list grows without bound", "d": "Offline for a day, it fills the heap: MemoryError and a reset, losing everything. Keep a fixed-size buffer, or drop old readings."},
+   {"t": "Sent readings are never removed", "d": "Every time the network is OK, every reading ever taken is sent again. Clear what was sent."},
+   {"t": "No exception handling", "d": "One failed sensor read or send ends the loop, and the device does nothing until reset. Catch, log and continue."},
+   {"t": "`ticks_ms() - start` instead of ticks_diff", "d": "ticks wrap around; the subtraction goes wrong eventually. `time.ticks_diff(time.ticks_ms(), start)`."},
+   {"t": "`time.time()` before the clock is set", "d": "After a power cut it counts from 2000. Set it with ntptime first, or don't timestamp until it has worked."}
+  ]},
+ {"id": "ds18", "after": "es-buses", "level": 2, "title": "Reading the probe", "minutes": 4,
+  "context": "One DS18B20 in the fridge on GPIO 4.",
+  "code": "ds = ds18x20.DS18X20(onewire.OneWire(Pin(4)))\n\ndef temp():\n    rom = ds.scan()[0]\n    ds.convert_temp()\n    return ds.read_temp(rom)",
+  "findings": [
+   {"t": "No wait after convert_temp", "d": "The conversion takes up to 750 ms; reading at once returns the last value, or 85.0 at power-up. `time.sleep_ms(750)` (or `await asyncio.sleep_ms(750)`)."},
+   {"t": "`ds.scan()[0]` raises when the probe is missing", "d": "Unplugged or a broken wire: IndexError, and if uncaught, the main loop dies. Check for an empty scan and report an error."},
+   {"t": "No range check", "d": "85.0 and -127 are failure values, not temperatures. Reject them and anything implausible for a fridge."},
+   {"t": "Scanning every read", "d": "Scan once at start and keep the rom; rescan only if reads fail."}
+  ]},
+ {"id": "umqtt", "after": "es-wifi", "level": 3, "title": "umqtt on the board", "minutes": 6,
+  "context": "The fridge board's network code.",
+  "code": "wlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nwlan.connect(\"house\", \"hunter2\")\nwhile not wlan.isconnected():\n    pass\n\nc = MQTTClient(\"esp32\", \"jarvis\", keepalive=60)\nc.connect()\nc.set_last_will(b\"home/kitchen/fridge/status\", b\"offline\")\n\nwhile True:\n    c.publish(b\"home/kitchen/fridge/temp\", str(temp()))\n    time.sleep(300)",
+  "findings": [
+   {"t": "Publishes every 5 minutes with a 60 s keepalive and no ping", "d": "umqtt doesn't ping by itself. After 90 s of silence the broker drops the connection, and the next publish fails. Ping within the keepalive, or set the keepalive above the publish interval."},
+   {"t": "No reconnect", "d": "Any Wi-Fi or socket error raises out of the loop and the device stops for good. Wrap in a recover loop: Wi-Fi, connect, work; on OSError back off and start over."},
+   {"t": "Will set after connect, and not retained", "d": "The will is part of CONNECT: set it before `connect()`, with `retain=True`, and publish a retained \"online\" after."},
+   {"t": "Client ID `esp32`", "d": "The next board flashed from the same code evicts this one. Use `machine.unique_id()`."},
+   {"t": "Wi-Fi wait with no timeout, password in the code", "d": "A router reboot at power-up hangs it forever. Add a timeout; move the password to secrets.py, out of git."},
+   {"t": "`jarvis` may not resolve on the board", "d": "No mDNS by default. Use the Pi's LAN IP, with a fixed lease."}
+  ]},
+ {"id": "brownout", "after": "es-power", "level": 1, "title": "It resets when it connects", "minutes": 3,
+  "context": "\"The board boots, prints 'connecting to Wi-Fi', then resets. Over and over. Must be a Wi-Fi bug.\" It's on a 1 m thin USB cable from a laptop hub, with a relay module powered from its 3V3 pin.",
+  "code": "rst:0xc (SW_CPU_RESET)\n...\nconnecting to Wi-Fi\nBrownout detector was triggered\nets Jun  8 2016 00:22:57\nrst:0xf (BROWNOUT_RST)",
+  "findings": [
+   {"t": "It's power, not Wi-Fi: the log says brownout", "d": "Wi-Fi's current peaks pull the voltage below the detector's threshold. Read the log before debugging code."},
+   {"t": "Thin cable and a hub", "d": "Both drop voltage under load. A short, thick cable into a proper USB charger."},
+   {"t": "The relay coil on the 3V3 pin", "d": "It draws a lot through the board's small regulator. Power it from 5 V (with a driver transistor), not the 3V3 rail."},
+   {"t": "No capacitor near the module", "d": "A 100 µF or so across 3.3 V and GND smooths the peaks."}
+  ]},
+ {"id": "sleep", "after": "es-sleep", "level": 3, "title": "A battery sensor", "minutes": 5,
+  "context": "A battery-powered balcony sensor on a dev board, meant to last months.",
+  "code": "count = 0\n\ndef main():\n    global count\n    count += 1\n    wifi(SSID, PW)\n    c = connect_mqtt()\n    c.publish(b\"home/balcony/temp\", str(read()), qos=0)\n    if count % 10 == 0:\n        c.publish(b\"home/balcony/battery\", str(battery()))\n    machine.deepsleep(60_000)\n\nmain()",
+  "findings": [
+   {"t": "`count` resets on every wake", "d": "Deep sleep wake is a reset: count is always 1 and the battery is never reported. Keep it in RTC memory."},
+   {"t": "Wi-Fi every minute", "d": "Joining Wi-Fi each wake dominates the battery: days, not months. Measure every minute if needed, but send every 10 to 15 minutes or on change."},
+   {"t": "Sleeps right after a QoS 0 publish", "d": "The message may not have left. Disconnect cleanly before sleeping."},
+   {"t": "Readings aren't retained", "d": "Between wakes a dashboard has nothing to show. Retain them, with a timestamp."},
+   {"t": "A dev board for a months-long battery", "d": "Its regulator, USB chip and LED draw mA through every sleep. Use a board built for batteries, or measure first."}
+  ]},
+ {"id": "wdt", "after": "es-reliable", "level": 2, "title": "A watchdog that can't bite", "minutes": 4,
+  "context": "\"Added a watchdog so it never hangs.\"",
+  "code": "wdt = WDT(timeout=5000)\ntimer = Timer(0)\ntimer.init(period=1000, callback=lambda t: wdt.feed())\n\nwifi(SSID, PW)\nwhile True:\n    c = connect_mqtt()\n    publish_reading(c)\n    time.sleep(60)",
+  "findings": [
+   {"t": "Fed from a timer", "d": "The timer keeps feeding while the main loop is hung, so the watchdog never resets anything. Feed it in the main loop, after real work."},
+   {"t": "A 5 s timeout with a 60 s sleep and a Wi-Fi connect", "d": "Fed properly from the loop, it would reset a healthy device every cycle. Choose a timeout longer than the slowest healthy cycle, and sleep in short slices that feed."},
+   {"t": "A new MQTT connection every minute", "d": "`connect_mqtt()` in the loop opens a connection each cycle without closing the last. Connect once; reconnect on error."},
+   {"t": "The reset cause isn't reported", "d": "Publish `machine.reset_cause()` at boot, so watchdog resets are visible."}
+  ]},
+ {"id": "esphomecfg", "after": "es-esphome", "level": 2, "title": "An ESPHome file", "minutes": 4,
+  "context": "A door sensor's YAML, committed to the repo.",
+  "code": "esphome:\n  name: front door\nesp32:\n  board: esp32-c3-devkitm-1\nwifi:\n  ssid: house\n  password: hunter2\nmqtt:\n  broker: jarvis\n  topic_prefix: home/hall/door\nbinary_sensor:\n  - platform: gpio\n    pin: GPIO9\n    name: Door",
+  "findings": [
+   {"t": "Passwords in the committed file", "d": "Move them to secrets.yaml (`!secret wifi_password`) and keep that out of git."},
+   {"t": "No `ota:`", "d": "Every change means taking the sensor off the door and plugging in USB."},
+   {"t": "GPIO9 is a C3 strapping pin", "d": "A door contact holding it low at reset puts the chip in download mode: it won't boot with the door in one position. Use another pin."},
+   {"t": "No MQTT login, and a hostname", "d": "Add `username`/`password` (its own user on the leaf), and use the Pi's IP; `jarvis` may not resolve on the board."},
+   {"t": "No debounce, no pull-up", "d": "Add `mode: INPUT_PULLUP` (or `pullup: true`) and a `delayed_on_off` filter, or one door opening becomes several events."},
+   {"t": "A name with a space", "d": "`name: front door` becomes the hostname; use `front-door`."}
+  ],
+  "optional": true}
+]

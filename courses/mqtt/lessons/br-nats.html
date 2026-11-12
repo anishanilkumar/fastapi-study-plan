@@ -1,0 +1,44 @@
+<p>The house's broker is already running: NATS, with the hub on the VPS and a leaf node on jarvis. The NATS server speaks MQTT too, so devices will connect to the leaf over MQTT and their messages become NATS subjects that your programs, at home or on the VPS, can subscribe to. This lesson is what switching that on means, and what's different from a plain MQTT broker.</p>
+
+<h3>Switching it on</h3>
+<p>MQTT is a block in the server's config. On jarvis it goes into the hand-written config in <code>pinix/modules/nats.nix</code>:</p>
+<pre><code>mqtt {
+  port: 1883            # its own listener; the client port stays on 127.0.0.1
+  js_domain: home       # keep MQTT's sessions and retained values on the Pi
+}</code></pre>
+<p>The mqtt listener has its own <code>host</code>, 0.0.0.0 by default, separate from the client port's <code>host: 127.0.0.1</code>. So it's reachable from the home network the moment it's on, and needs a login (next lesson) and a firewall rule in <code>modules/networking.nix</code> that opens 1883 to the home network only.</p>
+
+<h3>It needs JetStream</h3>
+<p>Everything MQTT must remember, NATS keeps in JetStream streams it creates and manages itself: sessions (subscriptions and queued messages), QoS 1 and 2 messages until they're acknowledged, and retained values. That's why it survives a restart. jarvis has JetStream in its own domain, <code>home</code>; <code>js_domain: home</code> makes MQTT use that one, so devices keep their sessions and retained values on the Pi, and the house keeps working when the internet is down.</p>
+
+<h3>Topics become subjects</h3>
+<table><thead><tr><th>MQTT</th><th>NATS subject</th></tr></thead><tbody>
+<tr><td><code>home/kitchen/fridge/temp</code></td><td><code>home.kitchen.fridge.temp</code></td></tr>
+<tr><td><code>home/+/fridge/temp</code></td><td><code>home.*.fridge.temp</code></td></tr>
+<tr><td><code>home/kitchen/#</code></td><td><code>home.kitchen.&gt;</code> and <code>home.kitchen</code> (two subscriptions)</td></tr>
+<tr><td><code>sensor/v1.2/temp</code> (a dot inside a level)</td><td><code>sensor.v1//2.temp</code></td></tr>
+<tr><td><code>/home/temp</code> (leading slash)</td><td><code>/.home.temp</code></td></tr>
+</tbody></table>
+<p>So a Python program on the VPS can <code>nats sub 'home.kitchen.&gt;'</code> and see what the fridge publishes. Leaf nodes only forward a subject where someone is interested, so a chatty sensor's messages cross the tailnet only when something on the hub subscribes to them.</p>
+
+<h3>What's different from Mosquitto</h3>
+<ul class="points">
+<li><strong>3.1.1 only.</strong> A client asking for MQTT 5 is refused with CONNACK code 1. Set every client and device to 3.1.1.</li>
+<li><strong>QoS 0, 1 and 2</strong> are all supported since NATS 2.10. A broker setting can refuse or downgrade QoS 2 if a device misbehaves with it.</li>
+<li><strong>Messages from NATS clients reach MQTT subscribers at QoS 0</strong>, whatever QoS they subscribed with. A command published with <code>nats pub</code> or nats-py to an offline device is lost even if the device has a persistent session. Commands that must wait for a device are published over MQTT at QoS 1.</li>
+<li><strong>Retained values are an MQTT thing.</strong> An MQTT subscriber gets them on subscribe; a plain NATS subscriber sees only live messages.</li>
+<li><strong>Client IDs</strong> must be usable as a subject token: letters, digits, <code>-</code> and <code>_</code> are safe. A second connection with the same ID evicts the first, as on any broker.</li>
+<li><strong>Permissions are on the converted subject.</strong> A device allowed <code>home/kitchen/fridge/#</code> needs subscribe permission on both <code>home.kitchen.fridge.&gt;</code> and <code>home.kitchen.fridge</code>. Servers before 2.12.3 also need <code>$MQTT.sub.&gt;</code> in the subscribe allow list, or QoS 1 subscriptions fail.</li>
+</ul>
+
+<aside class="bridge"><span class="label">From NATS</span><p>Nothing about the hub, the leaf or the existing subjects changes. MQTT is one more way in to the same subject space, with its own rules for QoS and memory on top. Keep device topics under their own prefix (<code>home.&gt;</code>) so they never collide with <code>notify.*</code> or <code>status.*</code>.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Assuming a NATS program can command a device the way an MQTT client can. It can publish, but at QoS 0 and never retained: fine for "turn on now" to a device that's online, wrong for anything that must arrive later.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>On your Mac, run a throwaway server: <code>nats-server -js -c m.conf</code> with <code>mqtt { port: 1883 }</code> and <code>server_name: test</code> in m.conf. Publish with <code>mosquitto_pub -t home/kitchen/temp -m 4</code> and watch it arrive in <code>nats sub 'home.&gt;'</code>. Then <code>nats pub home.kitchen.temp 5</code> and watch it in <code>mosquitto_sub -t 'home/#' -v</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.nats.io/running-a-nats-service/configuration/mqtt" target="_blank" rel="noopener">NATS: MQTT</a></li>
+<li><a href="https://docs.nats.io/running-a-nats-service/configuration/mqtt/mqtt_config" target="_blank" rel="noopener">NATS: the mqtt configuration block</a></li>
+<li>"NATS" in <code>infra/nixos_config/CLAUDE.md</code>, and <code>infra/pinix/modules/nats.nix</code></li>
+</ul></aside>

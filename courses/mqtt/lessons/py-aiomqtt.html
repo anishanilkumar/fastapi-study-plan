@@ -1,0 +1,59 @@
+<p>aiomqtt wraps paho in asyncio: no callbacks, no threads, just <code>async with</code> and <code>async for</code>. It's the natural fit inside a FastAPI app or any program that already runs an event loop.</p>
+
+<h3>Subscribe and handle</h3>
+<pre><code>import asyncio, aiomqtt
+
+async def main():
+    async with aiomqtt.Client("jarvis", username="fridge-logger", password=PW,
+                              identifier="fridge-logger-mac", keepalive=60) as client:
+        await client.subscribe("home/kitchen/fridge/#", qos=1)
+        async for message in client.messages:
+            if message.topic.matches("home/kitchen/fridge/temp"):
+                print("temp", float(message.payload))
+            elif message.topic.matches("home/+/+/status"):
+                print(message.topic.value, message.payload.decode())
+
+asyncio.run(main())</code></pre>
+<p><code>message.topic</code> is a <code>Topic</code> object: <code>.value</code> is the string, <code>.matches(filter)</code> applies MQTT's wildcard rules for you. <code>message.payload</code> is <code>bytes</code>. In aiomqtt 2, <code>client.messages</code> is an async iterator you loop over directly; older 1.x examples wrote <code>async with client.messages() as messages:</code>.</p>
+
+<h3>It doesn't reconnect: you do</h3>
+<p>When the connection drops, the <code>async for</code> raises <code>aiomqtt.MqttError</code> and the <code>async with</code> exits. There's no automatic reconnect, by design: you write the loop, so you decide the delay and what to redo.</p>
+<pre><code>async def run():
+    delay = 1
+    while True:
+        try:
+            async with aiomqtt.Client("jarvis", identifier="fridge-logger-mac") as client:
+                delay = 1                                  # connected: reset the backoff
+                await client.subscribe("home/kitchen/fridge/#", qos=1)
+                async for message in client.messages:
+                    await handle(message)
+        except aiomqtt.MqttError as e:
+            log.warning("mqtt lost (%s); retrying in %d s", e, delay)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 60)</code></pre>
+<p>Subscribing is inside the loop, so every new connection subscribes again: the same rule as paho's <code>on_connect</code>.</p>
+
+<h3>Slow handlers</h3>
+<p>Messages are handled one at a time in that <code>async for</code>. An <code>await</code> in <code>handle</code> is fine for anything quick; a blocking call is not, for the usual reason: it stalls the event loop, and with it the keepalive. For work that can run alongside, start a task per message with a bound on how many run at once (an <code>asyncio.Semaphore</code>), or put messages on an <code>asyncio.Queue</code> for a few workers.</p>
+
+<h3>Inside FastAPI</h3>
+<pre><code>from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(run())      # the reconnect loop above
+    yield
+    task.cancel()                          # shutdown: leave the broker cleanly
+
+app = FastAPI(lifespan=lifespan)</code></pre>
+<p>To publish from a route, keep one connected client on <code>app.state</code> and <code>await client.publish("home/hall/light/power/set", "ON", qos=1)</code>. Don't open a new MQTT connection per HTTP request: each is a TCP and TLS handshake, a CONNECT, and a fight over the client ID if they share one.</p>
+
+<aside class="bridge"><span class="label">From FastAPI</span><p>The same lifespan you used for an <code>httpx.AsyncClient</code>: create the long-lived thing once at startup, share it, close it at shutdown. The MQTT client is just another one.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Two parts of one program each opening an <code>aiomqtt.Client</code> with the same <code>identifier</code>. They evict each other every few seconds, and both reconnect loops make it look like a flaky network.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Turn the paho script from the last lesson into aiomqtt with the reconnect loop. Turn Wi-Fi off for 30 s and on again, and check it resubscribes.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://aiomqtt.bo3hm.com/" target="_blank" rel="noopener">aiomqtt documentation</a></li>
+</ul></aside>

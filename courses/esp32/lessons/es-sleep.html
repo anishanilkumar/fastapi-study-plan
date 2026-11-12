@@ -1,0 +1,42 @@
+<p>A board on USB power can stay awake. A board on a battery must sleep almost all the time and wake only to measure and send. Deep sleep is how; it changes how the program is written.</p>
+
+<h3>Deep sleep is a reset</h3>
+<pre><code>import machine
+# ... measure, connect, publish ...
+machine.deepsleep(10 * 60 * 1000)      # 10 minutes; nothing after this runs</code></pre>
+<p>In deep sleep almost everything is off: CPU, RAM, Wi-Fi. Waking is a reset: <code>boot.py</code> and <code>main.py</code> run from the top, every variable is gone. So a battery device's <code>main.py</code> isn't a loop; it's a script that runs once per wake and ends in <code>deepsleep</code>.</p>
+<pre><code>if machine.reset_cause() == machine.DEEPSLEEP_RESET:
+    print("woke from sleep")
+else:
+    print("power-on or reset button")</code></pre>
+
+<h3>Remembering across sleeps</h3>
+<p>A few bytes survive in the RTC's memory: <code>machine.RTC().memory(b"...")</code> to write, <code>.memory()</code> to read. Enough for a counter or the last value sent (to publish only on change). Gone on a power cut; for that, NVS or a file, written rarely.</p>
+
+<h3>What wakes it</h3>
+<ul class="points">
+<li><strong>A timer</strong>: the <code>deepsleep(ms)</code> argument.</li>
+<li><strong>A pin</strong>: <code>esp32.wake_on_ext0(pin, level)</code> for one RTC-capable pin (a door contact, a button), <code>wake_on_ext1</code> for several.</li>
+<li>Both at once: wake every hour or when the door opens, whichever is first.</li>
+</ul>
+
+<h3>Where the battery goes</h3>
+<p>Waking is cheap; Wi-Fi isn't. Joining a network takes one to several seconds at 100 mA or more, and that dominates the budget. Ways to spend less:</p>
+<ul class="points">
+<li>Wake often, send rarely: measure every 10 minutes, keep the last value in RTC memory, connect only when it changed or an hour has passed.</li>
+<li>Connect fast: a fixed IP instead of DHCP saves time; so does a strong signal.</li>
+<li>Choose the board for it: a dev board's regulator, USB chip and LED draw milliamps through the whole sleep (see the power lesson). A board built for batteries, or ESPHome on one, sleeps at tens of microamps.</li>
+</ul>
+
+<h3>MQTT for a sleeper</h3>
+<p>A device that's asleep 99% of the time can't hold a connection. Every wake is a fresh CONNECT. Its readings should be <strong>retained</strong>, so a dashboard sees the last one between wakes. Its will doesn't mean much: it publishes "offline" every time it sleeps, cleanly or not. Better: a retained timestamp in each reading, and "offline" judged from its age. Commands to it need a persistent session and QoS 1, or for it to ask on wake (the MQTT course's NATS-to-sleeping-device drill).</p>
+
+<aside class="bridge"><span class="label">From MQTT</span><p>The status pattern from the MQTT course assumes an always-on client. A sleeper breaks it, which is the general lesson: the will says "connection dropped", not "device broken". Decide what "offline" means for each device.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Putting the board to sleep before the MQTT publish has actually gone out. <code>publish()</code> at QoS 0 writes to a socket; sleeping at once can cut it off. Disconnect cleanly first, or publish at QoS 1 and wait for the ack.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write a <code>main.py</code> that counts wakes in RTC memory, prints the count, and sleeps 20 s. Then add publishing only on every third wake.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html#deep-sleep-mode" target="_blank" rel="noopener">MicroPython: deep sleep on the ESP32</a></li>
+</ul></aside>

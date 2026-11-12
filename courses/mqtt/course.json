@@ -1,0 +1,183 @@
+{
+ "title": "MQTT, for the house",
+ "short": "MQTT",
+ "order": 2,
+ "blurb": "The protocol devices speak: topics, QoS, sessions, retained values and wills; Python clients; and the NATS leaf on jarvis as the house's broker.",
+ "lede": "MQTT from the wire up, with the house as the example: the protocol, Python clients, and the NATS leaf on jarvis as the broker.",
+ "goal": 250,
+ "shift": {
+  "label": "The one big mental shift",
+  "html": "<p>Nothing in MQTT is addressed to anyone. A device publishes a fact to a topic; whoever cares has subscribed. There's no answer, no caller waiting, and a message nobody subscribed to is simply gone.</p><p>So for every message, ask: who needs this later, not just now (retain it, or keep a session)? What happens if it arrives twice (QoS 1)? And how will anyone know the sender died (a last will)?</p>"
+ },
+ "map": {
+  "label": "Translation",
+  "title": "What you know, in MQTT terms",
+  "from": "HTTP / NATS",
+  "to": "MQTT",
+  "rows": [
+   ["NATS subject home.kitchen.temp", "topic home/kitchen/temp"],
+   ["NATS wildcard *", "+ (one level)"],
+   ["NATS wildcard >", "# (also matches the parent level)"],
+   ["NATS server", "broker"],
+   ["core NATS publish (at most once)", "QoS 0"],
+   ["JetStream with acks (at least once)", "QoS 1"],
+   ["durable JetStream consumer", "persistent session (clean session off)"],
+   ["KV store: last value per key", "retained message"],
+   ["health-check polling", "last will + retained status topic"],
+   ["NATS request/reply", "reply_to + id in the payload (on 3.1.1)"],
+   ["NATS queue group", "shared subscription $share/... (MQTT 5 only)"],
+   ["HTTP Content-Type", "nothing: one format per topic, by convention"],
+   ["Idempotency-Key header", "an id in the payload, dedupe in the handler"]
+  ]
+ },
+ "plan_foot": "When you finish a day, explain one of its topics out loud as if to a friend setting up their first smart plug: what the device publishes, who subscribes, and what happens when the Wi-Fi drops.",
+ "plan": [
+  {
+   "id": "m1",
+   "n": 0,
+   "title": "The protocol",
+   "groups": [
+    {
+     "label": "Morning · how messages move",
+     "items": [
+      {"id": "m1-model", "lesson": "mq-why", "t": "Broker, clients, topics: nobody is addressed", "why": "A device publishes to a topic on the broker; subscribers get copies. One long-lived TCP connection per client, opened by the client, so devices behind NAT need no open port.", "src": ["MQTT specifications", "https://mqtt.org/mqtt-specification/"]},
+      {"id": "m1-keepalive", "lesson": "mq-why", "t": "Keepalive: PINGREQ, and dead after 1.5×", "why": "The client promises to be heard from every N seconds. Silence for 1.5 × N and the broker drops it and publishes its will."},
+      {"id": "m1-topics", "lesson": "mq-topics", "t": "Topic levels and the wildcards <code>+</code> and <code>#</code>", "why": "<code>+</code> is exactly one level, <code>#</code> is the rest and must be last, and <code>home/#</code> also matches <code>home</code>. Wildcards only in subscriptions. No leading slash; case matters.", "src": ["MQTT 3.1.1: topic names and filters", "https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718106"]},
+      {"id": "m1-scheme", "lesson": "mq-topics", "t": "A naming scheme: <code>home/&lt;room&gt;/&lt;device&gt;/&lt;what&gt;</code>, commands on <code>/set</code>", "why": "General to specific, stable ids, data in the payload not the topic. Write the scheme down before the first device arrives."},
+      {"id": "m1-connect", "lesson": "mq-connect", "t": "CONNECT and CONNACK: client ID, credentials, return codes", "why": "Code 1 is \"wrong protocol version\" (an MQTT 5 client on a 3.1.1 broker), 4 bad password, 5 not authorised. Same client ID twice: the first is kicked off."},
+      {"id": "m1-qos", "lesson": "mq-qos", "t": "QoS 0, 1, 2, and the lower of publish and subscribe wins", "why": "QoS is per hop. 0 for frequent readings, 1 for commands and events with an idempotent handler, 2 rarely.", "src": ["HiveMQ: quality of service", "https://www.hivemq.com/blog/mqtt-essentials-part-6-mqtt-quality-of-service-levels/"]}
+     ]
+    },
+    {
+     "label": "Afternoon · what the broker remembers",
+     "items": [
+      {"id": "m1-sessions", "lesson": "mq-sessions", "t": "Persistent sessions: subscriptions and QoS 1 messages kept while you're away", "why": "Clean session off, a stable client ID, and QoS 1 on both ends. QoS 0 is never queued for an offline client."},
+      {"id": "m1-retained", "lesson": "mq-retained", "t": "Retained messages: the last value, for whoever subscribes later", "why": "One per topic. Clear it with an empty retained publish. Retain state, never events or commands.", "src": ["HiveMQ: retained messages", "https://www.hivemq.com/blog/mqtt-essentials-part-8-retained-messages/"]},
+      {"id": "m1-will", "lesson": "mq-retained", "t": "The status pattern: retained will \"offline\", retained birth \"online\"", "why": "The will fires only on an unclean disconnect, so publish \"offline\" yourself before a clean one."},
+      {"id": "m1-payloads", "lesson": "mq-payloads", "t": "Payloads: units, UTC timestamps, one format per topic", "why": "The broker sees bytes. Decode defensively: one bad message costs a log line, not the subscriber."},
+      {"id": "m1-cmdstate", "lesson": "mq-payloads", "t": "Commands and state are different topics", "why": "<code>.../set ON</code> is a wish; <code>... ON</code> (retained) is the device's report. Send the target state, never \"toggle\"."}
+     ]
+    }
+   ],
+   "checks": [
+    {"id": "m1-c1", "t": "I can say which of <code>home/kitchen</code>, <code>home/kitchen/temp</code> and <code>/home/kitchen</code> match <code>home/#</code> and <code>home/+</code>"},
+    {"id": "m1-c2", "t": "I can explain why a QoS 1 command can arrive twice, and make the handler not care"},
+    {"id": "m1-c3", "t": "I can draw the online/offline pattern with will, birth and a clean shutdown"},
+    {"id": "m1-c4", "t": "I can say why a retained command is a bug"}
+   ]
+  },
+  {
+   "id": "m2",
+   "n": 1,
+   "title": "Python clients",
+   "groups": [
+    {
+     "label": "Morning · paho and aiomqtt",
+     "items": [
+      {"id": "m2-paho", "lesson": "py-paho", "t": "paho-mqtt 2: <code>CallbackAPIVersion.VERSION2</code>, subscribe in <code>on_connect</code>", "why": "Old examples use the version 1 callbacks. Subscribing in <code>on_connect</code> means every reconnect subscribes again.", "src": ["paho-mqtt: migrating to 2.0", "https://eclipse.dev/paho/files/paho.mqtt.python/html/migrations.html"]},
+      {"id": "m2-loop", "lesson": "py-paho", "t": "The loop thread runs your callbacks and the keepalive", "why": "A slow callback stops both. Hand slow work to a queue and a worker."},
+      {"id": "m2-aiomqtt", "lesson": "py-aiomqtt", "t": "aiomqtt: <code>async for message in client.messages</code>", "why": "No callbacks, no threads. <code>message.topic.matches()</code> applies the wildcard rules; <code>message.payload</code> is bytes.", "src": ["aiomqtt documentation", "https://aiomqtt.bo3hm.com/"]},
+      {"id": "m2-reconnect", "lesson": "py-aiomqtt", "t": "Your own reconnect loop, with backoff, subscribing each time", "why": "aiomqtt raises <code>MqttError</code> and stops; you decide how to come back."},
+      {"id": "m2-fastapi", "lesson": "py-aiomqtt", "t": "One MQTT client in the FastAPI lifespan, shared by routes", "why": "Never a connection per HTTP request."}
+     ]
+    },
+    {
+     "label": "Afternoon · patterns",
+     "items": [
+      {"id": "m2-confirm", "lesson": "py-patterns", "t": "Command, then wait for the confirmed state", "why": "Show \"not confirmed\" when the state topic doesn't follow within a few seconds."},
+      {"id": "m2-reqres", "lesson": "py-patterns", "t": "Request/response on 3.1.1: reply topic and id in the payload", "why": "Subscribe to the reply topic before sending; always time out. Between your own programs, use NATS request/reply."},
+      {"id": "m2-debounce", "lesson": "py-patterns", "t": "Debounce, dedupe, publish on change plus a heartbeat", "why": "Last acted-on value per topic; a reading at least every few minutes even when nothing changes."},
+      {"id": "m2-test", "lesson": "py-patterns", "t": "Tests against a throwaway local broker", "why": "Keep the handler a plain function of (topic, payload); test reconnects and bad payloads against a real broker."},
+      {"id": "m2-build", "lesson": "py-aiomqtt", "min": 45, "t": "Build one: the Mac's load on <code>home/mac/load</code>", "why": "aiomqtt, a retained status with a will, publish on change plus a heartbeat, and a reconnect loop. Run it against a local broker; kill the Wi-Fi and check it comes back."}
+     ]
+    }
+   ],
+   "checks": [
+    {"id": "m2-c1", "t": "I can say why a paho client that subscribed right after <code>connect()</code> goes deaf after a Wi-Fi blip"},
+    {"id": "m2-c2", "t": "I can write an aiomqtt reconnect loop from memory"},
+    {"id": "m2-c3", "t": "I can say what a blocking call in a message handler does to the connection"}
+   ]
+  },
+  {
+   "id": "m3",
+   "n": 2,
+   "title": "The house's broker",
+   "groups": [
+    {
+     "label": "Morning · NATS as the broker",
+     "items": [
+      {"id": "m3-enable", "lesson": "br-nats", "t": "The <code>mqtt</code> block on jarvis, with <code>js_domain: home</code>", "why": "MQTT state lives in JetStream; keeping it in the home domain keeps the house working without the internet. The mqtt listener has its own host: 0.0.0.0 unless set.", "src": ["NATS: MQTT", "https://docs.nats.io/running-a-nats-service/configuration/mqtt"]},
+      {"id": "m3-mapping", "lesson": "br-nats", "t": "Topics become subjects: <code>/</code> to <code>.</code>, <code>.</code> to <code>//</code>, <code>#</code> to two subscriptions", "why": "So a NATS program on the VPS can subscribe to what a device publishes at home."},
+      {"id": "m3-qos0", "lesson": "br-nats", "t": "From a NATS client, MQTT subscribers get QoS 0", "why": "Commands that must wait for an offline device go over MQTT at QoS 1, not <code>nats pub</code>."},
+      {"id": "m3-auth", "lesson": "br-security", "t": "A login per device, limited to its own topics", "why": "<code>allowed_connection_types: [\"MQTT\"]</code> and permissions on the converted subjects. Plan how today's login-free local programs keep working.", "src": ["NATS: authorization", "https://docs.nats.io/running-a-nats-service/configuration/securing_nats/authorization"]},
+      {"id": "m3-reach", "lesson": "br-security", "t": "1883 on the home network only, never forwarded", "why": "Outside the house: the tailnet, or NATS through the hub. The tailnet is shared with friends, so it isn't a login."}
+     ]
+    },
+    {
+     "label": "Afternoon · devices and debugging",
+     "items": [
+      {"id": "m3-firmware", "lesson": "br-devices", "t": "Read Tasmota, ESPHome and Zigbee2MQTT topics", "why": "<code>cmnd/stat/tele</code>; <code>&lt;prefix&gt;/status</code>; <code>zigbee2mqtt/&lt;name&gt;</code> and <code>/set</code>. Every one does will and birth.", "src": ["Tasmota: MQTT", "https://tasmota.github.io/docs/MQTT/"]},
+      {"id": "m3-discovery", "lesson": "br-devices", "t": "Home Assistant discovery: retained config under <code>homeassistant/</code>", "why": "Republish on <code>homeassistant/status online</code>; clear an old one with an empty retained message.", "src": ["Home Assistant: MQTT discovery", "https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery"]},
+      {"id": "m3-watch", "lesson": "br-debug", "t": "Watch the broker first: <code>mosquitto_sub -t '#' -v</code>, <code>nats sub 'home.&gt;'</code>", "why": "If the message shows there, the fault is the subscriber; if not, the publisher or its permissions."},
+      {"id": "m3-symptoms", "lesson": "br-debug", "t": "Symptoms to causes: ID fights, lost subscriptions, stale retained values", "why": "The table in the lesson covers most of what will go wrong."},
+      {"id": "m3-dryrun", "lesson": "br-nats", "min": 40, "t": "Dry run: a NATS server with MQTT on the Mac", "why": "<code>nats-server -js</code> with an mqtt block and two users with permissions. Connect the build from day 2 as one of them; check the other can't publish to its topics. Only then plan the change to pinix."}
+     ]
+    }
+   ],
+   "checks": [
+    {"id": "m3-c1", "t": "I can write the subscribe permissions a device needs for <code>home/kitchen/fridge/#</code> on NATS"},
+    {"id": "m3-c2", "t": "I can say why a command sent with <code>nats pub</code> to a sleeping device is lost"},
+    {"id": "m3-c3", "t": "Given \"it connects, then drops every few seconds\", I name the cause first"}
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "n": 1,
+   "title": "The protocol",
+   "short": "Protocol",
+   "blurb": "Topics, connections, QoS, sessions, retained values and wills: everything the broker does.",
+   "lessons": [
+    {"id": "mq-why", "title": "Publish, subscribe, and the broker in between", "min": 15, "day": "m1"},
+    {"id": "mq-topics", "title": "Topics and wildcards", "min": 20, "day": "m1"},
+    {"id": "mq-connect", "title": "Connecting: client IDs, keepalive, return codes", "min": 20, "day": "m1"},
+    {"id": "mq-qos", "title": "QoS 0, 1 and 2", "min": 25, "day": "m1"},
+    {"id": "mq-sessions", "title": "Persistent sessions", "min": 20, "day": "m1"},
+    {"id": "mq-retained", "title": "Retained messages and the last will", "min": 20, "day": "m1"},
+    {"id": "mq-payloads", "title": "Payloads, commands and state", "min": 15, "day": "m1"},
+    {"id": "mq-v5", "title": "What MQTT 5 adds", "min": 15, "day": null}
+   ]
+  },
+  {
+   "n": 2,
+   "title": "Python clients",
+   "short": "Python",
+   "blurb": "paho-mqtt and aiomqtt, reconnecting properly, and the patterns built on top.",
+   "lessons": [
+    {"id": "py-paho", "title": "paho-mqtt", "min": 25, "day": "m2"},
+    {"id": "py-aiomqtt", "title": "aiomqtt, and MQTT inside FastAPI", "min": 25, "day": "m2"},
+    {"id": "py-patterns", "title": "Patterns: confirm, ask, debounce, test", "min": 20, "day": "m2"}
+   ]
+  },
+  {
+   "n": 3,
+   "title": "The house's broker",
+   "short": "Broker",
+   "blurb": "The NATS leaf on jarvis as an MQTT broker, locked down, with real devices on it.",
+   "lessons": [
+    {"id": "br-nats", "title": "MQTT on NATS: the leaf on jarvis", "min": 25, "day": "m3"},
+    {"id": "br-security", "title": "Who can connect, and to what", "min": 20, "day": "m3"},
+    {"id": "br-devices", "title": "Tasmota, ESPHome, Zigbee2MQTT, Home Assistant", "min": 20, "day": "m3"},
+    {"id": "br-debug", "title": "Debugging and watching the broker", "min": 15, "day": "m3"}
+   ]
+  }
+ ],
+ "ranks": [
+  {"xp": 0, "t": "Listener", "need": []},
+  {"xp": 150, "t": "Subscriber", "need": [{"read": 3}]},
+  {"xp": 500, "t": "Publisher", "need": [{"parts": [1]}]},
+  {"xp": 900, "t": "Client", "need": [{"parts": [2]}, {"drills": 3}]},
+  {"xp": 1300, "t": "Broker keeper", "need": [{"parts": [3]}, {"drills": 6}, {"worst": 4}]},
+  {"xp": 1800, "t": "House-wired", "need": [{"parts": "all"}, {"drills": "all", "spare": 2}, {"answered": 70, "right": 0.85}, {"noweak": true}, {"nodue": true}]}
+ ]
+}

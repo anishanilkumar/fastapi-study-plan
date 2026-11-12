@@ -1,0 +1,874 @@
+{
+ "title": "Python and FastAPI, from the basics",
+ "short": "FastAPI",
+ "order": 1,
+ "blurb": "Python and FastAPI for PHP developers: the language, an API, SQLAlchemy and pytest, ready for a live code review in three days.",
+ "lede": "Python and FastAPI for PHP developers, in three days.",
+ "shift": {
+  "label": "The one big mental shift",
+  "html": "<p>PHP starts fresh for every request and throws everything away at the end. A Python server is one long-running process that handles thousands of requests. Anything at module level (a variable, a list, a database session) lives across requests and is shared between them.</p><p>When you review a snippet, ask: what here is shared that PHP would have thrown away? And what here waits without <code>await</code>?</p>"
+ },
+ "map": {
+  "label": "Translation",
+  "title": "Your PHP, in Python terms",
+  "from": "PHP",
+  "to": "Python",
+  "rows": [
+   [
+    "array (list-like)",
+    "list"
+   ],
+   [
+    "array (keyed)",
+    "dict"
+   ],
+   [
+    "null",
+    "None"
+   ],
+   [
+    "$this",
+    "self"
+   ],
+   [
+    "composer + vendor/",
+    "pip / uv + .venv"
+   ],
+   [
+    "namespace / use",
+    "package / import"
+   ],
+   [
+    "hash_equals()",
+    "hmac.compare_digest()"
+   ],
+   [
+    "PDO prepared statements",
+    "SQLAlchemy bound parameters"
+   ],
+   [
+    "Guzzle",
+    "httpx (has an async client)"
+   ],
+   [
+    "Laravel / Symfony DI",
+    "FastAPI Depends()"
+   ],
+   [
+    "Doctrine EntityManager",
+    "SQLAlchemy Session"
+   ],
+   [
+    "Form request validation",
+    "Pydantic models"
+   ],
+   [
+    "PHPUnit",
+    "pytest"
+   ],
+   [
+    "DateTimeImmutable with timezone",
+    "datetime with tzinfo (timezone.utc)"
+   ]
+  ]
+ },
+ "plan_foot": "When you finish a day, ask an AI assistant or a friend for concept-first questions on those topics, and answer out loud.",
+ "plan": [
+  {
+   "id": "sat",
+   "n": 0,
+   "title": "Python, from the basics",
+   "groups": [
+    {
+     "label": "Morning · the language",
+     "items": [
+      {
+       "id": "b-setup",
+       "lesson": "py-setup",
+       "t": "Run Python and keep projects apart with a virtualenv",
+       "why": "<code>python3 -m venv .venv</code>, <code>source .venv/bin/activate</code>, <code>pip install httpx</code>. A venv is a per-project <code>vendor/</code>; <code>uv</code> does the same faster. Try lines in the REPL (<code>python3</code>) as you read.",
+       "src": [
+        "Python tutorial: virtual environments",
+        "https://docs.python.org/3/tutorial/venv.html"
+       ]
+      },
+      {
+       "id": "b-syntax",
+       "lesson": "py-syntax",
+       "t": "Indentation is the syntax",
+       "why": "No braces, no semicolons, no <code>$</code>. Blocks start with <code>:</code> and are indented 4 spaces. <code>if / elif / else</code>, <code>for x in items:</code>, <code>while</code>, <code>range(5)</code>.",
+       "src": [
+        "Python tutorial: control flow",
+        "https://docs.python.org/3/tutorial/controlflow.html"
+       ]
+      },
+      {
+       "id": "b-types",
+       "lesson": "py-types",
+       "t": "The core types: <code>int</code>, <code>float</code>, <code>str</code>, <code>bool</code>, <code>None</code>",
+       "why": "Strings are immutable. Build them with f-strings: <code>f\"{name} has {n} items\"</code>. <code>None</code> is PHP's <code>null</code>; <code>True</code>/<code>False</code> are capitalised.",
+       "src": [
+        "Python tutorial: an informal introduction",
+        "https://docs.python.org/3/tutorial/introduction.html"
+       ]
+      },
+      {
+       "id": "b-collections",
+       "lesson": "py-collections",
+       "t": "PHP's array splits in two: <code>list</code> and <code>dict</code>",
+       "why": "<code>[1, 2, 3]</code> is a list (ordered, by position). <code>{\"a\": 1}</code> is a dict (by key). Also <code>tuple</code> (fixed, immutable) and <code>set</code> (unique). <code>d[\"missing\"]</code> raises <code>KeyError</code>; <code>d.get(\"missing\")</code> returns <code>None</code>.",
+       "src": [
+        "Python tutorial: data structures",
+        "https://docs.python.org/3/tutorial/datastructures.html"
+       ]
+      },
+      {
+       "id": "b-loops",
+       "lesson": "py-loops",
+       "t": "Loops the Python way: <code>enumerate</code>, <code>zip</code>, slicing, comprehensions",
+       "why": "<code>for i, x in enumerate(xs)</code> instead of a counter. <code>xs[1:3]</code>, <code>xs[-1]</code>. <code>[u.name for u in users if u.active]</code> replaces most <code>array_map</code> / <code>array_filter</code>."
+      },
+      {
+       "id": "b-functions",
+       "lesson": "py-functions",
+       "t": "Functions: positional, keyword, defaults, <code>*args</code>, <code>**kwargs</code>",
+       "why": "<code>def send(to, body, *, retries=3)</code>: everything after <code>*</code> must be passed by name. Call with <code>send(\"a\", \"hi\", retries=1)</code>. Functions are values; you can pass them around.",
+       "src": [
+        "Python tutorial: defining functions",
+        "https://docs.python.org/3/tutorial/controlflow.html#defining-functions"
+       ]
+      },
+      {
+       "id": "b-modules",
+       "lesson": "py-modules",
+       "t": "Modules, packages and imports",
+       "why": "Every <code>.py</code> file is a module; a folder of them is a package. <code>from app.models import User</code> is <code>use App\\Models\\User</code>. <code>if __name__ == \"__main__\":</code> runs only when the file is run directly.",
+       "src": [
+        "Python tutorial: modules",
+        "https://docs.python.org/3/tutorial/modules.html"
+       ]
+      },
+      {
+       "id": "b-classes",
+       "lesson": "py-classes",
+       "t": "Classes, <code>self</code>, and <code>@dataclass</code>",
+       "why": "<code>__init__</code> is the constructor; <code>self</code> is <code>$this</code>, written out as the first parameter. No <code>private</code>: a leading <code>_</code> means \"internal\". <code>@dataclass</code> writes the constructor for plain data classes.",
+       "src": [
+        "Python tutorial: classes",
+        "https://docs.python.org/3/tutorial/classes.html"
+       ]
+      }
+     ]
+    },
+    {
+     "label": "Afternoon · what trips people up",
+     "items": [
+      {
+       "id": "sat-process",
+       "lesson": "py-runtime",
+       "t": "Python servers are long-running processes",
+       "why": "Module-level variables, lists and sessions live across requests and are shared between them. PHP-FPM throws them away after each request. Many bugs come from this one difference."
+      },
+      {
+       "id": "sat-mutable",
+       "lesson": "py-functions",
+       "t": "Mutable default arguments (<code>def f(tags=[])</code>)",
+       "why": "The default is created once, when the function is defined, and shared by every call. Fix: default to <code>None</code> and create the list inside.",
+       "src": [
+        "Python tutorial: default argument values",
+        "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+       ]
+      },
+      {
+       "id": "sat-truthy",
+       "lesson": "py-types",
+       "t": "Truthiness: <code>\"\"</code>, <code>0</code>, <code>[]</code>, <code>{}</code>, <code>None</code> are all false",
+       "why": "<code>if not token:</code> treats an empty string and None the same. Know when you mean <code>is None</code>. Watch for checks that fail open when config is empty."
+      },
+      {
+       "id": "sat-is",
+       "lesson": "py-types",
+       "t": "<code>is</code> vs <code>==</code>",
+       "why": "<code>is</code> checks identity. Use it only for <code>None</code>, <code>True</code>, <code>False</code>. Everything else uses <code>==</code>."
+      },
+      {
+       "id": "sat-except",
+       "lesson": "py-errors",
+       "t": "<code>try / except / finally</code>, and why bare <code>except: pass</code> is bad",
+       "why": "Catch the specific exception you expect. A bare except swallows every error, even typos and shutdown signals, so bugs disappear silently.",
+       "src": [
+        "Python tutorial: errors and exceptions",
+        "https://docs.python.org/3/tutorial/errors.html"
+       ]
+      },
+      {
+       "id": "sat-with",
+       "lesson": "py-errors",
+       "t": "<code>with</code> blocks (context managers)",
+       "why": "<code>with open(...)</code> and <code>with Session(engine) as s:</code> close the resource even when an error happens. Like a guaranteed <code>finally</code>."
+      },
+      {
+       "id": "sat-datetime",
+       "lesson": "py-stdlib",
+       "t": "Naive vs aware <code>datetime</code>",
+       "why": "Always use <code>datetime.now(timezone.utc)</code>. Comparing a naive and an aware datetime raises <code>TypeError</code>. Naive times on a server are in whatever zone its clock uses, often hours off.",
+       "src": [
+        "Python docs: aware and naive objects",
+        "https://docs.python.org/3/library/datetime.html#aware-and-naive-objects"
+       ]
+      },
+      {
+       "id": "sat-hmac",
+       "lesson": "py-stdlib",
+       "t": "<code>hmac.compare_digest</code> for secrets",
+       "why": "Same as PHP <code>hash_equals()</code>. Plain <code>==</code> can leak timing information. A unit test can't prove constant time, so rely on the standard library.",
+       "src": [
+        "Python docs: hmac.compare_digest",
+        "https://docs.python.org/3/library/hmac.html#hmac.compare_digest"
+       ]
+      },
+      {
+       "id": "sat-types",
+       "lesson": "py-typing",
+       "t": "Reading type hints",
+       "why": "<code>str | None</code>, <code>list[str]</code>, <code>dict[str, int]</code>. FastAPI and Pydantic use them to parse and validate requests, so you need to read them fluently."
+      }
+     ]
+    }
+   ],
+   "checks": [
+    {
+     "id": "b-c1",
+     "t": "I can make a venv, install a package, and run a script that uses it"
+    },
+    {
+     "id": "b-c2",
+     "t": "I can turn a list of user dicts into the names of the active ones with one comprehension"
+    },
+    {
+     "id": "sat-c1",
+     "t": "I can explain why <code>def f(tags=[])</code> shares one list between calls"
+    },
+    {
+     "id": "sat-c2",
+     "t": "I can say how <code>if not token:</code> and <code>if token is None:</code> differ for an empty string"
+    },
+    {
+     "id": "sat-c3",
+     "t": "I can write a UTC-aware \"is this cert expired?\" check and say why naive breaks"
+    }
+   ]
+  },
+  {
+   "id": "sun",
+   "n": 1,
+   "title": "FastAPI from the first route, then async",
+   "groups": [
+    {
+     "label": "Morning · FastAPI from zero",
+     "items": [
+      {
+       "id": "sun-first",
+       "lesson": "fa-first",
+       "t": "First app: <code>app = FastAPI()</code> and one <code>@app.get</code> route",
+       "why": "Run it with <code>fastapi dev main.py</code> and open <code>/docs</code>: FastAPI writes the interactive API docs from your type hints. Go through the tutorial pages in order.",
+       "src": [
+        "FastAPI tutorial: first steps",
+        "https://fastapi.tiangolo.com/tutorial/first-steps/"
+       ]
+      },
+      {
+       "id": "sun-params",
+       "lesson": "fa-params",
+       "t": "Path, query and body parameters",
+       "why": "Name in the path: path param. Simple type: query param. Pydantic model: body. A <code>list[str]</code> needs <code>Query()</code> or FastAPI reads it as the body.",
+       "src": [
+        "FastAPI tutorial: query parameters",
+        "https://fastapi.tiangolo.com/tutorial/query-params/"
+       ]
+      },
+      {
+       "id": "sun-pydantic",
+       "lesson": "fa-pydantic",
+       "t": "Pydantic models",
+       "why": "Validate input with types and <code>Field(...)</code> limits. Use <code>response_model</code> so fields like <code>password_hash</code> never leak in responses.",
+       "src": [
+        "FastAPI tutorial: request body",
+        "https://fastapi.tiangolo.com/tutorial/body/"
+       ]
+      },
+      {
+       "id": "sun-errors",
+       "lesson": "fa-errors",
+       "t": "<code>HTTPException</code> and status codes",
+       "why": "Know when to return 401, 403, 404, 409, 422 and 502. A bad body gets 422 from Pydantic before your code runs. Interviewers notice a wrong status code.",
+       "src": [
+        "FastAPI tutorial: handling errors",
+        "https://fastapi.tiangolo.com/tutorial/handling-errors/"
+       ]
+      },
+      {
+       "id": "sun-depends",
+       "lesson": "fa-depends",
+       "t": "<code>Depends()</code>",
+       "why": "FastAPI's dependency injection, like Laravel/Symfony DI. Used for auth checks, the current user, and the database session.",
+       "src": [
+        "FastAPI tutorial: dependencies",
+        "https://fastapi.tiangolo.com/tutorial/dependencies/"
+       ]
+      },
+      {
+       "id": "sun-build",
+       "lesson": "fa-first",
+       "t": "Build one: a small notes API",
+       "why": "<code>GET /notes</code>, <code>POST /notes</code>, <code>DELETE /notes/{id}</code>, a Pydantic model, a dict in memory, 404 for a missing id. Try every route from <code>/docs</code>. Then read <code>app.py</code> behind this page: the same pieces with SQLite."
+      }
+     ]
+    },
+    {
+     "label": "Afternoon · async",
+     "items": [
+      {
+       "id": "sun-loop",
+       "lesson": "py-async",
+       "t": "The event loop: one thread, switches only at <code>await</code>",
+       "why": "Read this page first. It is the clearest explanation of async in Python.",
+       "src": [
+        "FastAPI: concurrency and async / await",
+        "https://fastapi.tiangolo.com/async/"
+       ]
+      },
+      {
+       "id": "sun-blocking",
+       "lesson": "py-async",
+       "t": "Blocking vs non-blocking calls",
+       "why": "Blocking: <code>time.sleep</code>, <code>requests</code>, sync database drivers. Non-blocking: <code>asyncio.sleep</code>, <code>httpx.AsyncClient</code>, async drivers. <code>await requests.get(...)</code> is a TypeError."
+      },
+      {
+       "id": "sun-gather",
+       "lesson": "py-async",
+       "t": "<code>asyncio.gather</code> and <code>create_task</code>",
+       "why": "How to run several awaits at the same time, and why <code>time.sleep</code> inside them makes them run one after another.",
+       "src": [
+        "Python docs: coroutines and tasks",
+        "https://docs.python.org/3/library/asyncio-task.html"
+       ]
+      },
+      {
+       "id": "sun-defasync",
+       "lesson": "fa-async",
+       "t": "<code>async def</code> vs <code>def</code> in FastAPI",
+       "why": "<code>async def</code> runs on the event loop. Plain <code>def</code> runs in a threadpool (about 40 threads). If a handler must call blocking code, plain <code>def</code> is the safe choice."
+      },
+      {
+       "id": "sun-lifespan",
+       "lesson": "fa-async",
+       "t": "Lifespan: startup and shutdown",
+       "why": "Create shared things (an <code>httpx.AsyncClient</code>, the DB engine) once at startup and close them at shutdown.",
+       "src": [
+        "FastAPI: lifespan events",
+        "https://fastapi.tiangolo.com/advanced/events/"
+       ]
+      }
+     ]
+    }
+   ],
+   "checks": [
+    {
+     "id": "sun-c0",
+     "t": "I can write a FastAPI route with a path param, a query param and a body without looking it up"
+    },
+    {
+     "id": "sun-c1",
+     "t": "I can explain why one blocking call slows down unrelated endpoints"
+    },
+    {
+     "id": "sun-c2",
+     "t": "I can give both fixes (async client, or plain <code>def</code>) and the trade-off"
+    },
+    {
+     "id": "sun-c3",
+     "t": "I know how FastAPI decides between path, query and body"
+    }
+   ]
+  },
+  {
+   "id": "mon",
+   "n": 2,
+   "title": "SQLAlchemy and pytest",
+   "groups": [
+    {
+     "label": "Morning · the database",
+     "items": [
+      {
+       "id": "mon-flush",
+       "lesson": "db-session-model",
+       "t": "When SQL actually runs: <code>add</code>, flush, autoflush, <code>commit</code>",
+       "why": "Nothing is sent on <code>add()</code> or on setting an attribute. Flush sends it inside the transaction (ids appear, constraint errors fire); commit ends it. Closing without commit rolls back. Unlike Drupal's <code>save()</code>, which writes at once.",
+       "src": [
+        "SQLAlchemy: session basics",
+        "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"
+       ]
+      },
+      {
+       "id": "mon-expire",
+       "lesson": "db-session-model",
+       "t": "After commit objects reload; after close they can't (DetachedInstanceError)",
+       "why": "<code>expire_on_commit</code> makes the next attribute read a fresh SELECT. A closed session can't do that, nor a lazy load like <code>d.owner</code>. Build the response while the session is open, <code>refresh()</code>, or <code>expire_on_commit=False</code>.",
+       "src": [
+        "SQLAlchemy: object states and expiry",
+        "https://docs.sqlalchemy.org/en/20/orm/session_state_management.html"
+       ]
+      },
+      {
+       "id": "mon-session",
+       "lesson": "db-sessions",
+       "t": "One session per request, via <code>Depends()</code> with <code>yield</code>",
+       "why": "Never a module-level <code>db = Session(engine)</code>: it is shared by every request and every thread.",
+       "src": [
+        "FastAPI: dependencies with yield",
+        "https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/"
+       ]
+      },
+      {
+       "id": "mon-tx",
+       "lesson": "db-sessions",
+       "t": "<code>commit</code>, <code>rollback</code>, and the failed-transaction state",
+       "why": "After an error, the session must be rolled back. If not, every later use fails with \"transaction has been rolled back due to a previous exception\".",
+       "src": [
+        "SQLAlchemy: session basics",
+        "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"
+       ]
+      },
+      {
+       "id": "mon-unique",
+       "lesson": "db-sessions",
+       "t": "Unique constraint + catch <code>IntegrityError</code> (return 409)",
+       "why": "\"Check if it exists, then insert\" has a race: two requests both pass the check. Let the database enforce it."
+      },
+      {
+       "id": "mon-bind",
+       "lesson": "db-sqlalchemy",
+       "t": "Bound parameters, never f-strings in SQL",
+       "why": "<code>select(Device).where(Device.serial == serial)</code> or <code>text(\"... WHERE serial = :serial\")</code>. Same idea as PDO prepared statements.",
+       "src": [
+        "SQLAlchemy 2.0: ORM quick start",
+        "https://docs.sqlalchemy.org/en/20/orm/quickstart.html"
+       ]
+      },
+      {
+       "id": "mon-nplus1",
+       "lesson": "db-sessions",
+       "t": "N+1 queries and pagination",
+       "why": "Loading related rows in a loop runs one query per row. Use <code>selectinload</code>. List endpoints need a limit."
+      },
+      {
+       "id": "mon-tenant",
+       "lesson": "db-sessions",
+       "t": "Ownership checks (IDOR)",
+       "why": "Filter by owner or tenant inside the query, not after loading. Your PHP experience transfers directly here."
+      }
+     ]
+    },
+    {
+     "label": "Afternoon · tests",
+     "items": [
+      {
+       "id": "mon-pytest",
+       "lesson": "test-pytest",
+       "t": "pytest basics",
+       "why": "Plain <code>assert</code>, fixtures, <code>@pytest.mark.parametrize</code>, <code>monkeypatch</code>.",
+       "src": [
+        "pytest: get started",
+        "https://docs.pytest.org/en/stable/getting-started.html"
+       ]
+      },
+      {
+       "id": "mon-client",
+       "lesson": "test-fastapi",
+       "t": "FastAPI <code>TestClient</code> and <code>dependency_overrides</code>",
+       "why": "Call endpoints in tests and swap the real database or auth for a test one.",
+       "src": [
+        "FastAPI: testing",
+        "https://fastapi.tiangolo.com/tutorial/testing/"
+       ]
+      },
+      {
+       "id": "mon-determ",
+       "lesson": "test-fastapi",
+       "t": "Deterministic tests",
+       "why": "Pass <code>now</code> in as a parameter. Fake upstreams at the transport (<code>httpx.MockTransport</code>). Don't depend on the machine's timezone or the network. Say what a test can't prove."
+      }
+     ]
+    }
+   ],
+   "checks": [
+    {
+     "id": "mon-c1",
+     "t": "I can explain why <code>db = Session(engine)</code> at module level breaks under load"
+    },
+    {
+     "id": "mon-c2",
+     "t": "I can write a test that registers the same serial twice and expects 409"
+    },
+    {
+     "id": "mon-c3",
+     "t": "I can say what a given test cannot prove"
+    }
+   ]
+  },
+  {
+   "id": "eve",
+   "n": 2,
+   "part": "evening",
+   "title": "Practice and rest",
+   "groups": [
+    {
+     "items": [
+      {
+       "id": "eve-practice",
+       "lesson": "iv-review",
+       "min": 20,
+       "t": "Two or three practice questions",
+       "why": "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has more than two dozen, very easy to moderate-hard; do any you haven't."
+      },
+      {
+       "id": "eve-deepdive",
+       "min": 20,
+       "t": "Rehearse your project deep-dive",
+       "why": "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each."
+      },
+      {
+       "id": "eve-rest",
+       "min": 0,
+       "t": "Stop studying by 21:00 and sleep",
+       "why": "A rested head reasons better than one more hour of reading."
+      }
+     ]
+    }
+   ],
+   "checks": []
+  },
+  {
+   "id": "tue",
+   "n": 3,
+   "part": "morning",
+   "title": "The day itself",
+   "groups": [
+    {
+     "items": [
+      {
+       "id": "tue-tabs",
+       "t": "Open the docs tabs",
+       "why": "FastAPI, SQLAlchemy, pytest and the Python standard library. If docs are allowed, use them; looking things up well is part of the job."
+      },
+      {
+       "id": "tue-script",
+       "lesson": "iv-review",
+       "t": "Review your code-review routine",
+       "why": "Read the whole snippet first. Name the worst bug first, with a concrete example. Give the fix, then the test, then what the test can't prove. Then rank the other issues."
+      },
+      {
+       "id": "tue-unsure",
+       "lesson": "iv-review",
+       "t": "Know what to say when you're unsure",
+       "why": "\"In PHP I'd do X. I'd check the docs for the exact Python syntax, but the fix is Y.\" That shows judgement, which is what they score."
+      }
+     ]
+    }
+   ],
+   "checks": [],
+   "target_title": true
+  }
+ ],
+ "parts": [
+  {
+   "n": 1,
+   "title": "Python",
+   "blurb": "The language, from running a script to async.",
+   "lessons": [
+    {
+     "id": "py-setup",
+     "title": "Setting up: Python, virtualenvs, the REPL",
+     "min": 15,
+     "day": "sat"
+    },
+    {
+     "id": "py-syntax",
+     "title": "Syntax and control flow",
+     "min": 15,
+     "day": "sat"
+    },
+    {
+     "id": "py-types",
+     "title": "Numbers, strings, booleans and None",
+     "min": 20,
+     "day": "sat"
+    },
+    {
+     "id": "py-collections",
+     "title": "Lists, tuples, dicts and sets",
+     "min": 25,
+     "day": "sat"
+    },
+    {
+     "id": "py-loops",
+     "title": "Iterating well: comprehensions, enumerate, zip",
+     "min": 20,
+     "day": "sat"
+    },
+    {
+     "id": "py-functions",
+     "title": "Functions, defaults and decorators",
+     "min": 25,
+     "day": "sat"
+    },
+    {
+     "id": "py-modules",
+     "title": "Modules, packages and imports",
+     "min": 15,
+     "day": "sat"
+    },
+    {
+     "id": "py-errors",
+     "title": "Exceptions and context managers",
+     "min": 20,
+     "day": "sat"
+    },
+    {
+     "id": "py-classes",
+     "title": "Classes and dataclasses",
+     "min": 25,
+     "day": "sat"
+    },
+    {
+     "id": "py-typing",
+     "title": "Type hints",
+     "min": 20,
+     "day": "sat"
+    },
+    {
+     "id": "py-iter",
+     "title": "Iterators and generators",
+     "min": 15,
+     "day": null
+    },
+    {
+     "id": "py-stdlib",
+     "title": "The standard library a backend uses",
+     "min": 25,
+     "day": "sat"
+    },
+    {
+     "id": "py-runtime",
+     "title": "Servers are long-running processes",
+     "min": 10,
+     "day": "sat"
+    },
+    {
+     "id": "py-async",
+     "title": "Async and the event loop",
+     "min": 30,
+     "day": "sun"
+    }
+   ],
+   "short": "Python"
+  },
+  {
+   "n": 2,
+   "title": "FastAPI",
+   "blurb": "Building an API, from the first route to production.",
+   "lessons": [
+    {
+     "id": "fa-first",
+     "title": "Your first FastAPI app",
+     "min": 15,
+     "day": "sun"
+    },
+    {
+     "id": "fa-params",
+     "title": "Path, query, body and headers",
+     "min": 20,
+     "day": "sun"
+    },
+    {
+     "id": "fa-pydantic",
+     "title": "Pydantic models and response models",
+     "min": 25,
+     "day": "sun"
+    },
+    {
+     "id": "fa-errors",
+     "title": "Status codes and errors",
+     "min": 15,
+     "day": "sun"
+    },
+    {
+     "id": "fa-depends",
+     "title": "Dependencies",
+     "min": 20,
+     "day": "sun"
+    },
+    {
+     "id": "fa-async",
+     "title": "def vs async def, lifespan, background work",
+     "min": 20,
+     "day": "sun"
+    },
+    {
+     "id": "fa-security",
+     "title": "Authentication and security",
+     "min": 25,
+     "day": null
+    },
+    {
+     "id": "fa-structure",
+     "title": "Structure, settings and deployment",
+     "min": 15,
+     "day": null
+    }
+   ],
+   "short": "FastAPI"
+  },
+  {
+   "n": 3,
+   "title": "Data and tests",
+   "blurb": "SQLAlchemy, transactions, pytest.",
+   "lessons": [
+    {
+     "id": "db-sqlalchemy",
+     "title": "SQLAlchemy 2.0 basics",
+     "min": 25,
+     "day": "mon"
+    },
+    {
+     "id": "db-session-model",
+     "title": "How a Session works, step by step",
+     "min": 25,
+     "day": "mon"
+    },
+    {
+     "id": "db-sessions",
+     "title": "Sessions, transactions and integrity",
+     "min": 20,
+     "day": "mon"
+    },
+    {
+     "id": "test-pytest",
+     "title": "pytest",
+     "min": 20,
+     "day": "mon"
+    },
+    {
+     "id": "test-fastapi",
+     "title": "Testing FastAPI apps",
+     "min": 20,
+     "day": "mon"
+    }
+   ],
+   "short": "Data and tests"
+  },
+  {
+   "n": 4,
+   "title": "The interview",
+   "blurb": "Putting it together for a live code review.",
+   "lessons": [
+    {
+     "id": "iv-review",
+     "title": "The code-review routine",
+     "min": 15,
+     "day": "eve"
+    }
+   ],
+   "short": "Interview"
+  }
+ ],
+ "ranks": [
+  {
+   "xp": 0,
+   "t": "Novice",
+   "need": []
+  },
+  {
+   "xp": 200,
+   "t": "Scripter",
+   "need": [
+    {
+     "read": 3
+    }
+   ]
+  },
+  {
+   "xp": 700,
+   "t": "Pythonista",
+   "need": [
+    {
+     "parts": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "xp": 1300,
+   "t": "Router",
+   "need": [
+    {
+     "parts": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "xp": 1900,
+   "t": "Tester",
+   "need": [
+    {
+     "parts": [
+      3
+     ],
+     "label": "Every data and testing lesson read, its check passed"
+    },
+    {
+     "drills": 4
+    }
+   ]
+  },
+  {
+   "xp": 2600,
+   "t": "Reviewer",
+   "need": [
+    {
+     "drills": 10
+    },
+    {
+     "worst": 7
+    }
+   ]
+  },
+  {
+   "xp": 3300,
+   "t": "Interview-ready",
+   "need": [
+    {
+     "parts": "all"
+    },
+    {
+     "drills": "all",
+     "spare": 3
+    },
+    {
+     "answered": 120,
+     "right": 0.85
+    },
+    {
+     "noweak": true
+    },
+    {
+     "nodue": true
+    }
+   ]
+  }
+ ]
+}

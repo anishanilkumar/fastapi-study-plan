@@ -1,0 +1,45 @@
+<p>Everything in the course, in one device: a probe in the fridge that reports its temperature to the house, and a notice on your phone when the door's been left open. It ties together this course and the MQTT one.</p>
+
+<h3>The parts</h3>
+<ul class="points">
+<li>An ESP32-C3 or S3 dev board, on a USB charger near the fridge.</li>
+<li>A waterproof DS18B20 probe on a cable (the flat cable passes the door seal), and a 4.7 kΩ resistor.</li>
+<li>Optional: a reed switch and magnet on the door, to one GPIO with the internal pull-up.</li>
+</ul>
+
+<h3>The topics</h3>
+<pre><code>home/kitchen/fridge/status    online / offline       retained, will
+home/kitchen/fridge/temp      {"c": 4.2, "ts": ...}  retained, QoS 0, on change ≥ 0.2 °C or every 5 min
+home/kitchen/fridge/door      open / closed          retained, QoS 1, on change (debounced)
+home/kitchen/fridge/boot      WDT_RESET …            retained</code></pre>
+
+<h3>The firmware</h3>
+<p>Either way works; doing it both ways is the best practice there is.</p>
+<ul class="points">
+<li><strong>MicroPython</strong>: the Wi-Fi and MQTT loop from lesson 8, the DS18B20 read from lesson 6, the door on an interrupt with debounce, a watchdog, NTP, and the reset cause published at boot.</li>
+<li><strong>ESPHome</strong>: the YAML from lesson 10 plus a <code>binary_sensor</code> for the door, with <code>delayed_on_off</code> as the debounce.</li>
+</ul>
+
+<h3>The house's side</h3>
+<p>The board publishes to the MQTT listener on jarvis's NATS leaf, as a <code>fridge</code> user allowed only <code>home.kitchen.fridge.&gt;</code>. From there, it's NATS: a small Python program (on jarvis, or the VPS) subscribes to <code>home.kitchen.fridge.&gt;</code>, keeps the door's state, and when the door has been <code>open</code> for more than two minutes, or the temperature is above 8 °C for ten, publishes a notice to <code>notify.anish</code>, which Friday's gateway already turns into a phone notification.</p>
+<pre><code>device ──MQTT──▶ jarvis (NATS leaf) ──NATS──▶ fridge-watch.py ──▶ notify.anish ──▶ Friday</code></pre>
+
+<h3>Done means</h3>
+<ul class="points">
+<li>Unplug the router for five minutes: the board reconnects on its own, and the status topic shows the gap.</li>
+<li>Restart jarvis: the retained values are back, and the board reconnects.</li>
+<li>Leave the door open: one notification, not one per bounce.</li>
+<li>Pull the probe out: the device publishes an error rather than 85 °C or nothing.</li>
+<li>Its YAML or <code>.py</code> files are in git, without secrets.</li>
+</ul>
+
+<aside class="bridge"><span class="label">From the house</span><p>This is the shape every device will take: MQTT at the edge, into the leaf, and from there the same NATS subjects and Friday notices the rest of the house already uses. One device done end to end makes the next ten a matter of copying.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Putting the alert logic on the device. "Door open for two minutes" needs a timer that survives the device rebooting, and the threshold will change. Keep the device dumb (report facts), and put decisions in a program you can change in seconds.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Build it on your desk first, against a NATS server with MQTT on your Mac (the MQTT course's dry run), with a glass of ice water as the fridge.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li>The MQTT course: "MQTT on NATS: the leaf on jarvis" and "Who can connect, and to what"</li>
+<li>"NATS" in <code>infra/nixos_config/CLAUDE.md</code>: the <code>notify.&lt;user&gt;</code> subject</li>
+</ul></aside>

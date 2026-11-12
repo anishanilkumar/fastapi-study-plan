@@ -1,4 +1,4 @@
-// Offline cache for the study plan.
+// Offline cache for Study: the home page and every course.
 //
 // The page and data files are fetched network-first, so a deploy shows up on
 // the next load, with the cached copy as the fallback when the network is
@@ -12,9 +12,9 @@
 // a login redirect from an auth proxy in front of the app never gets cached
 // as the page.
 
-const VERSION = "v3";
+const VERSION = "v4";
 const CACHE = "study-plan-" + VERSION;
-const CORE = ["/", "/quizzes.json", "/drills.json", "/manifest.webmanifest",
+const CORE = ["/", "/courses.json", "/manifest.webmanifest",
   "/fonts/archivo.woff2", "/fonts/plexmono-400.woff2", "/fonts/plexmono-500.woff2",
   "/icons/icon.svg", "/icons/icon-192.png", "/icons/apple-touch-icon.png"];
 const SLOW_MS = 3000;
@@ -29,13 +29,17 @@ self.addEventListener("install", (event) => {
     for (const url of CORE) {
       try { const r = await fetch(url, { cache: "no-store" }); if (storable(r)) await cache.put(url, r); } catch (e) { /* offline install: fill later */ }
     }
-    // Every lesson, so reading works offline from the first visit. The lesson
-    // ids are the keys of quizzes.json.
+    // Every course's page, questions, drills and lessons, so reading works
+    // offline from the first visit. /courses.json lists them.
     try {
-      const q = await (await fetch("/quizzes.json")).json();
-      await Promise.all(Object.keys(q).map(async (id) => {
-        const url = "/lessons/" + id + ".html";
-        try { const r = await fetch(url); if (storable(r)) await cache.put(url, r); } catch (e) { /* skip */ }
+      const courses = await (await fetch("/courses.json", { cache: "no-store" })).json();
+      const urls = [];
+      for (const [c, lessons] of Object.entries(courses)) {
+        urls.push("/" + c + "/", "/" + c + "/quizzes.json", "/" + c + "/drills.json");
+        for (const id of lessons) urls.push("/" + c + "/lessons/" + id + ".html");
+      }
+      await Promise.all(urls.map(async (url) => {
+        try { const r = await fetch(url, { cache: "no-store" }); if (storable(r)) await cache.put(url, r); } catch (e) { /* skip */ }
       }));
     } catch (e) { /* skip */ }
     self.skipWaiting();
@@ -52,10 +56,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
-  if (req.method !== "GET" || url.origin !== location.origin || url.pathname === "/state" || url.pathname.startsWith("/oauth2/")) return;
+  // Progress, the login and the mentor's pages (another person's view) are never cached.
+  if (req.method !== "GET" || url.origin !== location.origin || /(^|\/)state$/.test(url.pathname) ||
+      url.pathname.startsWith("/oauth2/") || url.pathname.startsWith("/mentor/")) return;
 
-  const cacheFirst = ["/lessons/", "/fonts/", "/icons/"].some((p) => url.pathname.startsWith(p));
-  const key = req.mode === "navigate" ? "/" : url.pathname;
+  const cacheFirst = url.pathname.includes("/lessons/") || ["/fonts/", "/icons/"].some((p) => url.pathname.startsWith(p));
+  // A page is stored by its path without the hash: "/" or "/<course>/".
+  const key = req.mode === "navigate" ? (url.pathname.endsWith("/") ? url.pathname : url.pathname + "/") : url.pathname;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);

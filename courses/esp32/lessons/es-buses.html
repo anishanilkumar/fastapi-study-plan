@@ -1,0 +1,40 @@
+<p>Most sensors don't give you a voltage to read; they talk over a bus. Four cover nearly everything you'll plug in: I²C, 1-Wire, SPI and UART.</p>
+
+<h3>I²C: many devices on two wires</h3>
+<pre><code>from machine import I2C, Pin
+i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=100_000)
+print([hex(a) for a in i2c.scan()])     # e.g. ['0x76'] for a BME280</code></pre>
+<p>Two wires (SDA data, SCL clock) plus power and ground, shared by every device; each has an address. A BME280 (temperature, humidity, pressure) is <code>0x76</code> or <code>0x77</code>. <strong>Always scan first</strong>: an empty list means wiring, power or missing pull-ups, not your driver. Most breakout boards include the pull-up resistors I²C needs.</p>
+
+<h3>1-Wire: the DS18B20 temperature probe</h3>
+<pre><code>import onewire, ds18x20, time
+ds = ds18x20.DS18X20(onewire.OneWire(Pin(4)))
+roms = ds.scan()                 # each probe has a unique 64-bit id
+ds.convert_temp()
+time.sleep_ms(750)               # a conversion takes up to 750 ms
+for rom in roms:
+    print(rom.hex(), ds.read_temp(rom))</code></pre>
+<p>One data wire with a <strong>4.7 kΩ pull-up to 3.3 V</strong>; several probes can share it, each found by its id. The waterproof DS18B20 on a cable is the fridge probe. A reading of 85.0 °C is its power-on value: the conversion didn't happen (too short a wait, or power trouble), not a hot fridge.</p>
+
+<h3>SPI and UART</h3>
+<ul class="points">
+<li><strong>SPI</strong>: faster, four wires (clock, data out, data in, chip select), one chip-select per device. Displays and SD cards.</li>
+<li><strong>UART</strong>: a serial line, TX to the other side's RX. Particle sensors (PMS5003), GPS modules, CO₂ sensors. <code>machine.UART(1, baudrate=9600, tx=..., rx=...)</code>; the baud rate must match the device.</li>
+</ul>
+
+<h3>Drivers</h3>
+<p>Many sensors have MicroPython drivers: one <code>.py</code> file to copy to the board, some via <code>mpremote mip install</code>. Read the driver before trusting it: check units, check it raises on a failed read rather than returning 0, check it doesn't block for seconds.</p>
+
+<h3>Wiring that keeps working</h3>
+<p>I²C is meant for short distances on a board: a metre of cable is pushing it. For a sensor far from the board, 1-Wire copes with several metres, or put a small board next to the sensor. Breadboard contacts loosen; for anything that stays, solder or use screw terminals.</p>
+
+<aside class="bridge"><span class="label">From the Pi</span><p>The same buses, with the same names: <code>i2cdetect</code> on the Pi is <code>i2c.scan()</code> here. Drivers for the Pi often use Linux's <code>/dev/i2c-1</code>; on the ESP32 you call the bus directly.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Believing a first reading. Sensors often need a moment after power-up, and the first value can be stale or a default (the DS18B20's 85 °C). Throw away the first, and range-check the rest.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Wire a DS18B20 with its 4.7 kΩ pull-up and print the temperature every 5 s. Then remove the resistor and see what the scan and readings do.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html#onewire-driver" target="_blank" rel="noopener">MicroPython: OneWire and DS18x20 on the ESP32</a></li>
+<li><a href="https://docs.micropython.org/en/latest/library/machine.I2C.html" target="_blank" rel="noopener">MicroPython: machine.I2C</a></li>
+</ul></aside>

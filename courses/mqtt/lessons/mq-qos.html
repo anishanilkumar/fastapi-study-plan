@@ -1,0 +1,39 @@
+<p>Each message carries a Quality of Service level: how hard the two ends of <em>one hop</em> try to deliver it. There are always two hops, publisher to broker and broker to subscriber, and each has its own QoS.</p>
+
+<h3>The three levels</h3>
+<table><thead><tr><th>QoS</th><th>Promise</th><th>Packets</th></tr></thead><tbody>
+<tr><td>0</td><td>At most once. Sent, never acknowledged, never retried.</td><td>PUBLISH</td></tr>
+<tr><td>1</td><td>At least once. Resent until acknowledged, so it can arrive twice.</td><td>PUBLISH → PUBACK</td></tr>
+<tr><td>2</td><td>Exactly once, per hop.</td><td>PUBLISH → PUBREC → PUBREL → PUBCOMP</td></tr>
+</tbody></table>
+<p>QoS 1 and 2 messages carry a 16-bit packet identifier. The sender keeps the message until it's acknowledged and, after a reconnect, sends it again with the <em>DUP</em> flag set. That retry is where QoS 1 duplicates come from: the PUBACK was lost, not the message.</p>
+
+<h3>The subscriber's QoS caps it</h3>
+<p>A subscription has a QoS too, the most it wants. A message reaches that subscriber at the <em>lower</em> of the two:</p>
+<pre><code>published at QoS 1, subscribed at QoS 0  →  delivered at QoS 0
+published at QoS 0, subscribed at QoS 2  →  delivered at QoS 0
+published at QoS 2, subscribed at QoS 1  →  delivered at QoS 1</code></pre>
+<p>So a publisher can't force reliable delivery on a subscriber that didn't ask for it, and a subscriber can't upgrade a message that was sent fire-and-forget.</p>
+
+<h3>"Exactly once" is narrower than it sounds</h3>
+<p>QoS 2 is exactly once between a client and the broker. It says nothing about your program: if the subscriber crashes after receiving and before writing to its database, the message is gone; if it writes and then crashes before acknowledging, some setups deliver it again. End-to-end "exactly once" comes from the handler, not the protocol: make handling <em>idempotent</em>. Give each event an id or a timestamp in the payload and ignore one you've already applied; send "set power on", not "toggle".</p>
+
+<h3>Which to use</h3>
+<ul class="points">
+<li><strong>QoS 0</strong> for readings that are sent often and where the next one replaces the last: a temperature every 30 seconds. Losing one doesn't matter.</li>
+<li><strong>QoS 1</strong> for commands and events: "turn the heater off", "door opened", "label printed". Make the handler idempotent and duplicates are harmless. This is the default to reach for.</li>
+<li><strong>QoS 2</strong> rarely. It costs four packets and broker state per message, and not every device or broker handles it well (some brokers can be set to refuse or downgrade it). Use it only when a duplicate does real harm and the handler can't be made idempotent.</li>
+</ul>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>A POST that times out leaves you guessing whether it happened; the fix is an idempotency key and a retry. QoS 1 is that retry built into the protocol, and the idempotency key is still your job.</p></aside>
+
+<aside class="bridge"><span class="label">From NATS</span><p>Core NATS is QoS 0: at most once, no acks. JetStream with acks is the at-least-once equivalent, with the same advice: dedupe by message id. When NATS bridges MQTT, it stores QoS 1 and 2 state in JetStream.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>"We publish at QoS 2, so it can't be lost." If the subscriber subscribed at QoS 0, or was offline with a clean session, it's lost. QoS is per hop and capped by the subscription; check both ends.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>A switch publishes <code>toggle</code> at QoS 1 to <code>home/hall/light/set</code>. The PUBACK is lost on a bad link and the switch resends. What does the light do? Rewrite the command so a duplicate is harmless.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718099" target="_blank" rel="noopener">MQTT 3.1.1: QoS levels and protocol flows</a></li>
+<li><a href="https://www.hivemq.com/blog/mqtt-essentials-part-6-mqtt-quality-of-service-levels/" target="_blank" rel="noopener">HiveMQ: quality of service</a></li>
+</ul></aside>

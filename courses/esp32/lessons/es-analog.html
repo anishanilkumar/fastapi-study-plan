@@ -1,0 +1,33 @@
+<p>Not everything is a bus. Some sensors give a voltage (a light sensor, a soil-moisture probe, a battery level), and some outputs need something between on and off (a dimmed LED, a fan's speed). That's the ADC and PWM.</p>
+
+<h3>Reading a voltage: the ADC</h3>
+<pre><code>from machine import ADC, Pin
+adc = ADC(Pin(34), atten=ADC.ATTN_11DB)    # full range, roughly 0 to 3.1 V
+raw = adc.read_u16()                        # 0 to 65535
+mv = adc.read_uv() // 1000                  # calibrated millivolts, where supported</code></pre>
+<ul class="points">
+<li><strong>Attenuation</strong> sets the range. Without it, only up to about 1 V reads correctly. 11 dB is the widest.</li>
+<li>The ESP32's ADC is <strong>not very linear</strong>, especially near the ends of its range, and it's noisy. Use <code>read_uv()</code> (calibrated), average several reads, and don't expect better than a few percent.</li>
+<li>On the original ESP32, use ADC1 pins (32 to 39); ADC2 is unusable while Wi-Fi is on.</li>
+<li>Never put more than 3.3 V on a pin. To measure a battery, use a divider (two equal resistors halve it) and multiply back.</li>
+</ul>
+
+<h3>Something in between: PWM</h3>
+<pre><code>from machine import PWM, Pin
+led = PWM(Pin(2), freq=1000, duty_u16=16384)    # on a quarter of the time
+led.duty_u16(65535)                              # fully on</code></pre>
+<p>PWM switches the pin on and off fast; the share of time it's on (the duty) looks like a level to an LED or a motor. 1 kHz suits LEDs; fans and motors want what their datasheet says (PC fans: 25 kHz). A servo wants 50 Hz with a pulse of 1 to 2 ms. The pin still gives only a few milliamps: a fan or a motor needs a MOSFET driven by the pin.</p>
+
+<h3>Touch</h3>
+<p>The original ESP32 and the S3 have capacitive touch pins: a bare wire or a coin becomes a button. <code>machine.TouchPad(Pin(4)).read()</code> drops when touched. Calibrate against the untouched value at start, since it drifts with humidity.</p>
+
+<aside class="bridge"><span class="label">From the Pi</span><p>The Pi has no ADC at all; you'd add a chip on I²C. The ESP32 has one built in, good enough for "is it dark" or "is the battery low", not for measurement.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Using a cheap resistive soil-moisture probe powered all the time. It corrodes in weeks. Power it from a pin only while reading, or buy a capacitive one.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Read a potentiometer (or a light sensor) with the ADC and set an LED's PWM duty from it. Average 16 reads and see how much steadier it is.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html#adc-analog-to-digital-conversion" target="_blank" rel="noopener">MicroPython: ADC on the ESP32</a></li>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html#pwm-pulse-width-modulation" target="_blank" rel="noopener">MicroPython: PWM on the ESP32</a></li>
+</ul></aside>

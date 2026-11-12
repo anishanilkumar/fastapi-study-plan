@@ -1,0 +1,43 @@
+<p>A device on your desk is watched; a device behind the fridge isn't. It must recover from anything by itself: a hung sensor, a router reboot, a bug that shows after three weeks. And you must be able to update it without taking it out.</p>
+
+<h3>The watchdog</h3>
+<pre><code>from machine import WDT
+wdt = WDT(timeout=30_000)        # reset the board if not fed for 30 s
+
+while True:
+    do_one_cycle()               # with timeouts on everything inside
+    wdt.feed()
+    time.sleep(10)</code></pre>
+<p>Once started, the watchdog can't be stopped: if the program hangs (a sensor read that never returns, a socket stuck), it resets the board. Feed it only from the main loop, after real work, never from a timer: a timer keeps firing even when the main loop is stuck, which defeats the point. Pick a timeout longer than the slowest healthy cycle, Wi-Fi connect included.</p>
+
+<h3>Know why it restarted</h3>
+<pre><code>cause = machine.reset_cause()    # PWRON_RESET, HARD_RESET, WDT_RESET, DEEPSLEEP_RESET, SOFT_RESET
+c.publish(b"home/kitchen/fridge/boot", str(cause).encode(), retain=True)</code></pre>
+<p>Publish the reset cause and an uptime counter. A device that's reset by its watchdog twice a day is telling you about a bug, and you'll only hear it if it says so.</p>
+
+<h3>Time</h3>
+<p>After every power cut the clock says 2000. Call <code>ntptime.settime()</code> after Wi-Fi connects (it sets UTC), and again every day or so; the ESP32's clock drifts. Until it has worked, publish without a timestamp, or not at all: a reading dated 2000-01-01 is worse than none.</p>
+
+<h3>Updating in place</h3>
+<ul class="points">
+<li><strong>ESPHome</strong>: OTA built in (previous lesson). The easy answer.</li>
+<li><strong>MicroPython code</strong>: over USB with <code>mpremote</code>, or have the device fetch new <code>.py</code> files from a server you control and reset. If you do that, download to a temporary name, check it (size, a hash), then rename, so a broken download never replaces a working file.</li>
+<li><strong>MicroPython firmware</strong> over the air is possible (<code>esp32.Partition</code> and two app slots) but is more work; for devices you can reach, USB is simpler.</li>
+</ul>
+
+<h3>A safe way back in</h3>
+<p>Keep a way to stop <code>main.py</code> from running: e.g. if a particular pin is held low at boot, skip it and leave the REPL free. One day an update will put the device in a reset loop, and this saves erasing it.</p>
+
+<h3>Logging you can read</h3>
+<p>Print statements only reach a connected USB cable. For a deployed device, publish important events (boot, errors, the reset cause) to a <code>.../log</code> topic at QoS 0, and keep them short. Don't write logs to flash continuously: it wears out.</p>
+
+<aside class="bridge"><span class="label">From the Pi</span><p>On jarvis, systemd restarts a crashed service and the journal keeps the logs. On the ESP32, the watchdog is your <code>Restart=always</code> and an MQTT log topic is your journal.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Feeding the watchdog from a <code>machine.Timer</code> callback "so it never resets by accident". Then it never resets when it should either: the timer keeps feeding while the main loop is hung.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Add a 20 s watchdog to a loop, then put a <code>while True: pass</code> in the loop on the tenth cycle. Check that the board resets and that the next boot publishes <code>WDT_RESET</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/library/machine.WDT.html" target="_blank" rel="noopener">MicroPython: machine.WDT</a></li>
+<li><a href="https://docs.micropython.org/en/latest/library/esp32.html" target="_blank" rel="noopener">MicroPython: the esp32 module (NVS, partitions, wake sources)</a></li>
+</ul></aside>

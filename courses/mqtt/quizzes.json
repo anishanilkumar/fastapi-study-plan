@@ -1,0 +1,122 @@
+{
+ "mq-why": [
+  ["A sensor publishes to a topic nobody subscribes to, at QoS 0. What happens?", ["The broker keeps it until someone subscribes", "It's dropped, with no error to the sensor", "The broker returns an error to the sensor"], 1, "Without a retained flag or a session waiting for it, a message with no matching subscription is simply gone."],
+  ["Who opens the TCP connection between a device and the broker?", ["The device, always", "The broker, when it has a message", "Whichever starts first"], 0, "Clients dial out to the broker and keep the connection open, so a device behind NAT needs no open port."],
+  ["Keepalive is 60 s. When does the broker treat a silent client as gone?", ["After 60 s", "After about 90 s (1.5 × keepalive)", "Only when TCP reports an error"], 1, "The broker allows one and a half keepalive intervals without any packet before closing the connection."],
+  ["At QoS 1, the acknowledgement a publisher receives comes from…", ["Each subscriber", "The broker", "The first subscriber to get it"], 1, "Publishers and subscribers never talk directly. The PUBACK is the broker saying it has the message."],
+  ["What does a client send when it has nothing to say within its keepalive?", ["PINGREQ", "An empty PUBLISH", "Nothing; TCP keepalive covers it"], 0, "A two-byte PINGREQ, answered by PINGRESP. TCP's own keepalive is far too slow to notice a dead device."],
+  ["For your own programs talking to each other in the house, the household's choice is…", ["MQTT, always", "NATS; MQTT is for devices you don't write", "HTTP polling"], 1, "Devices and their firmware speak MQTT; your programs get request/reply, streams and headers from NATS on the same server."]
+ ],
+ "mq-topics": [
+  ["Which topics does `home/+` match?", ["`home/kitchen` only, of these: `home/kitchen`, `home/kitchen/temp`, `home`", "All three", "`home/kitchen` and `home`"], 0, "`+` is exactly one level: not zero, not two."],
+  ["Does `home/kitchen/#` match `home/kitchen`?", ["No, `#` needs at least one more level", "Yes, `#` also matches the parent level", "Only if it's retained"], 1, "In MQTT, `sport/#` matches `sport` too. (NATS's `>` doesn't; that's why NATS subscribes twice for it.)"],
+  ["Does `home/#` match `/home/kitchen`?", ["Yes", "No: the leading slash makes an empty first level", "Only on Mosquitto"], 1, "`/home/kitchen` has three levels, the first empty. It's a different topic from `home/kitchen`."],
+  ["What happens when a client publishes to `home/+/temp`?", ["It's delivered to every room's temp topic", "It's a protocol error; the broker drops the connection", "It's published literally to a topic named with a plus"], 1, "Wildcards are for subscription filters only."],
+  ["Is `home/kit+` a valid filter?", ["Yes: every level starting with kit", "No: a wildcard must be a whole level", "Yes, but only for subscribe"], 1, "`+` and `#` must stand alone between slashes."],
+  ["A reading as `home/kitchen/fridge/temp/4.2`. What's wrong?", ["Nothing", "The value belongs in the payload; every reading becomes a new topic", "Topics can't contain dots"], 1, "Data in the topic breaks retained values and subscriptions. The topic says what; the payload says how much."]
+ ],
+ "mq-connect": [
+  ["Two devices connect with the same client ID. What happens?", ["Both stay connected", "The broker disconnects the first when the second connects", "The second is refused"], 1, "The session belongs to the ID; a new connection takes it over. Two devices with one ID evict each other in a loop."],
+  ["CONNACK return code 1 against the NATS broker usually means…", ["Bad password", "The client asked for MQTT 5; NATS speaks 3.1.1", "Not authorised"], 1, "Code 1 is \"unacceptable protocol version\". Set the client to 3.1.1."],
+  ["Where should a client subscribe?", ["Once, right after connect()", "In the connected callback, so it runs after every reconnect", "In the message callback"], 1, "With a clean session, a reconnect starts with no subscriptions. Subscribing in the connected callback restores them every time."],
+  ["CONNACK code 5 means…", ["Server unavailable", "Not authorised", "Client identifier rejected"], 1, "0 accepted, 1 protocol version, 2 identifier rejected, 3 server unavailable, 4 bad username or password, 5 not authorised."],
+  ["Why reconnect with a growing delay (1, 2, 4… s)?", ["The spec requires it", "So many devices coming back after a power cut don't hit the broker at once", "It saves battery only"], 1, "Backoff spreads the reconnects out; a fixed short delay makes every device retry in lockstep."],
+  ["A good client ID for a sensor is…", ["`sensor`", "Random on every boot", "Stable and unique, e.g. built from its MAC address"], 2, "Stable so its session can be resumed; unique so it doesn't evict anything else."]
+ ],
+ "mq-qos": [
+  ["Published at QoS 1, subscribed at QoS 0. Delivered at…", ["QoS 1", "QoS 0", "It isn't delivered"], 1, "Delivery is at the lower of the two."],
+  ["Where do QoS 1 duplicates come from?", ["The broker copies messages on purpose", "A lost PUBACK: the sender resends a message that had arrived", "Two subscribers"], 1, "The sender keeps resending until it sees PUBACK; if the ack was lost, the receiver gets the message twice (with the DUP flag)."],
+  ["QoS 2 guarantees exactly once…", ["From the device to your database", "On each hop between a client and the broker", "Across every subscriber combined"], 1, "It covers one client-broker hop. A crash in your handler can still lose or repeat work, so handlers must be idempotent."],
+  ["A temperature published every 30 s, where the next reading replaces the last, is best at…", ["QoS 0", "QoS 1", "QoS 2"], 0, "Losing one reading costs nothing; the next arrives soon."],
+  ["Which command is safe to deliver twice?", ["`toggle`", "`{\"power\": \"OFF\"}`", "`+1 brightness`"], 1, "A target state is idempotent; a toggle or a step applied twice undoes or overshoots."],
+  ["How many packets does one QoS 2 delivery take?", ["2", "4: PUBLISH, PUBREC, PUBREL, PUBCOMP", "3"], 1, "Two round trips, plus state on both sides until it completes. That cost is why QoS 2 is rarely worth it."]
+ ],
+ "mq-sessions": [
+  ["What does a persistent session keep for an offline client?", ["Its subscriptions and the QoS 1/2 messages that matched them", "Every message on the broker", "Only its last message"], 0, "Subscriptions plus queued QoS 1 and 2 messages. QoS 0 messages are never queued."],
+  ["A device with a persistent session is offline. A command is sent at QoS 0. When it reconnects…", ["It gets the command", "It doesn't: QoS 0 is never queued", "It gets it only if retained"], 1, "Queuing needs QoS 1 or 2 on both the publish and the subscription."],
+  ["A persistent session with a new random client ID on every start…", ["Works fine", "Is never resumed, and old sessions pile up on the broker", "Is refused by the broker"], 1, "Sessions are keyed by client ID. A new ID is a new session, and the old ones keep queueing."],
+  ["After CONNECT with clean session off, CONNACK says `session present = 0`. The client should…", ["Do nothing", "Subscribe again: the broker had no session", "Reconnect with clean session on"], 1, "No stored session means no stored subscriptions."],
+  ["A first-time subscriber to `home/#` gets which old messages?", ["Everything from the last day", "Only retained messages", "Everything queued under any session"], 1, "A session only holds what arrived after it existed. History is a database's job."],
+  ["For a dashboard that only shows current state, the best session is…", ["Persistent", "Clean, relying on retained messages for the current values", "Persistent at QoS 2"], 1, "It doesn't need missed events, only the latest values, which retained messages give it at connect."]
+ ],
+ "mq-retained": [
+  ["How do you delete a retained message?", ["Publish any non-retained message to the topic", "Publish an empty payload with retain set", "Restart the broker"], 1, "A zero-length retained publish clears it. A non-retained publish leaves the retained one in place."],
+  ["When is the last will published?", ["On every disconnect", "Only when the client disappears without a clean DISCONNECT", "When the client publishes \"offline\""], 1, "A clean DISCONNECT discards the will. That's why a clean shutdown publishes \"offline\" itself."],
+  ["Why should the \"offline\" will be retained?", ["It doesn't matter", "So later subscribers see offline, not the retained \"online\" from the birth message", "Wills can't be retained"], 1, "A non-retained will reaches only whoever is subscribed at that moment; the retained \"online\" stays the topic's value."],
+  ["Which should be retained?", ["The doorbell was pressed", "The heater is on", "A command to turn the heater on"], 1, "Retain state. A retained event replays to every new subscriber; a retained command re-runs on every reconnect."],
+  ["How many retained messages does the broker keep per topic?", ["All of them", "One: the latest", "Ten"], 1, "Each new retained publish replaces the last."],
+  ["A subscriber to `home/#` connects. Which retained messages does it get?", ["None; retained works per exact topic", "The retained message of every topic under home/", "Only home/'s own"], 1, "Retained values are per topic, delivered for every topic the filter matches."]
+ ],
+ "mq-payloads": [
+  ["In paho, `msg.payload == \"ON\"` is…", ["True when the device sent ON", "Never true: payload is bytes", "True only for retained messages"], 1, "Compare with `b\"ON\"` or decode first."],
+  ["Why separate `.../power/set` from `.../power`?", ["The spec requires it", "So a request is never mistaken for the device's actual state", "To save bandwidth"], 1, "The device acts on /set and reports what it actually did; the dashboard trusts only the report."],
+  ["A firmware update renames a JSON field. A robust subscriber…", ["Crashes, so you notice", "Logs the bad payload and carries on", "Unsubscribes"], 1, "One bad message should cost one log line; an exception escaping a callback can stop the client's loop."],
+  ["A camera snapshot should be sent…", ["As a 2 MB MQTT payload", "Over HTTP or a file store, with an MQTT message saying where it is", "Split into 1 KB MQTT messages"], 1, "MQTT carries state and events. The same rule as the house's NATS subjects: announcements, content over HTTPS."],
+  ["A retained `{\"temp\": 4.2}` with no timestamp tells a new subscriber…", ["The current temperature", "A temperature from some unknown time", "Nothing"], 1, "Without a timestamp it can't tell a fresh value from one three days old."],
+  ["What does MQTT 3.1.1 say about a payload's format?", ["It must be JSON", "Nothing: it's bytes, and the format is your convention", "It must be UTF-8"], 1, "No content type in 3.1.1. One topic, one documented format."]
+ ],
+ "mq-v5": [
+  ["An MQTT 5 client connects to NATS. What happens?", ["It works, with v5 features off", "CONNACK code 1: unacceptable protocol version", "It's silently downgraded"], 1, "NATS speaks 3.1.1 only. Set the client to 3.1.1."],
+  ["On 3.1.1, the closest thing to MQTT 5's message expiry is…", ["A timestamp in the payload, checked by the receiver", "QoS 2", "Retained messages"], 0, "The receiver ignores a command that's too old to act on."],
+  ["Shared subscriptions (`$share/group/topic`) exist in…", ["MQTT 3.1.1", "MQTT 5", "Both"], 1, "On 3.1.1 brokers the filter is just an odd topic filter. On the NATS side, queue groups do the same job."],
+  ["MQTT 5's clean start plus session expiry 0 equals 3.1.1's…", ["clean_session = True", "clean_session = False", "A retained session"], 0, "Start fresh, and end the session with the connection."],
+  ["MQTT 5 user properties are like…", ["HTTP headers", "Retained messages", "Topics"], 0, "Key/value metadata alongside the payload. On 3.1.1, put those fields in the payload."],
+  ["For your own programs that need headers and request/reply, the household's answer is…", ["Upgrade devices to MQTT 5", "Use NATS for them, on the same server", "Run a second broker"], 1, "Devices speak 3.1.1 MQTT; programs speak NATS, which already has those features."]
+ ],
+ "py-paho": [
+  ["`mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, ...)`: what does the first argument choose?", ["The MQTT protocol version", "Which callback signatures paho calls you with", "The QoS"], 1, "paho 2 changed the callbacks; VERSION2 picks the new ones (with reason_code and properties). The protocol is `protocol=`."],
+  ["A callback makes a 10 s HTTP call. What suffers?", ["Nothing", "Every other message waits, and the keepalive pings stop", "Only that message"], 1, "The loop thread runs callbacks and the network. Block it and the broker may decide you're dead."],
+  ["A script publishes once at QoS 1 and exits at once. Risk?", ["None", "It can exit before the message was sent; call wait_for_publish()", "It sends twice"], 1, "publish() returns immediately; the loop sends it later."],
+  ["Where must `will_set()` be called?", ["Before connect(): the will is part of CONNECT", "In on_connect", "Before disconnect()"], 0, "The will travels in the CONNECT packet."],
+  ["`loop_start()` runs your callbacks…", ["In the main thread", "In a background thread paho starts", "In asyncio"], 1, "Shared state touched by callbacks and your main code then needs care: a lock, or a queue."],
+  ["An exception escapes on_message (default settings). What happens?", ["Nothing; paho ignores it", "paho logs it and raises it out of the loop, stopping the client", "The message is redelivered"], 1, "Unless suppress_exceptions is set, it propagates: loop_forever ends, or loop_start's thread dies quietly."]
+ ],
+ "py-aiomqtt": [
+  ["When the connection drops, aiomqtt…", ["Reconnects by itself", "Raises MqttError; you write the reconnect loop", "Blocks until it's back"], 1, "By design there's no automatic reconnect; your loop decides the delay and resubscribes."],
+  ["Where does the subscribe go in a reconnect loop?", ["Before the loop, once", "Inside it, after each connect", "In a separate task"], 1, "Each new connection needs its subscriptions again."],
+  ["To publish from FastAPI routes, you…", ["Open a client per request", "Keep one connected client from the lifespan and share it", "Use paho in the route"], 1, "One long-lived connection, created at startup, like an httpx.AsyncClient."],
+  ["`message.topic.matches(\"home/+/temp\")` does…", ["A string comparison", "MQTT wildcard matching on the message's topic", "A regex"], 1, "Topic.matches applies + and # rules."],
+  ["A blocking call inside the `async for` loop…", ["Is fine", "Stalls the event loop, including the keepalive", "Raises an error"], 1, "Same rule as any asyncio code: await, or move it off the loop."],
+  ["In aiomqtt 2, incoming messages are read with…", ["`async with client.messages() as messages`", "`async for message in client.messages`", "`client.on_message = f`"], 1, "The context-manager form is aiomqtt 1.x; paho uses callbacks."]
+ ],
+ "py-patterns": [
+  ["A command was sent; when do you show it as done?", ["Immediately", "When the device's state topic reports the new state", "When the broker acks it"], 1, "The broker's ack only means the broker has it. The state topic is the truth."],
+  ["Request/response on 3.1.1: subscribe to the reply topic…", ["After sending the request", "Before sending it", "Never; replies come on the request topic"], 1, "A fast reply can arrive before a late subscription exists."],
+  ["Why put an id in a request?", ["The broker requires it", "So a caller can tell its own reply from others' on a shared topic", "For QoS 2"], 1, "Without it, concurrent callers can't match replies to requests."],
+  ["A sensor publishing only on change has gone quiet for a day. You can't tell…", ["Its last value", "Whether it's alive, unless it also sends a heartbeat or has a status will", "Its topic"], 1, "Publish on change plus a periodic heartbeat, and a retained status with a will."],
+  ["The best way to test MQTT handlers is…", ["Mock the client", "Plain functions of (topic, payload), plus a few tests against a real local broker", "Only manual tests"], 1, "Logic out of the transport; a real broker for reconnects and delivery."],
+  ["A door contact bounces open-closed-open in 50 ms. Before notifying, you…", ["Notify three times", "Debounce: compare with the last acted-on value and ignore changes in a short window", "Use QoS 2"], 1, "QoS doesn't help: these are three real messages."]
+ ],
+ "br-nats": [
+  ["A NATS client publishes to `home.hall.light.set`; an MQTT device subscribed at QoS 1. It's delivered at…", ["QoS 1", "QoS 0", "QoS 2"], 1, "Messages from NATS clients always reach MQTT subscribers at QoS 0, so they're not queued for an offline device."],
+  ["The MQTT topic `home/kitchen/fridge/temp` is which NATS subject?", ["home/kitchen/fridge/temp", "home.kitchen.fridge.temp", "home_kitchen_fridge_temp"], 1, "Slashes become dots."],
+  ["Where does NATS keep MQTT sessions and retained messages?", ["In memory only", "In JetStream streams it manages", "In a SQLite file"], 1, "That's why MQTT needs JetStream, and why sessions survive a restart."],
+  ["Why `js_domain: home` on jarvis?", ["Required syntax", "So MQTT state stays on the Pi, and the house works without the internet", "To reach the VPS"], 1, "jarvis has its own JetStream domain; MQTT state there doesn't depend on the hub."],
+  ["To allow an MQTT subscription to `home/kitchen/#`, NATS needs subscribe permission on…", ["`home.kitchen.>`", "`home.kitchen.>` and `home.kitchen`", "`home/kitchen/#`"], 1, "MQTT `#` matches the parent level too, so NATS makes two subscriptions, and both need permission."],
+  ["jarvis's client port is `host: 127.0.0.1`. The mqtt listener, with no host set, listens on…", ["127.0.0.1 too", "0.0.0.0: it has its own host setting", "The tailnet only"], 1, "Each listener has its own host. Set a login and a firewall rule before switching it on."]
+ ],
+ "br-security": [
+  ["Why a login per device rather than one shared one?", ["The broker requires it", "One leaked password then opens one device's topics, and you can revoke it alone", "Speed"], 1, "Device passwords leak (web UIs, YAML files). Per-device users with their own topics contain it."],
+  ["Should 1883 be forwarded on the router?", ["Yes, for the phone", "No: home network only; from outside use the tailnet or NATS via the hub", "Only with QoS 2"], 1, "The broker has no reason to face the internet."],
+  ["A publish the user isn't allowed to make is usually…", ["Answered with an error the client shows", "Dropped, with a line in the broker's log", "Delivered anyway"], 1, "In 3.1.1 there's no reason code on PUBACK; the broker's log is where to look."],
+  ["Being on the tailnet is not a login because…", ["Tailscale is unencrypted", "The tailnet is shared with friends", "MQTT doesn't work over it"], 1, "Anyone on the shared tailnet could reach the port."],
+  ["Mosquitto 2 with no listener configured listens on…", ["Every interface, anonymous", "localhost only", "Nothing"], 1, "Mosquitto 2 changed the default; adding `listener 1883` makes it reachable, with allow_anonymous false by default."],
+  ["What can a compromised device with no topic permissions do?", ["Only lie about itself", "Read every topic, publish retained garbage anywhere, send commands to the lock", "Nothing; it's on the LAN"], 1, "Permissions limit it to its own topics."]
+ ],
+ "br-devices": [
+  ["On Tasmota, where do you send a command?", ["`stat/<topic>/POWER`", "`cmnd/<topic>/POWER`", "`tele/<topic>/POWER`"], 1, "cmnd in, stat for answers, tele for periodic telemetry."],
+  ["Home Assistant discovery configs are published…", ["Without retain", "Retained, under `homeassistant/`", "Only over HTTP"], 1, "Retained so Home Assistant sees them whenever it starts."],
+  ["What should a device do when it sees `homeassistant/status online`?", ["Nothing", "Publish its discovery config again", "Disconnect"], 1, "In case the retained copy was lost; it's Home Assistant's birth message."],
+  ["Zigbee2MQTT sends a command to a device on…", ["`zigbee2mqtt/<name>/set`", "`zigbee2mqtt/<name>`", "`cmnd/<name>`"], 0, "The plain topic is the device's state; /set is for commands."],
+  ["Which topic lists every Tasmota device and whether it's up?", ["`tele/+/LWT`", "`stat/+/POWER`", "`$SYS/#`"], 0, "Retained Online, with Offline as the will."],
+  ["A renamed device still shows as unavailable in Home Assistant. Fix:", ["Restart Home Assistant", "Publish an empty retained message to the old config topic", "Change its QoS"], 1, "The old retained config keeps recreating the entity."]
+ ],
+ "br-debug": [
+  ["A client connects, then drops every few seconds, forever. First suspect?", ["Wi-Fi", "Another client with the same client ID", "QoS"], 1, "Two clients sharing an ID evict each other in a loop."],
+  ["Worked until the first Wi-Fi blip, then receives nothing. Likely cause?", ["The broker lost the topic", "It subscribed outside the connected callback, and the clean session dropped the subscription", "QoS 0"], 1, "Subscribe on every connect."],
+  ["A device turns itself off after every reboot.", ["A retained command on its /set topic", "A will", "QoS 1 duplicates"], 0, "Find it with --retained-only and clear it with an empty retained publish."],
+  ["Every message arrives twice in one client. Likely?", ["The broker is broken", "Overlapping subscriptions, like `home/#` and `home/kitchen/#`", "Retained messages"], 1, "The spec lets a broker deliver a copy per matching subscription. Or it's QoS 1 redelivery: check the DUP flag."],
+  ["First step in any \"messages don't arrive\" investigation:", ["Restart the broker", "Watch the broker: subscribe to `#` and see if the message appears", "Change QoS"], 1, "It tells you which side the fault is on."],
+  ["Where do permission violations show up on NATS?", ["In the client, always", "In the server's log, e.g. journalctl -u nats", "Nowhere"], 1, "The client usually never hears about a denied publish."]
+ ]
+}

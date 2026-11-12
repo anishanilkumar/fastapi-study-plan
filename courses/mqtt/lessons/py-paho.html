@@ -1,0 +1,61 @@
+<p>paho-mqtt is the standard Python client, from the Eclipse project that also makes Mosquitto. It's callback-based and runs its network loop in a thread. Version 2 (2024) changed the callback signatures, so many examples online no longer run as written.</p>
+
+<h3>A complete subscriber</h3>
+<pre><code>import json, logging
+import paho.mqtt.client as mqtt
+
+log = logging.getLogger("fridge")
+
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code.is_failure:
+        log.error("connect refused: %s", reason_code)      # e.g. "Not authorized"
+        return
+    # Here, not after connect(): this runs again after every reconnect.
+    client.subscribe("home/kitchen/fridge/#", qos=1)
+
+def on_message(client, userdata, msg):
+    log.info("%s %r retained=%s", msg.topic, msg.payload, msg.retain)
+
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="fridge-logger-mac",
+                     protocol=mqtt.MQTTv311)
+client.username_pw_set("fridge-logger", password)
+client.on_connect = on_connect
+client.on_message = on_message
+client.reconnect_delay_set(min_delay=1, max_delay=60)
+client.connect("jarvis", 1883, keepalive=60)
+client.loop_forever()          # blocks; reconnects by itself</code></pre>
+<p>The first argument, <code>CallbackAPIVersion.VERSION2</code>, picks the new callback signatures: <code>on_connect</code> gets a <code>reason_code</code> object and <code>properties</code>. Leave it out and paho 2 complains; old examples with <code>on_connect(client, userdata, flags, rc)</code> are the version 1 API.</p>
+
+<h3>The loop: who runs your callbacks</h3>
+<table><thead><tr><th>Call</th><th>What it does</th></tr></thead><tbody>
+<tr><td><code>loop_forever()</code></td><td>Runs the network loop in this thread, until <code>disconnect()</code>. For a program that only reacts to messages.</td></tr>
+<tr><td><code>loop_start()</code> / <code>loop_stop()</code></td><td>Runs it in a background thread, so your own code keeps going. Callbacks then run in <em>that</em> thread.</td></tr>
+</tbody></table>
+<p>The same thread that runs your callbacks also sends the keepalive pings and reads the socket. A callback that blocks (an HTTP call, a <code>time.sleep</code>, a slow database write) stops all of that: no other messages are handled, and long enough, the broker decides you're dead. Keep callbacks short; hand slow work to a <code>queue.Queue</code> and a worker thread.</p>
+
+<h3>Publishing</h3>
+<pre><code>client.loop_start()
+info = client.publish("home/kitchen/fridge/temp", "4.2", qos=1, retain=True)
+info.wait_for_publish(timeout=5)       # for QoS 1: until the broker's PUBACK
+if not info.is_published():
+    log.warning("not acknowledged yet; paho will retry")</code></pre>
+<p><code>publish()</code> returns at once; the message goes out from the loop thread. In a short script that publishes and exits, call <code>wait_for_publish()</code> or the process can end before anything was sent. Payloads can be <code>str</code> (sent as UTF-8), <code>bytes</code>, or numbers; send JSON as <code>json.dumps(...)</code>.</p>
+
+<h3>Last will and a clean exit</h3>
+<pre><code>client.will_set("home/kitchen/fridge/status", "offline", qos=1, retain=True)
+client.connect("jarvis", 1883, keepalive=60)
+...
+client.publish("home/kitchen/fridge/status", "offline", qos=1, retain=True).wait_for_publish()
+client.disconnect()                    # clean: the will is not sent</code></pre>
+<p><code>will_set</code> must come before <code>connect</code>: the will is part of CONNECT.</p>
+
+<aside class="bridge"><span class="label">From FastAPI</span><p>A FastAPI handler returns and the request is done. A paho callback returns into a loop that must keep spinning. It's the same lesson as "one blocking call stalls the event loop", with a thread instead of an event loop.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>An exception raised inside a callback. By default paho logs it and raises it again out of the network loop: <code>loop_forever()</code> ends, or with <code>loop_start()</code> the background thread dies and the client quietly stops receiving while the rest of the program runs on. Catch and log in your own handler, with the topic and payload. (<code>client.suppress_exceptions = True</code> makes paho only log it; turn on <code>client.enable_logger()</code> to see that.)</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write a script that publishes the Mac's CPU load every 10 s to <code>anish-test/mac/load</code> on the public test broker, with a retained online/offline status and a will. Kill it with <code>kill -9</code> and watch the will arrive.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html" target="_blank" rel="noopener">paho-mqtt: client reference</a></li>
+<li><a href="https://eclipse.dev/paho/files/paho.mqtt.python/html/migrations.html" target="_blank" rel="noopener">paho-mqtt: migrating to 2.0</a></li>
+</ul></aside>

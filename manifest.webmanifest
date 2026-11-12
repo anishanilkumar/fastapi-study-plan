@@ -1,7 +1,7 @@
 {
-  "name": "Study plan",
+  "name": "Study",
   "short_name": "Study",
-  "description": "Python and FastAPI, from the basics. Works offline.",
+  "description": "Self-hosted courses with lessons, checks, quizzes and drills. Works offline.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

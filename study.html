@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Study">
-<title>Python Study Plan</title>
+<title>Study</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Crect width=%2720%27 height=%2720%27 fill=%27%230a0e14%27/%3E%3Crect x=%275%27 y=%275%27 width=%2710%27 height=%2710%27 fill=%27none%27 stroke=%27%233dd6f5%27 stroke-width=%272%27/%3E%3Crect x=%278%27 y=%278%27 width=%274%27 height=%274%27 fill=%27%233dd6f5%27/%3E%3C/svg%3E">
 <style>
 /* The "instrument" style: a dark UI built like a machined instrument, not a
@@ -131,6 +131,14 @@ code { font-family: var(--face-mono); font-size: 0.875em; background: var(--pane
 a.wordmark { text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
 a.wordmark:hover { color: var(--arc); }
 .mast-row .btn { margin: 0; min-height: 44px; }
+/* The course switcher: quiet engraved links, the current one lit. */
+.course-links { display: flex; flex-wrap: wrap; gap: 0 1rem; margin-right: auto; }
+.course-links a { font-family: var(--face-mono); font-size: var(--t-label); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; border-bottom: var(--rule) solid transparent; }
+.course-links a:hover { color: var(--arc); }
+.course-links a[aria-current] { color: var(--arc); border-bottom-color: var(--arc); }
+.course-card { display: grid; gap: 0.75rem; }
+.course-card h2 a { color: var(--ink); text-decoration: none; }
+.course-card h2 a:hover { color: var(--arc); }
 .mast h1 { font-size: var(--t-major); letter-spacing: -0.03em; }
 .lede { color: var(--ink-dim); max-width: 60ch; }
 
@@ -276,10 +284,10 @@ body[data-view="plan"] .strip { position: sticky; }
 .reading ol.points { list-style: decimal; }
 .reading ol.points li::marker { font-family: var(--face-mono); color: var(--arc-dim); }
 /* Asides are callouts: a thick left rule in the colour of their job.
-   PHP bridge = arc (live, the thing to connect to); trap = gold (warning);
+   bridge from what you know (PHP, HTTP, NATS) = arc (live, the thing to connect to); trap = gold (warning);
    try-it = ink; further reading = engraved, the quietest. */
 .reading aside { display: grid; gap: 0.5rem; background: var(--panel-lit); border-left: 6px solid var(--engrave); padding: 1rem 1.125rem; }
-.reading aside.php { border-left-color: var(--arc); }
+.reading aside.php, .reading aside.bridge { border-left-color: var(--arc); }
 .reading ul.map { list-style: none; display: grid; gap: 0; margin: 0; padding: 0; }
 .reading ul.map li { display: grid; gap: 0.125rem; padding: 0.5rem 0; border-top: var(--rule) solid var(--engrave); }
 .reading ul.map li::before { content: none; }
@@ -612,128 +620,55 @@ body[data-focus="on"] .park { display: flex; }
 <div id="root"></div>
 <script>
 (function () {
-  // Days run basics first: the language itself, then the traps, then FastAPI
-  // from its first route up, then async, then the database and tests.
-  // Ids are what the server stores, so an item kept from an earlier version
-  // keeps its id and its tick.
-  var PLAN = [
-    { id: "sat", n: 0, title: "Python, from the basics", groups: [
-      { label: "Morning · the language", items: [
-        { id: "b-setup", lesson: "py-setup", t: "Run Python and keep projects apart with a virtualenv", why: "<code>python3 -m venv .venv</code>, <code>source .venv/bin/activate</code>, <code>pip install httpx</code>. A venv is a per-project <code>vendor/</code>; <code>uv</code> does the same faster. Try lines in the REPL (<code>python3</code>) as you read.", src: ["Python tutorial: virtual environments", "https://docs.python.org/3/tutorial/venv.html"] },
-        { id: "b-syntax", lesson: "py-syntax", t: "Indentation is the syntax", why: "No braces, no semicolons, no <code>$</code>. Blocks start with <code>:</code> and are indented 4 spaces. <code>if / elif / else</code>, <code>for x in items:</code>, <code>while</code>, <code>range(5)</code>.", src: ["Python tutorial: control flow", "https://docs.python.org/3/tutorial/controlflow.html"] },
-        { id: "b-types", lesson: "py-types", t: "The core types: <code>int</code>, <code>float</code>, <code>str</code>, <code>bool</code>, <code>None</code>", why: "Strings are immutable. Build them with f-strings: <code>f\"{name} has {n} items\"</code>. <code>None</code> is PHP's <code>null</code>; <code>True</code>/<code>False</code> are capitalised.", src: ["Python tutorial: an informal introduction", "https://docs.python.org/3/tutorial/introduction.html"] },
-        { id: "b-collections", lesson: "py-collections", t: "PHP's array splits in two: <code>list</code> and <code>dict</code>", why: "<code>[1, 2, 3]</code> is a list (ordered, by position). <code>{\"a\": 1}</code> is a dict (by key). Also <code>tuple</code> (fixed, immutable) and <code>set</code> (unique). <code>d[\"missing\"]</code> raises <code>KeyError</code>; <code>d.get(\"missing\")</code> returns <code>None</code>.", src: ["Python tutorial: data structures", "https://docs.python.org/3/tutorial/datastructures.html"] },
-        { id: "b-loops", lesson: "py-loops", t: "Loops the Python way: <code>enumerate</code>, <code>zip</code>, slicing, comprehensions", why: "<code>for i, x in enumerate(xs)</code> instead of a counter. <code>xs[1:3]</code>, <code>xs[-1]</code>. <code>[u.name for u in users if u.active]</code> replaces most <code>array_map</code> / <code>array_filter</code>." },
-        { id: "b-functions", lesson: "py-functions", t: "Functions: positional, keyword, defaults, <code>*args</code>, <code>**kwargs</code>", why: "<code>def send(to, body, *, retries=3)</code>: everything after <code>*</code> must be passed by name. Call with <code>send(\"a\", \"hi\", retries=1)</code>. Functions are values; you can pass them around.", src: ["Python tutorial: defining functions", "https://docs.python.org/3/tutorial/controlflow.html#defining-functions"] },
-        { id: "b-modules", lesson: "py-modules", t: "Modules, packages and imports", why: "Every <code>.py</code> file is a module; a folder of them is a package. <code>from app.models import User</code> is <code>use App\\Models\\User</code>. <code>if __name__ == \"__main__\":</code> runs only when the file is run directly.", src: ["Python tutorial: modules", "https://docs.python.org/3/tutorial/modules.html"] },
-        { id: "b-classes", lesson: "py-classes", t: "Classes, <code>self</code>, and <code>@dataclass</code>", why: "<code>__init__</code> is the constructor; <code>self</code> is <code>$this</code>, written out as the first parameter. No <code>private</code>: a leading <code>_</code> means \"internal\". <code>@dataclass</code> writes the constructor for plain data classes.", src: ["Python tutorial: classes", "https://docs.python.org/3/tutorial/classes.html"] }
-      ]},
-      { label: "Afternoon · what trips people up", items: [
-        { id: "sat-process", lesson: "py-runtime", t: "Python servers are long-running processes", why: "Module-level variables, lists and sessions live across requests and are shared between them. PHP-FPM throws them away after each request. Many bugs come from this one difference." },
-        { id: "sat-mutable", lesson: "py-functions", t: "Mutable default arguments (<code>def f(tags=[])</code>)", why: "The default is created once, when the function is defined, and shared by every call. Fix: default to <code>None</code> and create the list inside.", src: ["Python tutorial: default argument values", "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"] },
-        { id: "sat-truthy", lesson: "py-types", t: "Truthiness: <code>\"\"</code>, <code>0</code>, <code>[]</code>, <code>{}</code>, <code>None</code> are all false", why: "<code>if not token:</code> treats an empty string and None the same. Know when you mean <code>is None</code>. Watch for checks that fail open when config is empty." },
-        { id: "sat-is", lesson: "py-types", t: "<code>is</code> vs <code>==</code>", why: "<code>is</code> checks identity. Use it only for <code>None</code>, <code>True</code>, <code>False</code>. Everything else uses <code>==</code>." },
-        { id: "sat-except", lesson: "py-errors", t: "<code>try / except / finally</code>, and why bare <code>except: pass</code> is bad", why: "Catch the specific exception you expect. A bare except swallows every error, even typos and shutdown signals, so bugs disappear silently.", src: ["Python tutorial: errors and exceptions", "https://docs.python.org/3/tutorial/errors.html"] },
-        { id: "sat-with", lesson: "py-errors", t: "<code>with</code> blocks (context managers)", why: "<code>with open(...)</code> and <code>with Session(engine) as s:</code> close the resource even when an error happens. Like a guaranteed <code>finally</code>." },
-        { id: "sat-datetime", lesson: "py-stdlib", t: "Naive vs aware <code>datetime</code>", why: "Always use <code>datetime.now(timezone.utc)</code>. Comparing a naive and an aware datetime raises <code>TypeError</code>. Naive times on a server are in whatever zone its clock uses, often hours off.", src: ["Python docs: aware and naive objects", "https://docs.python.org/3/library/datetime.html#aware-and-naive-objects"] },
-        { id: "sat-hmac", lesson: "py-stdlib", t: "<code>hmac.compare_digest</code> for secrets", why: "Same as PHP <code>hash_equals()</code>. Plain <code>==</code> can leak timing information. A unit test can't prove constant time, so rely on the standard library.", src: ["Python docs: hmac.compare_digest", "https://docs.python.org/3/library/hmac.html#hmac.compare_digest"] },
-        { id: "sat-types", lesson: "py-typing", t: "Reading type hints", why: "<code>str | None</code>, <code>list[str]</code>, <code>dict[str, int]</code>. FastAPI and Pydantic use them to parse and validate requests, so you need to read them fluently." }
-      ]}
-    ], checks: [
-      { id: "b-c1", t: "I can make a venv, install a package, and run a script that uses it" },
-      { id: "b-c2", t: "I can turn a list of user dicts into the names of the active ones with one comprehension" },
-      { id: "sat-c1", t: "I can explain why <code>def f(tags=[])</code> shares one list between calls" },
-      { id: "sat-c2", t: "I can say how <code>if not token:</code> and <code>if token is None:</code> differ for an empty string" },
-      { id: "sat-c3", t: "I can write a UTC-aware \"is this cert expired?\" check and say why naive breaks" }
-    ]},
-    { id: "sun", n: 1, title: "FastAPI from the first route, then async", groups: [
-      { label: "Morning · FastAPI from zero", items: [
-        { id: "sun-first", lesson: "fa-first", t: "First app: <code>app = FastAPI()</code> and one <code>@app.get</code> route", why: "Run it with <code>fastapi dev main.py</code> and open <code>/docs</code>: FastAPI writes the interactive API docs from your type hints. Go through the tutorial pages in order.", src: ["FastAPI tutorial: first steps", "https://fastapi.tiangolo.com/tutorial/first-steps/"] },
-        { id: "sun-params", lesson: "fa-params", t: "Path, query and body parameters", why: "Name in the path: path param. Simple type: query param. Pydantic model: body. A <code>list[str]</code> needs <code>Query()</code> or FastAPI reads it as the body.", src: ["FastAPI tutorial: query parameters", "https://fastapi.tiangolo.com/tutorial/query-params/"] },
-        { id: "sun-pydantic", lesson: "fa-pydantic", t: "Pydantic models", why: "Validate input with types and <code>Field(...)</code> limits. Use <code>response_model</code> so fields like <code>password_hash</code> never leak in responses.", src: ["FastAPI tutorial: request body", "https://fastapi.tiangolo.com/tutorial/body/"] },
-        { id: "sun-errors", lesson: "fa-errors", t: "<code>HTTPException</code> and status codes", why: "Know when to return 401, 403, 404, 409, 422 and 502. A bad body gets 422 from Pydantic before your code runs. Interviewers notice a wrong status code.", src: ["FastAPI tutorial: handling errors", "https://fastapi.tiangolo.com/tutorial/handling-errors/"] },
-        { id: "sun-depends", lesson: "fa-depends", t: "<code>Depends()</code>", why: "FastAPI's dependency injection, like Laravel/Symfony DI. Used for auth checks, the current user, and the database session.", src: ["FastAPI tutorial: dependencies", "https://fastapi.tiangolo.com/tutorial/dependencies/"] },
-        { id: "sun-build", lesson: "fa-first", t: "Build one: a small notes API", why: "<code>GET /notes</code>, <code>POST /notes</code>, <code>DELETE /notes/{id}</code>, a Pydantic model, a dict in memory, 404 for a missing id. Try every route from <code>/docs</code>. Then read <code>app.py</code> behind this page: the same pieces with SQLite." }
-      ]},
-      { label: "Afternoon · async", items: [
-        { id: "sun-loop", lesson: "py-async", t: "The event loop: one thread, switches only at <code>await</code>", why: "Read this page first. It is the clearest explanation of async in Python.", src: ["FastAPI: concurrency and async / await", "https://fastapi.tiangolo.com/async/"] },
-        { id: "sun-blocking", lesson: "py-async", t: "Blocking vs non-blocking calls", why: "Blocking: <code>time.sleep</code>, <code>requests</code>, sync database drivers. Non-blocking: <code>asyncio.sleep</code>, <code>httpx.AsyncClient</code>, async drivers. <code>await requests.get(...)</code> is a TypeError." },
-        { id: "sun-gather", lesson: "py-async", t: "<code>asyncio.gather</code> and <code>create_task</code>", why: "How to run several awaits at the same time, and why <code>time.sleep</code> inside them makes them run one after another.", src: ["Python docs: coroutines and tasks", "https://docs.python.org/3/library/asyncio-task.html"] },
-        { id: "sun-defasync", lesson: "fa-async", t: "<code>async def</code> vs <code>def</code> in FastAPI", why: "<code>async def</code> runs on the event loop. Plain <code>def</code> runs in a threadpool (about 40 threads). If a handler must call blocking code, plain <code>def</code> is the safe choice." },
-        { id: "sun-lifespan", lesson: "fa-async", t: "Lifespan: startup and shutdown", why: "Create shared things (an <code>httpx.AsyncClient</code>, the DB engine) once at startup and close them at shutdown.", src: ["FastAPI: lifespan events", "https://fastapi.tiangolo.com/advanced/events/"] }
-      ]}
-    ], checks: [
-      { id: "sun-c0", t: "I can write a FastAPI route with a path param, a query param and a body without looking it up" },
-      { id: "sun-c1", t: "I can explain why one blocking call slows down unrelated endpoints" },
-      { id: "sun-c2", t: "I can give both fixes (async client, or plain <code>def</code>) and the trade-off" },
-      { id: "sun-c3", t: "I know how FastAPI decides between path, query and body" }
-    ]},
-    { id: "mon", n: 2, title: "SQLAlchemy and pytest", groups: [
-      { label: "Morning · the database", items: [
-        { id: "mon-flush", lesson: "db-session-model", t: "When SQL actually runs: <code>add</code>, flush, autoflush, <code>commit</code>", why: "Nothing is sent on <code>add()</code> or on setting an attribute. Flush sends it inside the transaction (ids appear, constraint errors fire); commit ends it. Closing without commit rolls back. Unlike Drupal's <code>save()</code>, which writes at once.", src: ["SQLAlchemy: session basics", "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"] },
-        { id: "mon-expire", lesson: "db-session-model", t: "After commit objects reload; after close they can't (DetachedInstanceError)", why: "<code>expire_on_commit</code> makes the next attribute read a fresh SELECT. A closed session can't do that, nor a lazy load like <code>d.owner</code>. Build the response while the session is open, <code>refresh()</code>, or <code>expire_on_commit=False</code>.", src: ["SQLAlchemy: object states and expiry", "https://docs.sqlalchemy.org/en/20/orm/session_state_management.html"] },
-        { id: "mon-session", lesson: "db-sessions", t: "One session per request, via <code>Depends()</code> with <code>yield</code>", why: "Never a module-level <code>db = Session(engine)</code>: it is shared by every request and every thread.", src: ["FastAPI: dependencies with yield", "https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/"] },
-        { id: "mon-tx", lesson: "db-sessions", t: "<code>commit</code>, <code>rollback</code>, and the failed-transaction state", why: "After an error, the session must be rolled back. If not, every later use fails with \"transaction has been rolled back due to a previous exception\".", src: ["SQLAlchemy: session basics", "https://docs.sqlalchemy.org/en/20/orm/session_basics.html"] },
-        { id: "mon-unique", lesson: "db-sessions", t: "Unique constraint + catch <code>IntegrityError</code> (return 409)", why: "\"Check if it exists, then insert\" has a race: two requests both pass the check. Let the database enforce it." },
-        { id: "mon-bind", lesson: "db-sqlalchemy", t: "Bound parameters, never f-strings in SQL", why: "<code>select(Device).where(Device.serial == serial)</code> or <code>text(\"... WHERE serial = :serial\")</code>. Same idea as PDO prepared statements.", src: ["SQLAlchemy 2.0: ORM quick start", "https://docs.sqlalchemy.org/en/20/orm/quickstart.html"] },
-        { id: "mon-nplus1", lesson: "db-sessions", t: "N+1 queries and pagination", why: "Loading related rows in a loop runs one query per row. Use <code>selectinload</code>. List endpoints need a limit." },
-        { id: "mon-tenant", lesson: "db-sessions", t: "Ownership checks (IDOR)", why: "Filter by owner or tenant inside the query, not after loading. Your PHP experience transfers directly here." }
-      ]},
-      { label: "Afternoon · tests", items: [
-        { id: "mon-pytest", lesson: "test-pytest", t: "pytest basics", why: "Plain <code>assert</code>, fixtures, <code>@pytest.mark.parametrize</code>, <code>monkeypatch</code>.", src: ["pytest: get started", "https://docs.pytest.org/en/stable/getting-started.html"] },
-        { id: "mon-client", lesson: "test-fastapi", t: "FastAPI <code>TestClient</code> and <code>dependency_overrides</code>", why: "Call endpoints in tests and swap the real database or auth for a test one.", src: ["FastAPI: testing", "https://fastapi.tiangolo.com/tutorial/testing/"] },
-        { id: "mon-determ", lesson: "test-fastapi", t: "Deterministic tests", why: "Pass <code>now</code> in as a parameter. Fake upstreams at the transport (<code>httpx.MockTransport</code>). Don't depend on the machine's timezone or the network. Say what a test can't prove." }
-      ]}
-    ], checks: [
-      { id: "mon-c1", t: "I can explain why <code>db = Session(engine)</code> at module level breaks under load" },
-      { id: "mon-c2", t: "I can write a test that registers the same serial twice and expects 409" },
-      { id: "mon-c3", t: "I can say what a given test cannot prove" }
-    ]},
-    { id: "eve", n: 2, part: "evening", title: "Practice and rest", groups: [
-      { items: [
-        { id: "eve-practice", lesson: "iv-review", min: 20, t: "Two or three practice questions", why: "Ask an AI assistant or a friend for concept-first questions on what you covered, and answer out loud: the bug, the fix, the test. The drills tab has more than two dozen, very easy to moderate-hard; do any you haven't." },
-        { id: "eve-deepdive", min: 20, t: "Rehearse your project deep-dive", why: "Two minutes on a project you built: what it does, the stack, one hard problem and how you solved it, and what you'd do differently. Expect follow-ups on each." },
-        { id: "eve-rest", min: 0, t: "Stop studying by 21:00 and sleep", why: "A rested head reasons better than one more hour of reading." }
-      ]}
-    ], checks: [] },
-    { id: "tue", n: 3, part: "morning", title: "The day itself", groups: [
-      { items: [
-        { id: "tue-tabs", t: "Open the docs tabs", why: "FastAPI, SQLAlchemy, pytest and the Python standard library. If docs are allowed, use them; looking things up well is part of the job." },
-        { id: "tue-script", lesson: "iv-review", t: "Review your code-review routine", why: "Read the whole snippet first. Name the worst bug first, with a concrete example. Give the fix, then the test, then what the test can't prove. Then rank the other issues." },
-        { id: "tue-unsure", lesson: "iv-review", t: "Know what to say when you're unsure", why: "\"In PHP I'd do X. I'd check the docs for the exact Python syntax, but the fix is Y.\" That shows judgement, which is what they score." }
-      ]}
-    ], checks: [] }
-  ];
-
-  var MAP = [
-    ["array (list-like)", "list"],
-    ["array (keyed)", "dict"],
-    ["null", "None"],
-    ["$this", "self"],
-    ["composer + vendor/", "pip / uv + .venv"],
-    ["namespace / use", "package / import"],
-    ["hash_equals()", "hmac.compare_digest()"],
-    ["PDO prepared statements", "SQLAlchemy bound parameters"],
-    ["Guzzle", "httpx (has an async client)"],
-    ["Laravel / Symfony DI", "FastAPI Depends()"],
-    ["Doctrine EntityManager", "SQLAlchemy Session"],
-    ["Form request validation", "Pydantic models"],
-    ["PHPUnit", "pytest"],
-    ["DateTimeImmutable with timezone", "datetime with tzinfo (timezone.utc)"]
-  ];
-
   // ---- Config, injected by the server from config.json (see
   // config.example.json). Opened as a plain file, it's null: all defaults.
   var CONFIG = /*STUDY_CONFIG*/null || {};
-  var TARGET = CONFIG.target ? { label: CONFIG.target.label, at: new Date(CONFIG.target.at) } : null;
-  var START = CONFIG.start ? new Date(CONFIG.start + "T12:00:00") : null;
-  var TITLE = CONFIG.title || "Python and FastAPI, from the basics";
   // Demo mode: no server state at all. Each visitor's progress lives in
   // their own browser, and the page never tries to save it anywhere else.
   var DEMO = !!CONFIG.demo;
-  // Mentor mode (/mentor/<token>): read-only. The progress, questions and
-  // drills come inlined in the page; nothing is fetched, stored or saved.
+  // Mentor mode (/mentor/<token>/<course>): read-only. The progress, questions
+  // and drills come inlined in the page; nothing is fetched, stored or saved.
   var MENTOR = CONFIG.mentor || null;
+  // Where "all courses" is: / for the learner, /mentor/<token> for a mentor.
+  var HOME = CONFIG.home_href || "/";
+
+  // ---- The home page (/): every course, with how far along each one is.
+  // The same page in another mode, so it shares the style and the fonts. ----
+  if (CONFIG.home) { renderHome(CONFIG.home); return; }
+  function renderHome(home) {
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    // A link from before there were courses (/#/lesson/py-types) still lands.
+    if (/^#\/./.test(location.hash) && home.legacy && !MENTOR) { location.replace(home.legacy + location.hash); return; }
+    document.title = CONFIG.title || "Study";
+    var h = '<header class="mast"><div class="mast-row"><a class="wordmark" href="' + esc(HOME) + '">Study' + (MENTOR ? " · progress report" : "") + "</a></div>" +
+      "<h1>" + esc(CONFIG.title || "Study") + "</h1>" +
+      '<p class="lede">' + (MENTOR ? "A read-only view of the learner's progress in each course. Open one for the detail." :
+        "Pick a course. Each keeps its own progress, XP, goal and deadline; lessons, checks, drills and notes work the same way in all of them.") + "</p>" +
+      (DEMO ? '<p class="demo-note"><span class="label">Demo</span> Your progress stays in this browser; nothing is sent to the server.</p>' : "") + "</header>";
+    home.courses.forEach(function (c) {
+      var lit = c.lessons ? Math.round(20 * c.read / c.lessons) : 0, ticks = "";
+      for (var i = 0; i < 20; i++) ticks += i < lit ? '<i class="on"></i>' : "<i></i>";
+      var started = c.read || c.passed || c.drills_done;
+      h += '<section class="instrument course-card"><div class="section-head"><span class="label">' + esc(c.short) + " · " + c.lessons + " lessons · " + c.drills + " drills · about " + c.hours + " h</span>" +
+        '<h2><a href="' + esc(c.href) + '">' + esc(c.title) + " ›</a></h2>" + '<p class="why">' + esc(c.blurb) + "</p></div>" +
+        '<div class="ticks" aria-hidden="true">' + ticks + "</div>" +
+        '<span class="stamp">' + (DEMO ? "Progress is kept in this browser" : started ? c.read + " of " + c.lessons + " read · " + c.passed + " checks passed · " + c.drills_done + " drills done" +
+          (c.updated_at ? " · last change " + esc(new Date(c.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })) : "") : "Not started") + "</span>" +
+        '<div class="next-actions"><a class="btn' + (started || MENTOR ? "" : " btn-primary") + '" href="' + esc(c.href) + '">' + (MENTOR ? "Open the report" : started ? "Carry on" : "Start") + " ›</a></div></section>";
+    });
+    document.getElementById("root").innerHTML = '<main class="page">' + h + "</main>";
+    if (!MENTOR && "serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("/sw.js").catch(function () {});
+  }
+
+  // ---- The course: its plan, syllabus, ranks and texts, from
+  // courses/<id>/course.json, injected by the server with the config. ----
+  var COURSE = CONFIG.course || { id: "none", title: "No course", plan: [], parts: [], ranks: [{ xp: 0, t: "Novice", need: [] }] };
+  // Where this course's files are: /<id>/quizzes.json, /<id>/lessons/<id>.html, /<id>/state.
+  var BASE = "/" + COURSE.id + "/";
+  var PLAN = COURSE.plan, PARTS = COURSE.parts;
+  var TARGET = CONFIG.target ? { label: CONFIG.target.label, at: new Date(CONFIG.target.at) } : null;
+  var START = CONFIG.start ? new Date(CONFIG.start + "T12:00:00") : null;
+  var TITLE = COURSE.title;
   function planDate(n) { var t = new Date(START); t.setDate(t.getDate() + n); return t; }
   function dayLabel(d) {
     var base = START ? planDate(d.n).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "Day " + (d.n + 1);
@@ -755,46 +690,6 @@ body[data-focus="on"] .park { display: flex; }
     });
   });
 
-  // The syllabus: every lesson, in reading order. Each lesson's text lives in
-  // /lessons/<id>.html; "day" says where the 3-day plan uses it (null: extra).
-  var PARTS = [
-    { n: 1, title: "Python", blurb: "The language, from running a script to async.", lessons: [
-      { id: "py-setup", title: "Setting up: Python, virtualenvs, the REPL", min: 15, day: "sat" },
-      { id: "py-syntax", title: "Syntax and control flow", min: 15, day: "sat" },
-      { id: "py-types", title: "Numbers, strings, booleans and None", min: 20, day: "sat" },
-      { id: "py-collections", title: "Lists, tuples, dicts and sets", min: 25, day: "sat" },
-      { id: "py-loops", title: "Iterating well: comprehensions, enumerate, zip", min: 20, day: "sat" },
-      { id: "py-functions", title: "Functions, defaults and decorators", min: 25, day: "sat" },
-      { id: "py-modules", title: "Modules, packages and imports", min: 15, day: "sat" },
-      { id: "py-errors", title: "Exceptions and context managers", min: 20, day: "sat" },
-      { id: "py-classes", title: "Classes and dataclasses", min: 25, day: "sat" },
-      { id: "py-typing", title: "Type hints", min: 20, day: "sat" },
-      { id: "py-iter", title: "Iterators and generators", min: 15, day: null },
-      { id: "py-stdlib", title: "The standard library a backend uses", min: 25, day: "sat" },
-      { id: "py-runtime", title: "Servers are long-running processes", min: 10, day: "sat" },
-      { id: "py-async", title: "Async and the event loop", min: 30, day: "sun" }
-    ]},
-    { n: 2, title: "FastAPI", blurb: "Building an API, from the first route to production.", lessons: [
-      { id: "fa-first", title: "Your first FastAPI app", min: 15, day: "sun" },
-      { id: "fa-params", title: "Path, query, body and headers", min: 20, day: "sun" },
-      { id: "fa-pydantic", title: "Pydantic models and response models", min: 25, day: "sun" },
-      { id: "fa-errors", title: "Status codes and errors", min: 15, day: "sun" },
-      { id: "fa-depends", title: "Dependencies", min: 20, day: "sun" },
-      { id: "fa-async", title: "def vs async def, lifespan, background work", min: 20, day: "sun" },
-      { id: "fa-security", title: "Authentication and security", min: 25, day: null },
-      { id: "fa-structure", title: "Structure, settings and deployment", min: 15, day: null }
-    ]},
-    { n: 3, title: "Data and tests", blurb: "SQLAlchemy, transactions, pytest.", lessons: [
-      { id: "db-sqlalchemy", title: "SQLAlchemy 2.0 basics", min: 25, day: "mon" },
-      { id: "db-session-model", title: "How a Session works, step by step", min: 25, day: "mon" },
-      { id: "db-sessions", title: "Sessions, transactions and integrity", min: 20, day: "mon" },
-      { id: "test-pytest", title: "pytest", min: 20, day: "mon" },
-      { id: "test-fastapi", title: "Testing FastAPI apps", min: 20, day: "mon" }
-    ]},
-    { n: 4, title: "The interview", blurb: "Putting it together for a live code review.", lessons: [
-      { id: "iv-review", title: "The code-review routine", min: 15, day: "eve" }
-    ]}
-  ];
   var LESSONS = [], BY_ID = {};
   PARTS.forEach(function (p) { p.lessons.forEach(function (l) { l.part = p; LESSONS.push(l); BY_ID[l.id] = l; }); });
 
@@ -804,7 +699,7 @@ body[data-focus="on"] .park { display: flex; }
   // The first CHECK_N questions of a lesson are its check; the rest appear
   // only in quiz rounds, and each is worth XP.extra the first time it's right.
   var CHECK_N = 3;
-  var GOAL = 300;                      // XP a day: about a third of the plan
+  var GOAL = COURSE.goal || 300;       // XP a day: about a third of the plan
   // Ranks need XP and evidence. XP alone can be farmed (focus blocks, rereading),
   // so each rank also names what it proves: checks passed, drills done, and at
   // the top, answers that are right now, not just once.
@@ -832,37 +727,46 @@ body[data-focus="on"] .park { display: flex; }
       go: fresh.map(function (d) { return ["Drill: " + d.title, "#/drill/" + d.id]; })
         .concat(missed.map(function (d) { return ["Look again: " + d.title, "#/drill/" + d.id]; })) };
   }
-  var RANKS = [
-    { xp: 0, t: "Novice", need: [] },
-    { xp: 200, t: "Scripter", need: [["Read 3 lessons", function (s) { return s.read >= 3; },
-      function (s) { return { say: s.read + " of 3 read", go: LESSONS.filter(function (l) { return !state.done[readId(l.id)]; }).map(function (l) { return ["Read: " + l.title, "#/lesson/" + l.id]; }) }; }]] },
-    { xp: 700, t: "Pythonista", need: [["Every Python lesson in the plan read, its check passed", function () { return partPassed(1); }, function () { return lessonsTodo([1]); }]] },
-    { xp: 1300, t: "Router", need: [["Every FastAPI lesson in the plan read, its check passed", function () { return partPassed(2); }, function () { return lessonsTodo([2]); }]] },
-    { xp: 1900, t: "Tester", need: [
-      ["Every data and testing lesson read, its check passed", function () { return partPassed(3); }, function () { return lessonsTodo([3]); }],
-      ["4 drills done", function (s) { return s.drillsDone >= 4; }, function (s) { return drillsTodo(s, 4); }]] },
-    { xp: 2600, t: "Reviewer", need: [
-      ["10 drills done", function (s) { return s.drillsDone >= 10; }, function (s) { return drillsTodo(s, 10); }],
-      ["The worst bug found in 7 drills", function (s) { return s.worst >= 7; }, function (s) { return worstTodo(s, 7); }]] },
-    { xp: 3300, t: "Interview-ready", need: [
-      ["Every lesson in the plan read, its check passed", function () { return partPassed(1) && partPassed(2) && partPassed(3) && partPassed(4); }, function () { return lessonsTodo([1, 2, 3, 4]); }],
-      ["Every drill done, the worst bug found in all but 3", function (s) { return drills && s.drillsDone >= drills.length && s.worst >= drills.length - 3; },
-        function (s) { var n = drills ? drills.length : 0, w = worstTodo(s, Math.max(0, n - 3)); return { say: s.drillsDone + " of " + n + " done · worst bug " + w.say.toLowerCase(), go: w.go }; }],
-      ["120 questions answered, 85% of them right the last time", function (s) { return s.seen >= 120 && s.lastRight >= 0.85 * s.seen; },
+  function partNs(want) { return want === "all" ? PARTS.map(function (p) { return p.n; }) : want; }
+  function partTitle(n) { return (PARTS.filter(function (p) { return p.n === n; })[0] || {}).title || "Part " + n; }
+  // course.json says what each rank needs as data ({"drills": 4}); this turns
+  // each into [label, met(s), todo(s)].
+  function need(x) {
+    if (x.read != null) return [x.label || "Read " + x.read + " lessons", function (s) { return s.read >= x.read; },
+      function (s) { return { say: s.read + " of " + x.read + " read", go: LESSONS.filter(function (l) { return !state.done[readId(l.id)]; }).map(function (l) { return ["Read: " + l.title, "#/lesson/" + l.id]; }) }; }];
+    if (x.parts != null) {
+      var ns = partNs(x.parts);
+      return [x.label || (x.parts === "all" ? "Every lesson in the plan read, its check passed" : "Every " + ns.map(partTitle).join(" and ") + " lesson in the plan read, its check passed"),
+        function () { return ns.every(partPassed); }, function () { return lessonsTodo(ns); }];
+    }
+    if (x.drills === "all") return [x.label || "Every drill done, the worst bug found in all but " + (x.spare || 0),
+      function (s) { return drills && s.drillsDone >= drills.length && s.worst >= drills.length - (x.spare || 0); },
+      function (s) { var n = drills ? drills.length : 0, w = worstTodo(s, Math.max(0, n - (x.spare || 0))); return { say: s.drillsDone + " of " + n + " done · worst bug " + w.say.toLowerCase(), go: w.go }; }];
+    if (x.drills != null) return [x.label || x.drills + " drills done", function (s) { return s.drillsDone >= x.drills; }, function (s) { return drillsTodo(s, x.drills); }];
+    if (x.worst != null) return [x.label || "The worst bug found in " + x.worst + " drills", function (s) { return s.worst >= x.worst; }, function (s) { return worstTodo(s, x.worst); }];
+    if (x.answered != null) {
+      var right = x.right || 0;
+      return [x.label || x.answered + " questions answered, " + Math.round(right * 100) + "% of them right the last time",
+        function (s) { return s.seen >= x.answered && s.lastRight >= right * s.seen; },
         function (s) {
-          return { say: s.seen + " of 120 answered · " + pct(s.lastRight, s.seen) + "% right the last time",
-            go: (s.seen && s.lastRight < 0.85 * s.seen ? [["Quiz your weak spots", "#/quiz/weak"]] : []).concat(s.seen < 120 ? [["Quiz round", "#/quiz/mix"]] : []) };
-        }],
-      ["No weak lesson (under 60% over 3+ answers)", function (s) { return s.weak === 0; },
-        function (s) {
-          var weak = LESSONS.filter(function (l) { var st = lessonStats(l.id); return st.n >= 3 && st.ok / st.n < 0.6; });
-          return { say: s.weak + " weak", go: weak.map(function (l) { var st = lessonStats(l.id); return ["Quiz: " + l.title + " (" + pct(st.ok, st.n) + "%)", "#/quiz/" + l.id]; }) };
-        }],
-      ["No missed questions waiting for review", function (s) { return s.due === 0; },
-        function (s) { return { say: s.due + " due", go: [["Review " + s.due + " now", "#/review"]] }; }]] }
-  ];
+          return { say: s.seen + " of " + x.answered + " answered · " + pct(s.lastRight, s.seen) + "% right the last time",
+            go: (s.seen && s.lastRight < right * s.seen ? [["Quiz your weak spots", "#/quiz/weak"]] : []).concat(s.seen < x.answered ? [["Quiz round", "#/quiz/mix"]] : []) };
+        }];
+    }
+    if (x.noweak) return [x.label || "No weak lesson (under 60% over 3+ answers)", function (s) { return s.weak === 0; },
+      function (s) {
+        var weak = LESSONS.filter(function (l) { var st = lessonStats(l.id); return st.n >= 3 && st.ok / st.n < 0.6; });
+        return { say: s.weak + " weak", go: weak.map(function (l) { var st = lessonStats(l.id); return ["Quiz: " + l.title + " (" + pct(st.ok, st.n) + "%)", "#/quiz/" + l.id]; }) };
+      }];
+    if (x.nodue) return [x.label || "No missed questions waiting for review", function (s) { return s.due === 0; },
+      function (s) { return { say: s.due + " due", go: [["Review " + s.due + " now", "#/review"]] }; }];
+    throw new Error("unknown rank requirement " + JSON.stringify(x));
+  }
+  var RANKS = COURSE.ranks.map(function (r) { return { xp: r.xp, t: r.t, need: r.need.map(need) }; });
   function rankMet(x, s) { return s.xp >= x.xp && x.need.every(function (n) { return n[1](s); }); }
   var DRILL_ID = /^drill-([a-z0-9]+)-(\d+)$/;
+  // The same badges in every course, plus one per plan day with self-checks
+  // and one per part, and the top rank.
   var BADGES = [
     { id: "first-tick", t: "First tick", d: "Tick a plan item", ok: function (s) { return s.planDone >= 1; } },
     { id: "first-read", t: "First lesson", d: "Read a lesson", ok: function (s) { return s.read >= 1; } },
@@ -874,19 +778,19 @@ body[data-focus="on"] .park { display: flex; }
     { id: "first-block", t: "First block", d: "Finish a focus block", ok: function (s) { return s.blocks >= 1; } },
     { id: "deep-work", t: "Deep work", d: "Four focus blocks in one day", ok: function (s) { return s.bestBlocks >= 4; } },
     { id: "goal", t: "Daily goal", d: "Earn " + GOAL + " XP in one day", ok: function (s) { return s.bestDay >= GOAL; } },
-    { id: "streak-3", t: "Three days running", d: "Earn XP three days in a row", ok: function (s) { return s.longest >= 3; } },
-    { id: "day-sat", t: "Day 1 done", d: "Every day-1 item ticked", ok: function (s) { return s.days.sat; } },
-    { id: "day-sun", t: "Day 2 done", d: "Every day-2 item ticked", ok: function (s) { return s.days.sun; } },
-    { id: "day-mon", t: "Day 3 done", d: "Every day-3 item ticked", ok: function (s) { return s.days.mon; } },
-    { id: "part-1", t: "Python, read", d: "All 14 Python lessons", ok: function (s) { return s.parts[1]; } },
-    { id: "part-2", t: "FastAPI, read", d: "All 8 FastAPI lessons", ok: function (s) { return s.parts[2]; } },
-    { id: "all-checks", t: "Every check passed", d: "Pass all " + LESSONS.length + " checks", ok: function (s) { return s.passed >= LESSONS.length; } },
-    { id: "ready", t: "Interview-ready", d: "Reach the top rank", ok: function (s) { return s.rank === RANKS.length - 1; } }
+    { id: "streak-3", t: "Three days running", d: "Earn XP three days in a row", ok: function (s) { return s.longest >= 3; } }
   ];
-
+  PLAN.filter(function (d) { return d.checks.length; }).forEach(function (d, i) {
+    BADGES.push({ id: "day-" + d.id, t: "Day " + (i + 1) + " done", d: "Every day-" + (i + 1) + " item ticked", ok: function (s) { return s.days[d.id]; } });
+  });
+  PARTS.forEach(function (p) {
+    BADGES.push({ id: "part-" + p.n, t: p.title + ", read", d: "All " + p.lessons.length + " " + p.title + " lesson" + (p.lessons.length === 1 ? "" : "s"), ok: function (s) { return s.parts[p.n]; } });
+  });
+  BADGES.push({ id: "all-checks", t: "Every check passed", d: "Pass all " + LESSONS.length + " checks", ok: function (s) { return s.passed >= LESSONS.length; } });
+  BADGES.push({ id: "ready", t: RANKS[RANKS.length - 1].t, d: "Reach the top rank", ok: function (s) { return s.rank === RANKS.length - 1; } });
   // Each learner's local copy under their own key (from the server), so two
   // people on one browser never see or overwrite each other's progress.
-  var LS = DEMO ? "study-plan-demo" : CONFIG.store || "study-plan";
+  var LS = CONFIG.store || "study-plan";
   // Everything the server stores. Notes and highlights earn no XP: they're
   // for you, and XP for them would reward copying text instead of learning it.
   function blank() { return { done: {}, quiz: {}, log: {}, review: {}, cleared: 0, blocks: {}, later: [], notes: {}, marks: {}, marknotes: {}, answers: {}, perday: {}, deadline: null, profile: null }; }
@@ -1095,24 +999,32 @@ body[data-focus="on"] .park { display: flex; }
     return h + "</svg>";
   }
 
+  // The other courses, one tap away, in the masthead.
+  function courseLinks() {
+    var cs = CONFIG.courses || [];
+    if (cs.length < 2) return "";
+    return '<nav class="course-links" aria-label="Courses">' + cs.map(function (c) {
+      return '<a href="' + esc(c.href) + '"' + (c.id === COURSE.id ? ' aria-current="page"' : "") + ">" + esc(c.short) + "</a>";
+    }).join("") + "</nav>";
+  }
   function renderShell() {
     document.title = TITLE;
     var h = "";
     if (MENTOR) {
       var upd = MENTOR.state.updated_at ? new Date(MENTOR.state.updated_at) : null;
-      h += '<header class="mast"><div class="mast-row"><a class="wordmark" href="#/record">Study plan · progress report</a></div>' +
+      h += '<header class="mast"><div class="mast-row"><a class="wordmark" href="' + esc(HOME) + '" aria-label="Every course">Study · progress report</a>' + courseLinks() + "</div>" +
         "<h1>" + esc(TITLE) + "</h1>" +
         '<p class="lede">A read-only view of the learner\'s progress' + (upd ? ", as of their last change " + esc(fmtWhen(upd)) : "") +
         ". Reload for the latest. The page speaks to the learner, so \u201cyou\u201d means them." +
         (TARGET ? " They're working towards: " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") + "</p></header>";
     } else
-    h += '<header class="mast"><div class="mast-row"><a class="wordmark" href="#/plan" aria-label="Study plan: home">Study plan</a>' +
+    h += '<header class="mast"><div class="mast-row"><a class="wordmark" href="' + esc(HOME) + '" aria-label="Study: every course">Study</a>' + courseLinks() +
       (CONFIG.mentor_path ? '<button type="button" class="btn" data-act="share-mentor" aria-label="Share progress with mentor">Share with mentor</button>' : "") + "</div>" +
       "<h1>" + esc(TITLE) + "</h1>" +
-      '<p class="lede">Python and FastAPI for PHP developers, in three days.' +
+      '<p class="lede">' + esc(COURSE.lede || "") +
       (TARGET ? " Counting down to " + esc(TARGET.label.toLowerCase()) + ", " + esc(targetText()) + "." : "") +
       " Tick the plan, read the lessons, pass each lesson's check, and practise on the drills. Everything earns XP.</p>" +
-      (DEMO ? '<p class="demo-note"><span class="label">Demo</span> Your progress stays in this browser; nothing is sent to the server. <a href="https://github.com/anishanilkumar/fastapi-study-plan">Run your own copy</a> to keep it.</p>' : "") +
+      (DEMO ? '<p class="demo-note"><span class="label">Demo</span> Your progress stays in this browser; nothing is sent to the server. <a href="https://github.com/anishanilkumar/study">Run your own copy</a> to keep it.</p>' : "") +
       "</header>";
     h += '<div class="focusbar instrument" id="focusbar"><div class="fb-row"><div class="fb-clock"><span class="label" id="fb-label">Focus block</span>' +
       '<span class="readout" id="fb-clock" role="timer"></span><span class="stamp" id="fb-sub"></span></div><div class="fb-ctl" id="fb-ctl"></div></div>' +
@@ -1313,14 +1225,16 @@ body[data-focus="on"] .park { display: flex; }
 
   function planHtml() {
     var h = (needSetup() ? setupHtml(true) : "") + '<div class="next-box" data-next></div><div data-today></div>';
-    h += '<section class="callout"><span class="label">The one big mental shift</span>' +
-      "<p>PHP starts fresh for every request and throws everything away at the end. A Python server is one long-running process that handles thousands of requests. Anything at module level (a variable, a list, a database session) lives across requests and is shared between them.</p>" +
-      "<p>When you review a snippet, ask: what here is shared that PHP would have thrown away? And what here waits without <code>await</code>?</p></section>";
-    h += '<section class="instrument"><div class="section-head"><span class="label">Translation</span><h2>Your PHP, in Python terms</h2></div><div class="table-wrap"><table><thead><tr><th class="label">PHP</th><th class="label">Python</th></tr></thead><tbody>';
-    MAP.forEach(function (r) { h += "<tr><td><code>" + esc(r[0]) + "</code></td><td><code>" + esc(r[1]) + "</code></td></tr>"; });
-    h += "</tbody></table></div></section>";
+    // The course's own framing: one idea to hold on to, and a table from what you know.
+    if (COURSE.shift) h += '<section class="callout"><span class="label">' + esc(COURSE.shift.label) + "</span>" + COURSE.shift.html + "</section>";
+    var map = COURSE.map;
+    if (map) {
+      h += '<section class="instrument"><div class="section-head"><span class="label">' + esc(map.label) + "</span><h2>" + esc(map.title) + '</h2></div><div class="table-wrap"><table><thead><tr><th class="label">' + esc(map.from) + '</th><th class="label">' + esc(map.to) + "</th></tr></thead><tbody>";
+      map.rows.forEach(function (r) { h += "<tr><td><code>" + esc(r[0]) + "</code></td><td><code>" + esc(r[1]) + "</code></td></tr>"; });
+      h += "</tbody></table></div></section>";
+    }
     PLAN.forEach(function (d) {
-      var title = d.id === "tue" && TARGET ? "The day itself: " + TARGET.label.toLowerCase() + " at " + TARGET.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : d.title;
+      var title = d.target_title && TARGET ? "The day itself: " + TARGET.label.toLowerCase() + " at " + TARGET.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : d.title;
       h += '<section class="instrument" id="' + d.id + '"><div class="day-head"><div><span class="label">' + esc(dayLabel(d)) + "</span><h2>" + esc(title) + '</h2></div><span class="stamp count" id="count-' + d.id + '"></span></div>';
       d.groups.forEach(function (g) {
         if (g.label) h += '<div class="label group-label">' + esc(g.label) + "</div>";
@@ -1331,14 +1245,14 @@ body[data-focus="on"] .park { display: flex; }
       }
       h += "</section>";
     });
-    h += '<p class="stamp foot">When you finish a day, ask an AI assistant or a friend for concept-first questions on those topics, and answer out loud.</p>';
+    if (COURSE.plan_foot) h += '<p class="stamp foot">' + esc(COURSE.plan_foot) + "</p>";
     return h;
   }
 
   function syllabusHtml() {
     var total = LESSONS.reduce(function (a, l) { return a + l.min; }, 0);
     var h = '<section class="section-head syl-head"><span class="label">Syllabus · ' + LESSONS.length + " lessons · about " + Math.round(total / 60 * 2) / 2 + " h of reading</span>" +
-      '<p class="lede">Read in order: each lesson assumes the ones before it. Every lesson ends with a three-question check and links to the official docs. Lessons marked <span class="tag-extra">Extra</span> aren\'t in the 3-day plan.</p></section>';
+      '<p class="lede">Read in order: each lesson assumes the ones before it. Every lesson ends with a three-question check and links to the official docs. Lessons marked <span class="tag-extra">Extra</span> aren\'t in the plan.</p></section>';
     PARTS.forEach(function (p) {
       h += '<section class="instrument"><div class="day-head"><div><span class="label">Part ' + p.n + "</span><h2>" + esc(p.title) + '</h2><p class="why">' + esc(p.blurb) + '</p></div><span class="stamp count" id="pcount-' + p.n + '"></span></div><ol class="lessons">';
       p.lessons.forEach(function (l) {
@@ -1441,7 +1355,7 @@ body[data-focus="on"] .park { display: flex; }
     var box = document.getElementById("reading");
     function show(html, text) { box.innerHTML = html; box.removeAttribute("aria-busy"); if (text) applyMarks(l.id); }
     if (lessonCache[l.id]) { show(lessonCache[l.id], true); return; }
-    fetch("/lessons/" + l.id + ".html").then(function (r) {
+    fetch(BASE + "lessons/" + l.id + ".html").then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.text();
     }).then(function (html) {
@@ -1476,8 +1390,8 @@ body[data-focus="on"] .park { display: flex; }
   }
 
   function loadJson(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }); }
-  function loadQuizzes() { return quizzes ? Promise.resolve(quizzes) : loadJson("/quizzes.json").then(function (q) { return (quizzes = q); }); }
-  function loadDrills() { return allDrills ? Promise.resolve(allDrills) : loadJson("/drills.json").then(function (d) { setDrills(d); updateCounts(); return d; }); }
+  function loadQuizzes() { return quizzes ? Promise.resolve(quizzes) : loadJson(BASE + "quizzes.json").then(function (q) { return (quizzes = q); }); }
+  function loadDrills() { return allDrills ? Promise.resolve(allDrills) : loadJson(BASE + "drills.json").then(function (d) { setDrills(d); updateCounts(); return d; }); }
 
   function renderQuiz(l) {
     var box = document.getElementById("quiz"); if (!box) return;
@@ -1701,7 +1615,7 @@ body[data-focus="on"] .park { display: flex; }
   // ==== Quiz rounds: ten questions, one at a time, weighted towards what
   // you get wrong and what you haven't seen. ====
   var ROUND = 10, quizScope = null, round = null;
-  var SCOPES = [["mix", "Smart mix"], ["weak", "Weak spots"], ["unseen", "Unseen"], ["part-1", "Python"], ["part-2", "FastAPI"], ["part-3", "Data and tests"], ["part-4", "Interview"]];
+  var SCOPES = [["mix", "Smart mix"], ["weak", "Weak spots"], ["unseen", "Unseen"]].concat(PARTS.map(function (p) { return ["part-" + p.n, p.short || p.title]; }));
   function lessonsRead() { return LESSONS.filter(function (l) { return state.done[readId(l.id)] || state.quiz[l.id]; }); }
   function lessonStats(id) {
     var n = 0, ok = 0, seen = 0;
@@ -1712,7 +1626,7 @@ body[data-focus="on"] .park { display: flex; }
     return { n: n, ok: ok, seen: seen };
   }
   function scopeLessons(scope) {
-    var pm = /^part-(\d)$/.exec(scope);
+    var pm = /^part-(\d+)$/.exec(scope);
     if (pm) return LESSONS.filter(function (l) { return String(l.part.n) === pm[1]; });
     if (BY_ID[scope]) return [BY_ID[scope]];
     if (scope === "weak") {
@@ -2306,12 +2220,6 @@ body[data-focus="on"] .park { display: flex; }
   // One listener for every button with a data-act, wherever it is.
   document.addEventListener("click", function (ev) {
     var t = ev.target;
-    if (t.closest && t.closest("a.wordmark")) {
-      // Home is the top of the plan, not wherever it was last scrolled to.
-      planScroll = 0;
-      if (route === "plan" || (MENTOR && route === "record")) { ev.preventDefault(); history.replaceState(null, "", MENTOR ? "#/record" : "#/plan"); window.scrollTo(0, 0); }
-      return;
-    }
     if (t.closest && t.closest("#selbar-btn")) { selbarAct(false); return; }
     if (t.closest && t.closest("#selbar-note")) { selbarAct(true); return; }
     var mk = t.closest && t.closest("#reading mark[data-mark]");
@@ -2563,7 +2471,7 @@ body[data-focus="on"] .park { display: flex; }
   function api(method, body) {
     var ctl = window.AbortController ? new AbortController() : null;
     var t = ctl ? setTimeout(function () { ctl.abort(); }, 10000) : null;
-    return fetch("/state", {
+    return fetch(BASE + "state", {
       method: method, cache: "no-store", signal: ctl ? ctl.signal : undefined,
       headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined
@@ -2576,8 +2484,8 @@ body[data-focus="on"] .park { display: flex; }
 
   // ---- Offline readiness: count what's actually in the cache on this
   // device, rather than assume the service worker got it all. ----
-  function offlineUrls() { return LESSONS.map(function (l) { return "/lessons/" + l.id + ".html"; }); }
-  var CORE_URLS = ["/", "/quizzes.json", "/drills.json"];
+  function offlineUrls() { return LESSONS.map(function (l) { return BASE + "lessons/" + l.id + ".html"; }); }
+  var CORE_URLS = [BASE, BASE + "quizzes.json", BASE + "drills.json"];
   function paintOffline(kind, text, button) {
     var el = document.getElementById("offline"); if (!el) return;
     el.hidden = !kind; el.dataset.state = kind || "";

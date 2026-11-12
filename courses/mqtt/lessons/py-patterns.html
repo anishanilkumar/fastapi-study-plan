@@ -1,0 +1,43 @@
+<p>The protocol gives you topics, QoS, sessions and retained values. The rest is patterns built from them. These five come up in every home setup.</p>
+
+<h3>1. Command, then confirmed state</h3>
+<pre><code>dashboard ── home/hall/heater/power/set  "OFF"  (QoS 1, not retained) ──▶ heater
+heater    ── home/hall/heater/power      "OFF"  (QoS 1, retained)     ──▶ everyone</code></pre>
+<p>The sender treats the command as done only when the state topic says so. If no matching state arrives within a few seconds, show "not confirmed" rather than pretending. The state topic is the truth; the command is a wish.</p>
+
+<h3>2. Request and response on 3.1.1</h3>
+<p>For "ask a device something and wait", put a reply topic and an id in the request:</p>
+<pre><code>req_id = uuid.uuid4().hex
+await client.subscribe(f"home/pantry/scale/reply/{me}", qos=1)
+await client.publish("home/pantry/scale/tare", json.dumps({"id": req_id, "reply_to": f"home/pantry/scale/reply/{me}"}), qos=1)
+# wait for the message with that id, with a timeout; ignore any other id</code></pre>
+<p>Subscribe to the reply topic <em>before</em> sending, or a fast answer arrives before anyone listens. Always time out. If this is between your own programs, use NATS request/reply instead; it does all of this for you.</p>
+
+<h3>3. Debounce and deduplicate</h3>
+<p>Sensors chatter: a door contact can bounce open-closed-open in 50 ms, and QoS 1 can repeat a message. Before acting ("door opened: send a notification"), compare with the last value you acted on, and ignore repeats within a short window. Keep that last value per topic in a dict, not one global variable for everything.</p>
+
+<h3>4. Publish on change, and on a heartbeat</h3>
+<p>Publishing a reading every second floods the broker; publishing only on change means a quiet sensor looks dead. Do both: publish when the value moves by more than a threshold, and at least every few minutes regardless. With retain on, a late subscriber gets the last value; with a timestamp in it, it knows how old.</p>
+
+<h3>5. Test against a real broker</h3>
+<p>Mocking an MQTT client tests your mock. Run a broker for the tests instead: a throwaway Mosquitto (or <code>nats-server -c</code> with an mqtt block) on a random port.</p>
+<pre><code>@pytest.fixture
+def broker(tmp_path):
+    port = free_port()
+    conf = tmp_path / "m.conf"
+    conf.write_text(f"listener {port} 127.0.0.1\nallow_anonymous true\n")
+    p = subprocess.Popen(["mosquitto", "-c", str(conf)])
+    wait_for_port(port)
+    yield port
+    p.terminate(); p.wait()</code></pre>
+<p>Then test what matters: the handler subscribes again after the broker restarts; a malformed payload is logged and skipped; a duplicate command changes nothing. Keep the handler itself a plain function of <code>(topic, payload)</code>, so most tests need no broker at all.</p>
+
+<aside class="bridge"><span class="label">From FastAPI</span><p>Same advice as the FastAPI course: keep logic out of the transport. A route calls a function you can test without HTTP; a message handler calls a function you can test without MQTT.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Request/response with a fixed reply topic shared by every caller. Two dashboards ask at once, both get both answers, and without an id neither knows which is theirs.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write the handler for "notify Friday when the washing machine is done": power draw over 5 W for at least 10 minutes, then under 2 W for 3 minutes. Which state do you keep, and what happens if the handler restarts in the middle?</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://www.hivemq.com/blog/mqtt5-essentials-part9-request-response-pattern/" target="_blank" rel="noopener">HiveMQ: request/response</a></li>
+</ul></aside>

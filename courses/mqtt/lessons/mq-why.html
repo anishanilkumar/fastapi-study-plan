@@ -1,0 +1,40 @@
+<p>MQTT is a publish/subscribe protocol for small devices on unreliable networks. A sensor doesn't call a server; it <em>publishes</em> a message to a <em>topic</em> on a <em>broker</em>, and whoever has <em>subscribed</em> to that topic gets a copy. The sensor never knows who that is, or whether anyone is listening.</p>
+
+<h3>The three pieces</h3>
+<ul class="points">
+<li><strong>Broker.</strong> The one server everything connects to. It keeps the connections, matches each published message against the subscriptions and delivers copies. At home, that will be the NATS leaf on jarvis (Mosquitto is the other common one).</li>
+<li><strong>Clients.</strong> Everything else: an ESP32 with a temperature sensor, a Zigbee bridge, Home Assistant, a Python script. Every client can publish and subscribe; "sensor" and "dashboard" are only roles.</li>
+<li><strong>Topics.</strong> Strings like <code>home/kitchen/fridge/temp</code>. There's nothing to create first: publishing to a topic is enough for it to exist, for that one message.</li>
+</ul>
+
+<h3>What one exchange looks like</h3>
+<pre><code>fridge sensor  ── CONNECT ───────────────▶ broker
+               ◀─ CONNACK (accepted) ────
+               ── PUBLISH home/kitchen/fridge/temp "4.2" ─▶
+                                                   │ matches "home/+/fridge/#"
+dashboard      ◀───────────────────── PUBLISH ─────┘</code></pre>
+<p>Every packet goes over one long-lived TCP connection per client (port 1883 plain, 8883 with TLS). The client opens it, so a device behind NAT needs no open port: it dials out, and the broker pushes messages down that same connection. The fixed header is two bytes; a whole small publish is a few dozen. That's why a battery device can afford it.</p>
+
+<h3>Keepalive: how the broker knows you're gone</h3>
+<p>The client says in CONNECT how often it will be heard from, e.g. 60 seconds. If it has nothing else to send in that time it sends a two-byte <code>PINGREQ</code>, and the broker answers <code>PINGRESP</code>. If the broker hears nothing for one and a half times the keepalive, it treats the client as dead, closes the connection and (lesson 6) publishes its last will. TCP alone can take many minutes to notice a device that lost power; keepalive bounds it.</p>
+
+<h3>When MQTT is the right tool</h3>
+<table><thead><tr><th>Use</th><th>For</th></tr></thead><tbody>
+<tr><td>MQTT</td><td>Devices you don't write the firmware for (Tasmota, ESPHome, Zigbee2MQTT, Home Assistant all speak it), small boards, battery, flaky Wi-Fi</td></tr>
+<tr><td>NATS (core, JetStream)</td><td>Your own programs: the household's <code>notify.*</code>, <code>print.queued</code>, request/reply, streams and work queues</td></tr>
+<tr><td>HTTP</td><td>Asking a server for a page or a resource; anything with a request and an answer you wait for</td></tr>
+</tbody></table>
+<p>You don't have to pick one: the NATS server speaks MQTT too, so a message a device publishes over MQTT can reach a Python program subscribed with a NATS client, and the other way round. Lesson 12 is about exactly that.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>HTTP is request/response: the client asks, a named server answers, and the connection is often closed after. MQTT is the opposite shape: connections stay open, nobody is addressed by name, and the publisher gets no answer from subscribers, only (at QoS 1 and 2) an acknowledgement from the broker. "Did the light turn on?" is a second message the light publishes, not a response.</p></aside>
+
+<aside class="bridge"><span class="label">From NATS</span><p>You already know this model: subjects, wildcards, publishers that don't know their subscribers. MQTT topics use <code>/</code> where NATS uses <code>.</code>, and <code>+</code>/<code>#</code> where NATS uses <code>*</code>/<code>&gt;</code>. What MQTT adds is built for devices: per-message QoS, sessions that survive a disconnect, retained values and a last will.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>"Published" doesn't mean "received". At QoS 0 a message to a topic nobody subscribes to is simply dropped, with no error. Even at QoS 1, the acknowledgement comes from the broker, not from any subscriber.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>With Mosquitto's command-line tools (<code>nix shell nixpkgs#mosquitto</code>) and the public test broker: in one terminal <code>mosquitto_sub -h test.mosquitto.org -t 'anish-test/#' -v</code>, in another <code>mosquitto_pub -h test.mosquitto.org -t anish-test/hello -m hi</code>. Then publish before subscribing and see that the message is gone. Never send anything private to a public broker.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://mqtt.org/mqtt-specification/" target="_blank" rel="noopener">MQTT specifications (3.1.1 and 5.0)</a></li>
+<li><a href="https://www.hivemq.com/mqtt/" target="_blank" rel="noopener">HiveMQ: MQTT essentials</a></li>
+</ul></aside>

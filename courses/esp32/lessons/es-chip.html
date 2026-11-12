@@ -1,0 +1,40 @@
+<p>"An ESP32" can mean a chip, a module with that chip under a metal can, or a whole dev board with USB and pins. They're different things to buy, and the differences between family members decide what a project can do.</p>
+
+<h3>Chip, module, board</h3>
+<ul class="points">
+<li><strong>Chip</strong>: the silicon, e.g. ESP32-C3. Processor, Wi-Fi radio, RAM. Needs external flash and an antenna.</li>
+<li><strong>Module</strong>: chip + flash (often 4 MB) + crystal + antenna, under a shielded can. ESP32-WROOM-32, ESP32-C3-MINI-1. This is what's certified for radio use.</li>
+<li><strong>Dev board</strong>: a module on a board with a USB connector, a 3.3 V regulator, BOOT and RESET (EN) buttons, and pins on a 2.54 mm grid for a breadboard. ESP32-DevKitC, the many "ESP32-C3 SuperMini" clones. This is what you start with.</li>
+</ul>
+
+<h3>The family</h3>
+<table><thead><tr><th>Chip</th><th>Cores</th><th>Radio</th><th>Notes</th></tr></thead><tbody>
+<tr><td>ESP32 (the original)</td><td>2 × Xtensa LX6, 240 MHz</td><td>Wi-Fi 4, Bluetooth Classic + BLE</td><td>The most examples and the most quirks (strapping pins, ADC2). Usually a separate USB-serial chip.</td></tr>
+<tr><td>ESP32-S3</td><td>2 × Xtensa LX7</td><td>Wi-Fi 4, BLE 5</td><td>Native USB, often with PSRAM: the comfortable choice for MicroPython and cameras.</td></tr>
+<tr><td>ESP32-C3</td><td>1 × RISC-V, 160 MHz</td><td>Wi-Fi 4, BLE 5</td><td>Small, cheap, native USB. Plenty for a sensor that publishes MQTT.</td></tr>
+<tr><td>ESP32-C6</td><td>1 × RISC-V</td><td>Wi-Fi 6, BLE 5, 802.15.4 (Thread, Zigbee)</td><td>Can talk Zigbee and Thread too.</td></tr>
+<tr><td>ESP32-H2</td><td>1 × RISC-V</td><td>BLE 5, 802.15.4, <em>no Wi-Fi</em></td><td>For Thread/Zigbee devices, not for MQTT over Wi-Fi.</td></tr>
+</tbody></table>
+<p>Almost all of them are Wi-Fi on 2.4 GHz only. If your router's 2.4 GHz and 5 GHz networks share one name, a board joins fine; if the house has only 5 GHz, it can't.</p>
+
+<h3>Memory, in numbers</h3>
+<p>Around 400 KB of RAM (some of it taken by Wi-Fi), 4 MB of flash typical. Boards with <strong>PSRAM</strong> (2 to 8 MB of extra, slower RAM) make MicroPython far roomier. Compared to the Pi: jarvis has a gigabyte and a Linux kernel; the ESP32 has a few hundred kilobytes and no operating system you'd recognise. A program is the whole device.</p>
+
+<h3>Languages</h3>
+<table><thead><tr><th>Way</th><th>What it is</th><th>Use it for</th></tr></thead><tbody>
+<tr><td>MicroPython</td><td>Python 3 on the chip, with a REPL over USB</td><td>Learning, trying sensors, small custom devices: this course</td></tr>
+<tr><td>ESPHome</td><td>Describe the device in YAML; it writes and builds the C++</td><td>Standard sensors and switches for the house, with OTA</td></tr>
+<tr><td>Arduino (C++)</td><td>The Arduino API on top of Espressif's SDK</td><td>The libraries for odd hardware are often here first</td></tr>
+<tr><td>ESP-IDF (C)</td><td>Espressif's own SDK, on FreeRTOS</td><td>Full control, production firmware</td></tr>
+</tbody></table>
+
+<aside class="bridge"><span class="label">From the Pi</span><p>The Pi runs Linux: processes, files, SSH, systemd restarting things. The ESP32 runs one program. No SSH; you talk to it over USB serial, or over the network only if your program listens. If the program hangs, the device hangs, until a watchdog (lesson 11) or someone resets it.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Buying an ESP32-H2 or a bare chip for a Wi-Fi sensor, or a board with a charge-only USB cable in the box. Check the radio, and use a cable you know carries data.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Look up the board you'll buy: which chip, how much flash, PSRAM or not, native USB or a USB-serial chip (and which: CP2102, CH340), and where its BOOT button is.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://www.espressif.com/en/products/socs" target="_blank" rel="noopener">Espressif: SoC overview</a></li>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html" target="_blank" rel="noopener">MicroPython: ESP32 quick reference</a></li>
+</ul></aside>

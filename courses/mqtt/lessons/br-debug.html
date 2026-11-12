@@ -1,0 +1,43 @@
+<p>MQTT problems are quiet: nothing errors, messages just don't arrive. Debugging is mostly watching the broker and knowing which symptom points at which cause.</p>
+
+<h3>Watch everything</h3>
+<pre><code>mosquitto_sub -h jarvis -u admin -P … -t '#' -v              # every topic, with its name
+mosquitto_sub -h jarvis -t 'home/#' -v -F '%I %r %t %p'      # time, retained flag, topic, payload
+mosquitto_sub -h jarvis -t 'home/#' -v --retained-only       # just the stored state, then exit
+nats sub 'home.>'                                            # the same traffic as NATS subjects, on jarvis</code></pre>
+<p>Start every investigation here. If the device's message shows up, the problem is the subscriber; if it doesn't, the device or its permissions.</p>
+
+<h3>Symptoms and causes</h3>
+<table><thead><tr><th>Symptom</th><th>Usually</th></tr></thead><tbody>
+<tr><td>Connects, disconnects every few seconds, forever</td><td>Two clients with the same client ID evicting each other</td></tr>
+<tr><td>Worked until the first Wi-Fi blip, then receives nothing</td><td>Subscribed outside the connected callback; clean session lost the subscription</td></tr>
+<tr><td>Disconnected after about a minute of quiet</td><td>A blocking callback stopped the loop, so no keepalive pings</td></tr>
+<tr><td>Connection refused, code 1</td><td>The client asked for MQTT 5; the broker speaks 3.1.1</td></tr>
+<tr><td>Connection refused, code 4 or 5</td><td>Wrong password, or the user isn't allowed MQTT connections</td></tr>
+<tr><td>Publishes, nobody gets it</td><td>No permission to publish there (often dropped silently), a typo or case difference in the topic, or a leading <code>/</code></td></tr>
+<tr><td>A dashboard shows a value from last week</td><td>A stale retained message; or a will that wasn't retained</td></tr>
+<tr><td>A device turns itself off on every reboot</td><td>A retained command on its <code>/set</code> topic</td></tr>
+<tr><td>Commands sent while a device slept never arrive</td><td>Clean session, QoS 0, or sent from a NATS client (always QoS 0)</td></tr>
+<tr><td>Every message arrives twice</td><td>Two overlapping subscriptions in one client (<code>home/#</code> and <code>home/kitchen/#</code>): the spec lets a broker send a copy for each. Or QoS 1 redelivery (look for the DUP flag)</td></tr>
+</tbody></table>
+
+<h3>Clearing a stuck retained message</h3>
+<pre><code>mosquitto_sub -h jarvis -t 'home/#' -v --retained-only      # find it
+mosquitto_pub -h jarvis -t home/hall/light/power/set -r -n  # an empty retained message deletes it</code></pre>
+
+<h3>Watching the server</h3>
+<p>On jarvis, the monitoring port is <code>127.0.0.1:8222</code>: <code>curl -s 127.0.0.1:8222/connz</code> lists connections (MQTT ones included, with their client IDs), <code>/varz</code> the server, <code>/leafz</code> the link to the hub, <code>/jsz</code> JetStream, where MQTT's state lives. The server's log (<code>journalctl -u nats</code>) shows refused connections and permission violations, which the client usually never hears about.</p>
+
+<h3>When it's the network</h3>
+<p>A device that drops off regularly is often Wi-Fi: check its signal (Tasmota reports <code>RSSI</code> in <code>tele/.../STATE</code>; Zigbee2MQTT reports <code>linkquality</code>). Lower its keepalive a little so it's noticed sooner, and make sure it reconnects with backoff rather than hammering.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>An HTTP failure is a status code at the caller. An MQTT failure is usually an absence, so you look at the middle: the broker sees every connection, publish and refusal. Its log and a <code>#</code> subscription are your access log.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Leaving a debugging <code>mosquitto_sub -t '#'</code> running under a persistent session (<code>-c</code>). When it's closed, the broker keeps queueing every QoS 1 message in the house for it.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Pick three rows of the table and reproduce each against a local broker on your Mac. Note what the client logs, and what the broker logs.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://mosquitto.org/man/mosquitto_sub-1.html" target="_blank" rel="noopener">mosquitto_sub manual</a></li>
+<li><a href="https://docs.nats.io/running-a-nats-service/nats_admin/monitoring" target="_blank" rel="noopener">NATS: monitoring</a></li>
+</ul></aside>

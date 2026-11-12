@@ -1,0 +1,43 @@
+<p>Everything a client is to the broker is decided in its first packet, CONNECT. Most "it connects but then something weird happens" bugs come from one of its fields.</p>
+
+<h3>What CONNECT carries</h3>
+<table><thead><tr><th>Field</th><th>What it does</th></tr></thead><tbody>
+<tr><td>Client ID</td><td>Who this is. The broker keys the session by it (lesson 5). One per device, stable across reboots.</td></tr>
+<tr><td>Clean session</td><td>In 3.1.1: true throws away any stored session now and at disconnect; false resumes it.</td></tr>
+<tr><td>Keepalive</td><td>Seconds between packets the client promises (lesson 1). 0 turns it off; don't.</td></tr>
+<tr><td>Username / password</td><td>Sent as plain bytes. Without TLS, anyone on the path can read them.</td></tr>
+<tr><td>Will</td><td>A message the broker publishes for you if you vanish (lesson 6).</td></tr>
+</tbody></table>
+
+<h3>The answer: CONNACK</h3>
+<p>In 3.1.1 the broker answers with a return code. Know them; client libraries often only log the number.</p>
+<table><thead><tr><th>Code</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>0</td><td>Accepted</td></tr>
+<tr><td>1</td><td>Unacceptable protocol version (a client asking for MQTT 5 on a broker that only speaks 3.1.1, like NATS)</td></tr>
+<tr><td>2</td><td>Client identifier rejected</td></tr>
+<tr><td>3</td><td>Server unavailable</td></tr>
+<tr><td>4</td><td>Bad username or password</td></tr>
+<tr><td>5</td><td>Not authorised</td></tr>
+</tbody></table>
+<p>CONNACK also says whether a stored session was found ("session present"). A client that asked to resume and gets <code>session present = 0</code> must subscribe again: the broker has forgotten its subscriptions.</p>
+
+<h3>Client IDs: one connection each</h3>
+<p>If a second connection arrives with a client ID already connected, the broker disconnects the <em>first</em> one. Two devices flashed with the same ID, or a script run twice, then knock each other off in a loop: each reconnects, evicts the other, and both log "connection lost" every few seconds. Build the ID from something unique and stable (<code>fridge-sensor-a4cf12</code> from the MAC address), and give each running program its own.</p>
+<pre><code>import socket, os
+client_id = f"pantry-bridge-{socket.gethostname()}"   # stable, unique per machine
+# random each start (uuid4) is fine only with clean_session=True:
+# a persistent session under a fresh id is never resumed, just left behind</code></pre>
+
+<h3>Reconnecting</h3>
+<p>Networks drop. A client must reconnect by itself, with a growing delay (1 s, 2 s, 4 s … up to a minute or two) so that fifty devices coming back after a power cut don't all hammer the broker in the same second. And after every reconnect it must subscribe again unless the session was resumed. The simplest correct habit: <em>subscribe inside the "connected" callback</em>, every time.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>An HTTP client authenticates on every request and a dead server is an immediate error. An MQTT client authenticates once, then sits on a connection that can die silently. So the work moves: keepalive to notice, reconnect logic to recover, and resubscribing to restore what the connection meant.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Subscribing once, right after <code>connect()</code>, outside the connected callback. It works on your desk. After the first Wi-Fi blip the client reconnects with a clean session and silently receives nothing ever again.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Run <code>mosquitto_sub -h test.mosquitto.org -i anish-same -t 'anish-test/#' -v</code> in two terminals with the same <code>-i</code>. Watch them take turns being disconnected. Then run them with different IDs.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718028" target="_blank" rel="noopener">MQTT 3.1.1: CONNECT</a></li>
+<li><a href="https://www.hivemq.com/blog/mqtt-essentials-part-3-client-broker-connection-establishment/" target="_blank" rel="noopener">HiveMQ: connection establishment</a></li>
+</ul></aside>

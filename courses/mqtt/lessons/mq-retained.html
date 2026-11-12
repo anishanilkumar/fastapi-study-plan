@@ -1,0 +1,36 @@
+<p>Two features turn MQTT from a stream of events into something that knows the current state of the house: retained messages, and the last will.</p>
+
+<h3>Retained: the last known value</h3>
+<p>Publish with the <em>retain</em> flag and the broker keeps that message as the topic's current value, one per topic. Anyone who subscribes later gets it straight away, then the live updates.</p>
+<pre><code>mosquitto_pub -t home/kitchen/fridge/temp -m 4.2 -r     # kept
+mosquitto_sub -t 'home/kitchen/#' -v                    # a minute later: gets 4.2 at once</code></pre>
+<ul class="points">
+<li>A new retained message on the topic replaces the old one. Only the last is kept.</li>
+<li>It's kept per topic name, not per filter: a subscriber to <code>home/#</code> gets the retained value of every topic below.</li>
+<li>To delete it, publish an <strong>empty</strong> retained message to the topic: <code>mosquitto_pub -t home/kitchen/fridge/temp -r -n</code>. Publishing a non-retained message does not clear it.</li>
+<li>A retained message delivered on subscribe has its retain flag set, so a subscriber can tell "this is old state" from "this just happened".</li>
+</ul>
+
+<h3>What to retain</h3>
+<p>State, not events. "The heater is on", "the fridge is 4.2 °C", "the device is online": retain. "The doorbell was pressed", "a label was printed": don't, or every dashboard that connects tomorrow rings the bell again. And never retain a command: a retained <code>.../set off</code> turns the device off again every time it reconnects, long after anyone wanted that.</p>
+
+<h3>The last will</h3>
+<p>In CONNECT a client can leave a will: a topic, a payload, a QoS and a retain flag. If the client disappears <em>without</em> saying goodbye (keepalive timed out, network dropped, protocol error), the broker publishes the will for it. A clean DISCONNECT discards it.</p>
+
+<h3>The status pattern</h3>
+<p>Together they give every device an online/offline topic that's always right:</p>
+<pre><code>1. CONNECT with will:  home/kitchen/fridge/status = "offline", retained, QoS 1
+2. once connected:     publish home/kitchen/fridge/status = "online", retained, QoS 1
+3. shutting down:      publish "offline" (retained) yourself, then DISCONNECT</code></pre>
+<p>Step 2 is the "birth" message; step 1 covers the crash; step 3 covers the clean exit, where the will doesn't fire. A dashboard subscribing to <code>home/+/+/status</code> immediately sees every device's state, even one that died an hour ago. Tasmota, ESPHome and Zigbee2MQTT all do exactly this.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>An HTTP health check polls: "are you there?" every few seconds. The will turns it around: the broker already knows when a connection dies, so it announces it once, and the retained flag keeps the answer for anyone who asks later.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>A will that isn't retained. It's published once, to whoever happens to be subscribed at that moment, and the retained "online" from the birth message stays the topic's value. The dashboard says the dead device is fine, forever.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p><code>mosquitto_sub -h test.mosquitto.org -t 'anish-test/dev/status' -v --will-topic anish-test/dev/status --will-payload offline --will-retain -k 5</code>, then kill the terminal (don't Ctrl-C cleanly). From another terminal subscribe to the topic after ten seconds.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://www.hivemq.com/blog/mqtt-essentials-part-8-retained-messages/" target="_blank" rel="noopener">HiveMQ: retained messages</a></li>
+<li><a href="https://www.hivemq.com/blog/mqtt-essentials-part-9-last-will-and-testament/" target="_blank" rel="noopener">HiveMQ: last will and testament</a></li>
+</ul></aside>

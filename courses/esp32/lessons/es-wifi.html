@@ -1,0 +1,62 @@
+<p>A sensor is only useful in the house once it's on the network. This lesson gets a board onto Wi-Fi and publishing MQTT to the leaf on jarvis, and keeps it there when the router restarts. It builds on the MQTT course: client IDs, keepalive, wills.</p>
+
+<h3>Joining Wi-Fi</h3>
+<pre><code>import network, time
+
+def wifi(ssid, password, timeout_s=20):
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        wlan.connect(ssid, password)
+        start = time.ticks_ms()
+        while not wlan.isconnected():
+            if time.ticks_diff(time.ticks_ms(), start) &gt; timeout_s * 1000:
+                raise OSError("wifi timeout")
+            time.sleep_ms(200)
+    return wlan</code></pre>
+<p>Always with a timeout: a board that waits forever for a router that's rebooting is a board that needs unplugging. Keep the password out of <code>main.py</code>: a small <code>secrets.py</code> on the board, never in git.</p>
+
+<h3>MQTT with umqtt</h3>
+<pre><code>from umqtt.simple import MQTTClient
+import machine, binascii
+
+cid = "fridge-" + binascii.hexlify(machine.unique_id()).decode()   # stable and unique
+c = MQTTClient(cid, "192.168.1.20", user="fridge", password=PW, keepalive=60)
+c.set_last_will(b"home/kitchen/fridge/status", b"offline", retain=True, qos=1)
+c.connect()
+c.publish(b"home/kitchen/fridge/status", b"online", retain=True, qos=1)
+c.publish(b"home/kitchen/fridge/temp", b"4.2", retain=True)</code></pre>
+<p><code>umqtt.simple</code> is small and does exactly what you call: it doesn't send keepalive pings by itself (call <code>c.ping()</code> within the keepalive, or publish often enough) and doesn't reconnect. To receive, <code>c.set_callback(f)</code>, subscribe, and call <code>c.check_msg()</code> in your loop. umqtt speaks MQTT 3.1.1, which is what the NATS leaf wants. If <code>import umqtt.simple</code> fails, <code>mpremote mip install umqtt.simple</code>.</p>
+
+<h3>Staying connected</h3>
+<pre><code>def run():
+    delay = 1
+    while True:
+        try:
+            wifi(SSID, WIFI_PW)
+            c = connect_mqtt()          # will, birth, subscribe
+            delay = 1
+            while True:
+                publish_reading(c)
+                c.check_msg()
+                time.sleep(30)
+        except OSError as e:            # Wi-Fi or socket gone
+            print("lost:", e)
+            time.sleep(delay)
+            delay = min(delay * 2, 300)</code></pre>
+<p>The same loop as aiomqtt's: connect, subscribe, work, and on any network error back off and start again from Wi-Fi. For an asyncio program, Peter Hinch's <code>mqtt_as</code> library does all of this (Wi-Fi outages included) and is worth using once the device does more than publish.</p>
+
+<h3>Addresses</h3>
+<p>A hostname like <code>jarvis</code> may not resolve from the board (no mDNS by default, no tailnet). Use the Pi's LAN address, and give the Pi a fixed lease on the router so it doesn't move.</p>
+
+<aside class="bridge"><span class="label">From MQTT</span><p>Everything from the MQTT course applies at its strictest here: a stable client ID from the chip's id, a retained will and birth, subscriptions after every connect, QoS 1 for commands, target states not toggles. The device is the client those lessons were written for.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>A <code>while not wlan.isconnected(): pass</code> with no timeout and no sleep. When the router's down at boot, the board spins forever, never reaching the code that would retry or report.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Run a local broker on your Mac and get the board publishing its uptime every 10 s, with a will. Restart your Wi-Fi router (or turn off the Mac's broker) and watch it come back on its own.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html#networking" target="_blank" rel="noopener">MicroPython: networking on the ESP32</a></li>
+<li><a href="https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple" target="_blank" rel="noopener">umqtt.simple</a></li>
+<li><a href="https://github.com/peterhinch/micropython-mqtt" target="_blank" rel="noopener">mqtt_as (Peter Hinch)</a></li>
+</ul></aside>

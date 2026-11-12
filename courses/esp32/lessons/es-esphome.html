@@ -1,0 +1,58 @@
+<p>For a device that's a standard sensor or switch, writing firmware is the slow way. ESPHome turns a YAML description into firmware, flashes it, and updates it over Wi-Fi from then on. Most ESP32s in a house are best done this way; MicroPython is for the ones that aren't standard.</p>
+
+<h3>A whole fridge sensor</h3>
+<pre><code>esphome:
+  name: fridge
+esp32:
+  board: esp32-c3-devkitm-1
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+logger:
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+mqtt:
+  broker: 192.168.1.20             # jarvis
+  username: fridge
+  password: !secret mqtt_password
+  topic_prefix: home/kitchen/fridge
+
+one_wire:
+  - platform: gpio
+    pin: GPIO4
+sensor:
+  - platform: dallas_temp
+    name: Temperature
+    update_interval: 60s</code></pre>
+<pre><code>uv tool install esphome
+esphome run fridge.yaml            # build, flash over USB the first time, then show the logs</code></pre>
+<p>It publishes <code>home/kitchen/fridge/sensor/temperature/state</code>, keeps a retained <code>home/kitchen/fridge/status</code> with a will, and announces itself to Home Assistant through MQTT discovery. <code>secrets.yaml</code> holds the passwords, and stays out of git.</p>
+
+<h3>OTA</h3>
+<p>After the first flash over USB, <code>esphome run fridge.yaml</code> finds the device on the network and updates it over Wi-Fi, so a sensor stuck in the fridge never needs unplugging. The OTA password stops anyone else on the LAN flashing it.</p>
+
+<h3>MQTT or the native API</h3>
+<p>ESPHome usually talks to Home Assistant over its own API instead of MQTT. Use <code>api:</code> if Home Assistant is the only consumer; use <code>mqtt:</code> (as here) when the house's programs should see it too, through the leaf and NATS. You can have both.</p>
+
+<h3>When MicroPython instead</h3>
+<table><thead><tr><th>ESPHome</th><th>MicroPython</th></tr></thead><tbody>
+<tr><td>Standard sensors, switches, lights, displays</td><td>Odd logic: a state machine, a protocol ESPHome doesn't know</td></tr>
+<tr><td>OTA, Wi-Fi reconnects, MQTT, deep sleep handled for you</td><td>You write all of that (this course)</td></tr>
+<tr><td>Change YAML, rebuild (a minute)</td><td>Edit, <code>mpremote run</code>, see it (seconds)</td></tr>
+</tbody></table>
+<p>A good path: learn on MicroPython (you see every step), then build the devices that stay in the house with ESPHome, and keep MicroPython for the ones it can't do. ESPHome's <code>lambda:</code> blocks of C++ and custom components close much of the gap.</p>
+
+<aside class="bridge"><span class="label">From Nix</span><p>The same idea as your NixOS configs: declare what the device is, let a tool build it, redeploy by running one command. The YAML is the source of truth; keep it in git (without secrets.yaml).</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Leaving out <code>ota:</code> on the first flash. The device works, but every later change means taking it out of wherever it's mounted and plugging in USB.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Flash the fridge YAML to a board on your desk, against a local broker, and watch its topics with <code>mosquitto_sub -t 'home/#' -v</code>. Change <code>update_interval</code> and update it over the air.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://esphome.io/guides/getting_started_command_line.html" target="_blank" rel="noopener">ESPHome: getting started from the command line</a></li>
+<li><a href="https://esphome.io/components/mqtt.html" target="_blank" rel="noopener">ESPHome: MQTT</a></li>
+<li><a href="https://esphome.io/components/sensor/dallas_temp.html" target="_blank" rel="noopener">ESPHome: Dallas temperature sensor</a></li>
+</ul></aside>

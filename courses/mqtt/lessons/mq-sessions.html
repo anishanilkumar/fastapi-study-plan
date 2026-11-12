@@ -1,0 +1,38 @@
+<p>QoS only protects a message while the subscriber is connected, unless the broker keeps a <em>session</em> for it. A session is the broker remembering a client between connections. It's what lets a device sleep, or lose Wi-Fi for ten minutes, and still get the commands sent meanwhile.</p>
+
+<h3>What a session holds</h3>
+<ul class="points">
+<li>The client's <strong>subscriptions</strong>, so it needn't send SUBSCRIBE again.</li>
+<li><strong>QoS 1 and 2 messages</strong> that matched those subscriptions while the client was away, queued for it.</li>
+<li>QoS 1 and 2 messages <strong>in flight</strong> when the connection dropped, not yet acknowledged.</li>
+</ul>
+<p>QoS 0 messages are never queued for an offline client. A persistent session doesn't change that.</p>
+
+<h3>Clean session, in 3.1.1</h3>
+<pre><code>clean_session = True    # start empty; forget everything at disconnect
+clean_session = False   # resume the session for this client ID, keep it after</code></pre>
+<p>With <code>False</code>, the session lives under the client ID, so the ID must be stable (lesson 3). Reconnect under the same ID and the queued messages arrive, and CONNACK says <code>session present = 1</code>.</p>
+
+<h3>Choosing</h3>
+<table><thead><tr><th>Client</th><th>Session</th><th>Why</th></tr></thead><tbody>
+<tr><td>A dashboard, a debugging <code>mosquitto_sub</code></td><td>Clean</td><td>Only the current state matters; retained messages (next lesson) give it that at connect</td></tr>
+<tr><td>A device that receives commands</td><td>Persistent, subscribe at QoS 1</td><td>"Heater off" sent while it rebooted must still arrive</td></tr>
+<tr><td>A program that logs every event to a database</td><td>Persistent, QoS 1</td><td>No gaps when it restarts for a deploy</td></tr>
+</tbody></table>
+
+<h3>Sessions cost the broker</h3>
+<p>A persistent session for a client that never comes back keeps queueing forever, or until the broker's own limit. In 3.1.1 there's no expiry in the protocol; brokers add their own (Mosquitto's <code>persistent_client_expiration</code>, for one). MQTT 5 fixes this with a session expiry interval (lesson 8). So: persistent sessions only for clients that will return, under IDs that don't change, and connect once with clean session <code>True</code> to delete one you've retired.</p>
+
+<h3>A queue is not a history</h3>
+<p>A session delivers what was published <em>after</em> the session existed. A client that connects for the first time gets nothing from before, except retained messages. If a program needs past events (yesterday's readings), that's a database's job, or a JetStream stream's, not MQTT's.</p>
+
+<aside class="bridge"><span class="label">From NATS</span><p>A persistent MQTT session is close to a durable JetStream consumer: named, it remembers where you got to and redelivers unacknowledged messages. NATS in fact keeps MQTT sessions in JetStream, so they survive a server restart.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>A persistent session with a random client ID per start. Every restart makes a new session that's never resumed, and the broker keeps queueing for all the old ones.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Subscribe with <code>mosquitto_sub -c -i anish-sess -q 1 -t 'anish-test/cmd' -h test.mosquitto.org</code> (<code>-c</code> is clean session off), stop it, publish three messages at <code>-q 1</code>, start it again. Then repeat with <code>-q 0</code> on the publish.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://www.hivemq.com/blog/mqtt-essentials-part-7-persistent-session-queuing-messages/" target="_blank" rel="noopener">HiveMQ: persistent sessions and queuing</a></li>
+<li><a href="https://mosquitto.org/man/mosquitto-conf-5.html" target="_blank" rel="noopener">mosquitto.conf: persistence and persistent_client_expiration</a></li>
+</ul></aside>

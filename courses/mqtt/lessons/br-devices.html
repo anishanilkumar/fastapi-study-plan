@@ -1,0 +1,53 @@
+<p>Most devices in a house won't run your code. They run firmware that already speaks MQTT, each with its own topic scheme. Learn to read them, and the broker becomes one place to see and drive all of them.</p>
+
+<h3>Tasmota (Wi-Fi plugs and switches)</h3>
+<pre><code>cmnd/hall-plug/POWER       ON          # you send commands here
+stat/hall-plug/POWER       ON          # it answers with the result
+tele/hall-plug/STATE       {...}       # periodic state, every TelePeriod seconds
+tele/hall-plug/SENSOR      {"ENERGY": {"Power": 412, ...}}
+tele/hall-plug/LWT         Online      # retained; Offline is its last will</code></pre>
+<p>Three prefixes: <code>cmnd</code> (in), <code>stat</code> (answers), <code>tele</code> (telemetry). The middle part is the device's topic, set in its web UI. <code>tele/+/LWT</code> is the list of every Tasmota device and whether it's up.</p>
+
+<h3>ESPHome (your own ESP32 boards)</h3>
+<p>ESPHome devices usually talk to Home Assistant over its native API, not MQTT. Add an <code>mqtt:</code> block to the YAML and they publish under a prefix instead:</p>
+<pre><code>mqtt:
+  broker: 192.168.1.20        # jarvis on the LAN
+  username: fridge
+  password: !secret mqtt_password
+  topic_prefix: home/kitchen/fridge
+
+# publishes  home/kitchen/fridge/sensor/temperature/state   4.2
+# birth/will home/kitchen/fridge/status                      online / offline (retained)
+# commands   home/kitchen/fridge/switch/fan/command          ON</code></pre>
+<p>Here you choose the scheme, so make it match your own (lesson 2).</p>
+
+<h3>Zigbee2MQTT (Zigbee sensors through a USB stick)</h3>
+<pre><code>zigbee2mqtt/bridge/state                 online          # the bridge itself, retained
+zigbee2mqtt/hall-door                    {"contact": false, "battery": 97, "linkquality": 120}
+zigbee2mqtt/hall-lamp/set                {"state": "ON", "brightness": 180}</code></pre>
+<p>One JSON object per device, named by its friendly name; commands go to <code>&lt;name&gt;/set</code>. A Zigbee door sensor is battery-powered and sleeps, so it only reports on change: its last value is all you have, which is why Zigbee2MQTT can retain it.</p>
+
+<h3>Home Assistant discovery</h3>
+<p>Home Assistant finds MQTT devices from <em>config</em> messages, retained, under <code>homeassistant/</code>:</p>
+<pre><code>topic:   homeassistant/sensor/fridge_temp/config         (retained)
+payload: {"name": "Fridge", "unique_id": "fridge-temp-a4cf12",
+          "state_topic": "home/kitchen/fridge/sensor/temperature/state",
+          "unit_of_measurement": "°C", "device_class": "temperature",
+          "availability_topic": "home/kitchen/fridge/status"}</code></pre>
+<p>It's retained so Home Assistant sees it whenever it starts. Home Assistant publishes <code>online</code> to <code>homeassistant/status</code> when it starts; a device that sees that should publish its config again, in case the retained copy is gone. ESPHome, Tasmota and Zigbee2MQTT can all do discovery for you. To remove a device, publish an empty retained message to its config topic.</p>
+
+<h3>On the NATS broker</h3>
+<p>All of these default to MQTT 3.1.1 or let you choose it; check, since some newer integrations pick 5 by default. Their client IDs (<code>DVES_A4CF12</code>, <code>esphome-fridge</code>) are fine as subject tokens. Their topics become subjects: <code>tele/hall-plug/SENSOR</code> is <code>tele.hall-plug.SENSOR</code> to a NATS program.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>Each of these also has a web UI or an HTTP API. Use MQTT for anything automated: it's one connection, it's pushed when something changes, and the broker tells you when the device goes away.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>A retained discovery config left behind after renaming a device. Home Assistant keeps showing the old entity as unavailable, forever. Clear the old config topic with an empty retained publish.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write the discovery config for the washing-machine plug's power reading, and for a "washing done" binary sensor your Python program publishes. Which topics are retained?</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://tasmota.github.io/docs/MQTT/" target="_blank" rel="noopener">Tasmota: MQTT</a></li>
+<li><a href="https://esphome.io/components/mqtt.html" target="_blank" rel="noopener">ESPHome: MQTT client</a></li>
+<li><a href="https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html" target="_blank" rel="noopener">Zigbee2MQTT: MQTT topics and messages</a></li>
+<li><a href="https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery" target="_blank" rel="noopener">Home Assistant: MQTT discovery</a></li>
+</ul></aside>

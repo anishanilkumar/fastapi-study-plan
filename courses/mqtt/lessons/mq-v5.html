@@ -1,0 +1,31 @@
+<p>MQTT 5 (2019) is the current version, and Mosquitto, HiveMQ, EMQX and most new client libraries speak it. NATS speaks 3.1.1 only, and so does a lot of firmware. Know what 5 adds, so you know what you're giving up and what to do instead.</p>
+
+<h3>What MQTT 5 adds</h3>
+<table><thead><tr><th>Feature</th><th>What it solves</th><th>On 3.1.1, instead</th></tr></thead><tbody>
+<tr><td>Reason codes on every ack</td><td>Why a subscribe or publish was refused, not just that it was</td><td>The broker's log</td></tr>
+<tr><td>Session expiry interval</td><td>Sessions that clean themselves up after N seconds offline</td><td>A broker-side expiry setting</td></tr>
+<tr><td>Message expiry</td><td>A queued command that's too old to act on is dropped</td><td>A timestamp in the payload, checked by the receiver</td></tr>
+<tr><td>Shared subscriptions <code>$share/group/topic</code></td><td>Several workers share one stream of messages, each gets some</td><td>One subscriber, or NATS queue groups on the NATS side</td></tr>
+<tr><td>Response topic, correlation data</td><td>Request/response with a reply address</td><td>A <code>reply_to</code> and an <code>id</code> in the JSON payload (lesson 11)</td></tr>
+<tr><td>User properties</td><td>Headers: key/value metadata</td><td>Fields in the payload</td></tr>
+<tr><td>Content type, payload format</td><td>Says what the bytes are</td><td>One format per topic, documented</td></tr>
+<tr><td>Topic aliases</td><td>A short number instead of a long topic, saving bytes</td><td>Short topics</td></tr>
+<tr><td>Will delay</td><td>Don't announce "offline" for a reconnect that takes two seconds</td><td>Tolerate a brief offline in the dashboard</td></tr>
+</tbody></table>
+
+<h3>Clean start replaces clean session</h3>
+<p>In 5, "clean session" splits in two: <em>clean start</em> (throw away an existing session at connect) and the <em>session expiry interval</em> (how long to keep it after disconnect; 0 is "end with the connection"). <code>clean_session=True</code> in 3.1.1 is clean start plus expiry 0; <code>False</code> is no clean start plus "keep it".</p>
+
+<h3>Connecting a 5 client to a 3.1.1 broker</h3>
+<p>Clients pick the protocol version in CONNECT. A client set to 5 against NATS gets CONNACK code 1, "unacceptable protocol version", and some libraries just report "connection refused". Set the version explicitly: in paho, <code>protocol=mqtt.MQTTv311</code>; in aiomqtt, <code>protocol=aiomqtt.ProtocolVersion.V311</code>.</p>
+
+<aside class="bridge"><span class="label">From NATS</span><p>Most of what MQTT 5 adds, core NATS and JetStream already have: headers, request/reply with inboxes, queue groups, per-message expiry in streams. So the household's split stays clean: devices speak 3.1.1 MQTT to the leaf, and your own programs that need the richer features speak NATS to the same server.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Copying an MQTT 5 example (with <code>properties=</code> or <code>$share/</code>) into a client for a 3.1.1 broker. Shared subscription filters are just odd topic filters there, and match nothing you publish.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Pick two features from the table that you'd miss most for the house, and write how you'd do each on 3.1.1.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html" target="_blank" rel="noopener">MQTT 5.0 specification</a></li>
+<li><a href="https://www.hivemq.com/mqtt/mqtt-5/" target="_blank" rel="noopener">HiveMQ: MQTT 5 essentials</a></li>
+</ul></aside>

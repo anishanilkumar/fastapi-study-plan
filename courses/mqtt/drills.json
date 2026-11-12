@@ -1,0 +1,105 @@
+[
+ {"id": "topicfilters", "after": "mq-topics", "level": 1, "title": "A topic plan", "minutes": 4,
+  "context": "A first draft of the topics for the house, and the filter a dashboard uses to show every temperature.",
+  "code": "# published by devices\n/Home/Kitchen/fridge temp      4.2\nhome/kitchen/fridge/temp/4.2\nhome/hall/light               toggle\n\n# the dashboard subscribes to\nhome/+/temp",
+  "findings": [
+   {"t": "The value is in the topic", "d": "`home/kitchen/fridge/temp/4.2` makes a new topic per reading, so nothing can subscribe to \"the fridge's temp\" or retain it. Topic `home/kitchen/fridge/temp`, payload `4.2`."},
+   {"t": "Leading slash, capitals and a space", "d": "`/Home/Kitchen/fridge temp` has an empty first level (so `home/#` never matches it), differs by case from `home/...`, and NATS refuses the space. All lower-case, no leading slash, no spaces."},
+   {"t": "The dashboard's filter matches nothing here", "d": "`home/+/temp` is three levels; the temps are four (`home/<room>/<device>/temp`). `home/+/+/temp`."},
+   {"t": "A command on the state topic, as a toggle", "d": "`home/hall/light toggle` mixes a command with the light's state, and a repeated toggle undoes itself. `home/hall/light/power/set ON`, and the light reports on `home/hall/light/power`."}
+  ]},
+ {"id": "pahosub", "after": "py-paho", "level": 2, "title": "A paho subscriber", "minutes": 5,
+  "context": "Logs the kitchen's readings. It works on the desk; after a day on the Pi it has stopped logging, with no error.",
+  "code": "import paho.mqtt.client as mqtt\n\ndef on_message(client, userdata, msg):\n    if msg.payload == \"OPEN\":\n        notify(\"fridge door open\")\n    log_reading(msg.topic, float(msg.payload))\n\nclient = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=\"logger\")\nclient.on_message = on_message\nclient.connect(\"jarvis\", 1883)\nclient.subscribe(\"home/kitchen/#\")\nclient.loop_forever()",
+  "findings": [
+   {"t": "Subscribes once, outside on_connect", "d": "After the first reconnect (Wi-Fi blip, broker restart) the clean session has no subscriptions and the client receives nothing, silently. Subscribe in `on_connect`, which runs on every connect."},
+   {"t": "`float(msg.payload)` on every message raises", "d": "`home/kitchen/#` also matches `.../status` (\"online\") and the door's \"OPEN\". The ValueError escapes the callback, and by default paho re-raises it out of `loop_forever()`, ending the program. Dispatch on the topic; catch and log bad payloads."},
+   {"t": "`msg.payload == \"OPEN\"` is never true", "d": "The payload is bytes. `msg.payload == b\"OPEN\"`, or decode first."},
+   {"t": "A generic client ID", "d": "`logger` is likely to be used by another program too; the two evict each other. Make it unique: `kitchen-logger-jarvis`."},
+   {"t": "QoS 0 by default", "d": "`subscribe` without `qos=` is QoS 0, so door events can be lost. `qos=1` for events."}
+  ]},
+ {"id": "will", "after": "mq-retained", "level": 2, "title": "Online and offline", "minutes": 4,
+  "context": "A sensor's status topic, so the dashboard can show which devices are up.",
+  "code": "client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=\"fridge-a4cf12\")\nclient.connect(\"jarvis\", 1883, keepalive=60)\nclient.will_set(\"home/kitchen/fridge/status\", \"offline\", qos=1)\nclient.publish(\"home/kitchen/fridge/status\", \"online\", qos=1, retain=True)\nclient.loop_start()\n...\n# on shutdown\nclient.disconnect()",
+  "findings": [
+   {"t": "`will_set` after `connect`", "d": "The will is part of CONNECT; set after it, it's never sent to the broker, so a crash leaves \"online\". Call `will_set` before `connect`."},
+   {"t": "The will isn't retained", "d": "Even when set right, a non-retained \"offline\" reaches only current subscribers; the retained \"online\" stays the topic's value. `retain=True` on the will."},
+   {"t": "A clean shutdown never says offline", "d": "`disconnect()` discards the will. Publish \"offline\" (retained) and wait for it before disconnecting."},
+   {"t": "\"online\" is published once, not per connect", "d": "After a reconnect the broker has already published the will \"offline\" (if the drop was unclean). Publish \"online\" in `on_connect`, every time."}
+  ]},
+ {"id": "aioloop", "after": "py-aiomqtt", "level": 3, "title": "An aiomqtt service", "minutes": 6,
+  "context": "Inside a FastAPI app: listens for the washing machine's power readings and lets a route turn the plug off.",
+  "code": "@asynccontextmanager\nasync def lifespan(app):\n    asyncio.create_task(listen())\n    yield\n\nasync def listen():\n    async with aiomqtt.Client(\"jarvis\", identifier=\"house-api\") as client:\n        await client.subscribe(\"tele/washer/SENSOR\")\n        async for m in client.messages:\n            data = json.loads(m.payload)\n            requests.post(FRIDAY, json={\"power\": data[\"ENERGY\"][\"Power\"]})\n\n@app.post(\"/washer/off\")\nasync def washer_off():\n    async with aiomqtt.Client(\"jarvis\", identifier=\"house-api\") as c:\n        await c.publish(\"cmnd/washer/POWER\", \"OFF\")",
+  "findings": [
+   {"t": "The route and the listener share a client ID", "d": "Each POST connects as `house-api`, evicting the listener, whose `async for` then raises and (see next) never comes back. Keep one client from the lifespan and publish through it."},
+   {"t": "No reconnect loop", "d": "When the connection drops, `MqttError` ends `listen()` and the task dies silently: no more readings until a restart. Wrap it in `while True` with try/except MqttError and backoff, subscribing inside."},
+   {"t": "`requests.post` blocks the event loop", "d": "Every reading stalls the whole app, every route and the MQTT keepalive, for the length of an HTTP call. `await` an `httpx.AsyncClient` (from the lifespan)."},
+   {"t": "The task isn't kept or cancelled", "d": "`create_task` without keeping a reference can be garbage-collected, and nothing cancels it at shutdown. `task = ...`, `task.cancel()` after `yield`."},
+   {"t": "Every reading is posted", "d": "Tasmota sends a reading every TelePeriod; this notifies Friday each time. Detect the transition (running to done) and notify once."}
+  ]},
+ {"id": "retaincmd", "after": "mq-payloads", "level": 1, "title": "A heater schedule", "minutes": 3,
+  "context": "Turns the hall heater off at night.",
+  "code": "def night():\n    client.publish(\"home/hall/heater/power\", \"toggle\", qos=0, retain=True)",
+  "findings": [
+   {"t": "A retained command", "d": "Every time the heater reconnects (every reboot, every Wi-Fi blip) it gets the retained message and acts again, days later. Commands are never retained."},
+   {"t": "`toggle` isn't idempotent", "d": "Sent twice, or replayed, it turns the heater back on. Send the target state: `OFF`."},
+   {"t": "On the state topic, not a command topic", "d": "`home/hall/heater/power` is where the heater reports; publish to `home/hall/heater/power/set`."},
+   {"t": "QoS 0 for a command", "d": "If the heater is offline for a moment, the command is lost. QoS 1, with a persistent session on the heater."}
+  ]},
+ {"id": "natsconf", "after": "br-nats", "level": 3, "title": "Switching MQTT on, on jarvis", "minutes": 6,
+  "context": "A first attempt at the leaf's config, so devices can connect.",
+  "code": "server_name: jarvis\nhost: 127.0.0.1\nport: 4222\njetstream { store_dir: \"/var/lib/nats\", domain: home }\nleafnodes { remotes: [ { url: \"nats-leaf://100.64.0.21:7422\", nkey: $NATS_LEAF_SEED } ] }\n\nmqtt {\n  port: 1883\n}\n\n# fridge sensor\nauthorization { users: [\n  { user: fridge, password: \"fridge123\",\n    permissions: { publish: [\"home/kitchen/fridge/#\"], subscribe: [\"home/kitchen/fridge/#\"] } }\n] }",
+  "findings": [
+   {"t": "Permissions written as MQTT topics", "d": "NATS checks the converted subject: `home.kitchen.fridge.>` (and `home.kitchen.fridge` for the `#` subscribe). As written, every publish and subscribe is refused."},
+   {"t": "A plain-text password in the config", "d": "The config is in the Nix store, world-readable, and in git. Use a bcrypt hash from `nats server passwd`, as the VPS does."},
+   {"t": "Local programs now need a login", "d": "Adding `authorization` makes the 127.0.0.1 client port require one too, and today's local programs send none. Plan for it (a `no_auth_user` for local programs, or logins for each)."},
+   {"t": "No `allowed_connection_types`", "d": "The fridge's login works on the NATS client port too. Limit device users to `[\"MQTT\"]`."},
+   {"t": "No `js_domain: home` in the mqtt block", "d": "Say where MQTT's state lives, so sessions and retained values stay on the Pi and the house works without the hub."}
+  ]},
+ {"id": "natscmd", "after": "br-nats", "level": 2, "title": "A wake-up command from NATS", "minutes": 4,
+  "context": "A nats-py job on the VPS tells the battery-powered pantry scale, which sleeps and wakes every 10 minutes, to tare itself.",
+  "code": "nc = await nats.connect(\"nats://100.64.0.21:4222\", user=\"pantry\", password=PW)\nawait nc.publish(\"home/pantry/scale/tare\", b\"now\")\nawait nc.close()",
+  "findings": [
+   {"t": "From NATS, MQTT subscribers get QoS 0", "d": "The scale is asleep, so the message isn't queued for it, persistent session or not. Publish over MQTT at QoS 1 to the leaf, or keep the request in a stream and have the scale ask on wake."},
+   {"t": "The subject is written as an MQTT topic", "d": "`home/pantry/scale/tare` is one NATS token that happens to contain slashes. The scale's MQTT subscription to `home/pantry/scale/tare` is the subject `home.pantry.scale.tare`, so this never matches it."},
+   {"t": "`now` isn't a usable command", "d": "Arriving 10 minutes late, \"now\" is wrong. Send an id and a timestamp, so the scale can drop a stale request and ignore a repeat."}
+  ]},
+ {"id": "acl", "after": "br-security", "level": 2, "title": "Mosquitto for a friend's flat", "minutes": 4,
+  "context": "A friend's Mosquitto setup, port-forwarded so their phone works away from home.",
+  "code": "listener 1883 0.0.0.0\nallow_anonymous true\n\n# acl_file /etc/mosquitto/acl\n# user devices\n# topic readwrite #",
+  "findings": [
+   {"t": "Anonymous, and open to the internet", "d": "Anyone who scans the port can read every topic and drive every device. `allow_anonymous false`, a password file, and no port-forward: reach it over a VPN or Tailscale."},
+   {"t": "No TLS on a port that leaves the house", "d": "Passwords and payloads cross the internet in clear. If it must be reachable, 8883 with TLS; better not at all."},
+   {"t": "One user with `readwrite #` (if enabled)", "d": "Every device would share one login with access to everything. A user per device, limited to its own topics."}
+  ]},
+ {"id": "discovery", "after": "br-devices", "level": 3, "title": "Home Assistant discovery", "minutes": 5,
+  "context": "A Python script announces its \"washing done\" sensor to Home Assistant at startup.",
+  "code": "client.publish(\n    \"homeassistant/binary_sensor/washer_done/config\",\n    json.dumps({\"name\": \"Washing done\",\n                \"state_topic\": \"home/utility/washer/done\"}),\n    qos=0)\n...\nclient.publish(\"home/utility/washer/done\", \"ON\", retain=True)",
+  "findings": [
+   {"t": "The config isn't retained", "d": "Home Assistant only sees it if it happens to be running at that moment; after its next restart the sensor is gone. `retain=True`, and republish on `homeassistant/status` \"online\"."},
+   {"t": "No `unique_id`", "d": "Without it the entity can't be renamed or managed in Home Assistant, and a second announcement can duplicate it."},
+   {"t": "\"Washing done\" is retained as ON", "d": "It's an event. Retained, every Home Assistant restart sees \"done\" again, and automations fire. Retain it only if you also publish OFF when the next wash starts, or don't retain it."},
+   {"t": "No availability topic", "d": "If the script dies, the sensor keeps its last value. Add `availability_topic` with a retained will \"offline\"."}
+  ]},
+ {"id": "debounce", "after": "py-patterns", "level": 4, "title": "Door notifications", "minutes": 7,
+  "context": "Notifies Friday when the front door opens. Zigbee2MQTT publishes `{\"contact\": false}` for open.",
+  "code": "last = None\n\nasync def handle(topic, payload):\n    global last\n    data = json.loads(payload)\n    if data[\"contact\"] == False and last != False:\n        await notify(\"Front door opened\")\n    last = data[\"contact\"]\n\nasync def run():\n    async with aiomqtt.Client(\"jarvis\", identifier=\"door\", clean_session=False) as c:\n        await c.subscribe(\"zigbee2mqtt/#\", qos=1)\n        async for m in c.messages:\n            await handle(m.topic.value, m.payload)",
+  "findings": [
+   {"t": "One `last` for every device", "d": "It subscribes to `zigbee2mqtt/#`, so any device's message (a lamp, the bridge) updates `last` or raises KeyError. Subscribe to the door's topic, and keep the last value per topic."},
+   {"t": "`data[\"contact\"]` raises on other messages", "d": "`zigbee2mqtt/bridge/state` and other devices have no `contact`. The exception ends the `async for`, and there's no reconnect loop to restart it. `.get()`, and catch per message."},
+   {"t": "A retained or queued \"open\" at start notifies", "d": "On restart, `last` is None; the retained state or messages queued in the persistent session arrive and \"Front door opened\" fires for an old event. Skip retained messages (`m.retain`) and old timestamps."},
+   {"t": "No debounce", "d": "A bouncing contact sends open-closed-open in a moment: two notifications. Ignore a second open within a few seconds."},
+   {"t": "Persistent session under a generic ID", "d": "`door` is easy to reuse elsewhere; with clean_session off, a collision also mixes up queued messages. A unique, stable ID."}
+  ],
+  "optional": true},
+ {"id": "qosmix", "after": "mq-qos", "level": 1, "title": "Reliable by decree", "minutes": 3,
+  "context": "\"We need every door event, so the sensor publishes at QoS 2.\"",
+  "code": "sensor:     publish  home/hall/door/contact  qos=2\nlogger:     subscribe home/hall/door/#       qos=0   clean_session=True\nhandler:    db.insert(event)        # on every message",
+  "findings": [
+   {"t": "The subscription caps it at QoS 0", "d": "Delivery is at the lower of publish and subscribe QoS: the logger gets QoS 0, fire and forget. Subscribe at QoS 1."},
+   {"t": "A clean session loses events while the logger is down", "d": "During a restart or a deploy nothing is kept for it. Persistent session with a stable client ID."},
+   {"t": "Insert on every message duplicates", "d": "At QoS 1, repeats happen. Insert keyed by an event id or timestamp from the payload, ignoring one already stored."},
+   {"t": "QoS 2 from the sensor costs without helping", "d": "Four packets per event on a small device, for a guarantee the subscriber throws away. QoS 1 plus an idempotent handler."}
+  ],
+  "optional": true}
+]

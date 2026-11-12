@@ -1,31 +1,37 @@
-# fastapi-study-plan
+# study
 
-A self-hosted, gamified course in Python and FastAPI for PHP developers,
-built to get you ready for a backend interview or a live code review in
-about three days.
+Self-hosted, gamified courses, each with a plan, lessons, checks, quizzes
+and timed drills, all working offline. Three come with it:
 
-It's one small FastAPI app (the course is a working example of what it
-teaches) serving one page:
+| Course | What | Size |
+|---|---|---|
+| **Python and FastAPI, from the basics** (`fastapi`) | Python and FastAPI for PHP developers, ready for a backend interview or a live code review in about three days | 28 lessons, 28 drills |
+| **MQTT, for the house** (`mqtt`) | The protocol devices speak, Python clients (paho, aiomqtt), and a NATS server as the broker | 15 lessons, 11 drills |
+| **ESP32, from the bench to the fridge** (`esp32`) | The microcontroller behind most home devices: GPIO, power, MicroPython, sensors, Wi-Fi and MQTT, deep sleep, ESPHome | 12 lessons, 8 drills |
 
-- **Plan**: a three-day checklist from Python basics to async, FastAPI,
-  SQLAlchemy and pytest, with a "next up" button that always points at the
+It's one small FastAPI app (the FastAPI course is a working example of
+what it teaches). `/` lists the courses with how far along you are in each;
+every course has its own page, with its own progress, XP, ranks, goal and
+deadline, and a switcher between them. In each course:
+
+- **Plan**: a day-by-day checklist through the course, with a "next up" button that always points at the
   next thing to do.
-- **Syllabus**: 28 lessons (about 9.5 hours of reading) with code,
-  "From PHP" comparisons, common traps, a short exercise and links to the
+- **Syllabus**: the lessons, in parts, with code, comparisons with what
+  you already know ("From PHP", "From NATS"), common traps, a short exercise and links to the
   official docs.
 - **Checks**: three questions after every lesson, with the reason behind
   each answer. Questions you miss come back the next day for review.
 - **Quiz**: 10-question rounds, one question at a time, from a bank of six
-  per lesson (168 in all), weighted towards what you get wrong and haven't
+  per lesson, weighted towards what you get wrong and haven't
   seen. Rounds can cover everything you've read, your weak spots, only
   questions you've never answered, one part or one lesson. Keys 1-4 answer, Enter moves on.
 - **Today**: say how long you have (1–3 h, or until 23:00) and the plan
   fills it with the most useful things left, in order: missed questions,
   lessons you started, drills, the next lessons, weak spots. It reflows as
   you go, and Next up (and focus mode) follows it.
-- **Drills**: 28 timed code reviews of realistic snippets with planted
-  bugs, and a ranked answer key. Each has a level, very easy to
-  moderate-hard, and the list filters by it. Thirteen are optional practice:
+- **Drills**: timed reviews of realistic snippets (code, configs, circuits)
+  with planted bugs, and a ranked answer key. Each has a level, very easy to
+  moderate-hard, and the list filters by it. Some are optional practice:
   no XP, and they don't count towards progress, ranks or the deadline. Each unlocks with a lesson; once you've read
   it, Next up asks you for that drill.
 - **Record**: XP, ranks, a daily goal, a streak and badges. All of it is
@@ -58,8 +64,8 @@ connection is back. Add it to your phone's home screen to open it like an app.
 With [uv](https://docs.astral.sh/uv/):
 
 ```sh
-git clone https://github.com/anishanilkumar/fastapi-study-plan
-cd fastapi-study-plan
+git clone https://github.com/anishanilkumar/study
+cd study
 uv run --with fastapi --with uvicorn python app.py
 ```
 
@@ -68,28 +74,32 @@ Open http://127.0.0.1:8781. Progress goes to `study.db` next to the app.
 With Docker:
 
 ```sh
-docker build -t study-plan .
-docker run -p 8781:8781 -v study-plan-data:/data study-plan
+docker build -t study .
+docker run -p 8781:8781 -v study-data:/data study
 ```
 
 ## Make it yours
 
-Copy `config.example.json` to `config.json` (gitignored) and edit it:
+Copy `config.example.json` to `config.json` (gitignored) and edit it. Dates
+are per course, under `courses.<id>`; a config from before courses, with
+them at the top, still works and counts as the `fastapi` course's.
 
 | Key | What it does |
 |---|---|
-| `title` | The page heading |
-| `start` | Day 1 of the plan (`YYYY-MM-DD`), so days show as dates. Leave it out for "Day 1, Day 2…" |
-| `finish_by` | When all the work should be done, e.g. `"2026-01-12T21:00:00+01:00"`. The page then shows hours of work left against usable hours left (07:00–23:00), whether you're ahead or behind, and today's share. It can be changed on the Record page. |
-| `target` | What you're counting down to: `{"label": "Interview", "at": "2026-01-13T14:00:00+01:00"}`. The time needs a UTC offset. Leave it out for no countdown |
-| `overrides` | Replace a plan item's text by id, e.g. your own project for the `eve-deepdive` item |
-| (on the page) | Each learner can set their own goal and date, day 1 and finish-by deadline: asked on the plan at first login when config has no `target` or `start` for them, and editable under "Your dates" on Record. Once set there, they win over config |
-| `mentor_token` | Turns on a read-only page at `/mentor/<token>` to share with a mentor: progress, scores, drills, highlights and notes, not parked thoughts. At least 32 characters: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The Record page shows the link to copy. Change it to revoke the link |
+| `title` | The heading of the list of courses (default "Study") |
+| `courses.<id>.start` | Day 1 of that course's plan (`YYYY-MM-DD`), so days show as dates. Leave it out for "Day 1, Day 2…" |
+| `courses.<id>.finish_by` | When all its work should be done, e.g. `"2026-01-12T21:00:00+01:00"`. The page then shows hours of work left against usable hours left (07:00–23:00), whether you're ahead or behind, and today's share. It can be changed on the Record page. |
+| `courses.<id>.target` | What you're counting down to: `{"label": "Interview", "at": "2026-01-13T14:00:00+01:00"}`. The time needs a UTC offset. Leave it out for no countdown |
+| `courses.<id>.overrides` | Replace a plan item's text by id, e.g. your own project for the FastAPI course's `eve-deepdive` item |
+| (on the page) | Each learner can set their own goal and date, day 1 and finish-by deadline per course: asked on the plan at first visit when config has none for them, and editable under "Your dates" on Record. Once set there, they win over config |
+| `mentor_token` | Turns on read-only pages at `/mentor/<token>` to share with a mentor: every course, with progress, scores, drills, highlights and notes, not parked thoughts. At least 32 characters: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The Record page shows the link to copy. Change it to revoke the link |
+
+An unknown key, or a course that doesn't exist, stops the app at startup
+with the reason, so a typo can't be silently ignored.
 
 ### More than one learner
 
-Put each learner's own `start`, `target`, `finish_by`, `overrides` and
-`mentor_token` under `users`, keyed by their name, and set
+Put each learner's own `courses` dates and `mentor_token` under `users`, keyed by their name, and set
 `STUDY_USER_HEADER` to a header your auth proxy sets to the logged-in name
 (oauth2-proxy with `--set-xauthrequest`, then in nginx
 `auth_request_set $u $upstream_http_x_auth_request_preferred_username;
@@ -99,7 +109,8 @@ proxy must always set it, and must overwrite whatever a client sends.
 
 ```json
 { "owner": "anish",
-  "users": { "anish":  { "target": { "label": "Interview", "at": "2026-01-13T14:00:00+01:00" }, "mentor_token": "…" },
+  "users": { "anish":  { "courses": { "fastapi": { "target": { "label": "Interview", "at": "2026-01-13T14:00:00+01:00" } } },
+                         "mentor_token": "…" },
              "friend": { "mentor_token": "…" } } }
 ```
 
@@ -115,15 +126,15 @@ reason. Environment variables: `STUDY_DB` (SQLite path), `STUDY_CONFIG`
 ### Public demo mode
 
 `STUDY_DEMO=1` turns an instance into a public demo: no database at all,
-each visitor's progress stays in their own browser, and `PUT /state` is
+each visitor's progress stays in their own browser, and every `PUT` is
 refused. Visitors never see each other's ticks and there's nothing to reset.
 
 ## Security
 
-There is **no login**. The app keeps one learner's progress and binds to
+There is **no login**. The app keeps each learner's progress per course and binds to
 localhost by default. To put it on the internet, run it behind a reverse
 proxy that handles authentication (oauth2-proxy, Authelia, basic auth in
-nginx, Tailscale, …). `PUT /state` only accepts small, validated data, but
+nginx, Tailscale, …). `PUT /<course>/state` only accepts small, validated data, but
 without auth anyone with the URL could change your progress.
 
 The mentor page is the one exception: `/mentor/` is meant to sit outside
@@ -133,30 +144,57 @@ path in your proxy (in nginx, a `location /mentor/` with `auth_request off`).
 ## How it's built
 
 ```
-app.py              FastAPI: the page (with config injected), state API, static files
-study-plan.html     the whole UI: plain HTML, CSS and JavaScript, no build step
-lessons/*.html      one reading per lesson (HTML fragments)
-quizzes.json        questions per lesson: [question, options, answer index, why]; the first three are the check
-drills.json         the code-review drills and their ranked findings
-sw.js               the service worker for offline use
-test_app.py         pytest suite
+app.py                FastAPI: the pages (with config and the course injected), state API, course files
+study.html            the whole UI: plain HTML, CSS and JavaScript, no build step; the list of
+                      courses and a course are two modes of this one page
+courses/<id>/
+  course.json         the course: title, plan, parts and lessons, ranks, and its own framing
+  lessons/*.html      one reading per lesson (HTML fragments)
+  quizzes.json        questions per lesson: [question, options, answer index, why]; the first three are the check
+  drills.json         the drills and their ranked findings
+sw.js                 the service worker: every course saved for offline use
+test_app.py           pytest suite
 ```
 
-The state API is described at the top of `app.py`. A few things are worth
-reading as examples of the lessons themselves: plain `def` handlers because
-`sqlite3` blocks, a fresh connection per request, Pydantic validation of
-everything the page sends, a lifespan handler that migrates old databases,
-and an aware-datetime check on the config.
+Progress is one row per learner and course. The state API is described at
+the top of `app.py`. A few things are worth reading as examples of the
+FastAPI lessons themselves: plain `def` handlers because `sqlite3` blocks, a
+fresh connection per request, Pydantic validation of everything the page
+sends (and of every course file), a lifespan handler that migrates old
+databases, and an aware-datetime check on the config.
+
+Upgrading from before courses needs nothing: on its first start the app
+copies the old progress into the `fastapi` course (the old tables stay as a
+backup), old links like `/#/lesson/py-types` land in the right course, and
+`GET/PUT /state` still reach the `fastapi` course for a tab left open across
+the deploy.
 
 ### Adding content
 
-- **A lesson**: add `lessons/<id>.html`, at least three questions under the
-  same id in `quizzes.json` (the first three form its check; any more appear
-  in quiz rounds), and an entry in `PARTS` in `study-plan.html`. The tests
-  check that all three agree.
+- **A course**: a folder `courses/<id>/` (lower-case, not `fonts`, `icons`,
+  `mentor` or `state`) with the four parts above. Copy an existing course's
+  `course.json` and change it: `title`, `short` (the switcher), `order`,
+  `blurb` (its card), `lede`, `goal` (XP a day), optionally `shift` (one idea
+  to hold on to) and `map` (a table from what the learner knows), the `plan`
+  (days of grouped items, each optionally linked to a lesson, plus self-check
+  items), the `parts` and their lessons (`day` says which plan day uses it;
+  `null` makes it an extra), and the `ranks`. A rank needs XP plus any of:
+  `{"read": n}`, `{"parts": [1, 2]}` or `{"parts": "all"}` (read and passed),
+  `{"drills": n}`, `{"drills": "all", "spare": n}`, `{"worst": n}`,
+  `{"answered": n, "right": 0.85}`, `{"noweak": true}`, `{"nodue": true}`,
+  each with an optional `label`. Badges come from the plan and the parts.
+- **A lesson**: `lessons/<id>.html`, at least three questions under the same
+  id in `quizzes.json` (the first three form its check), and an entry in a
+  part in `course.json`. Callouts are `<aside class="bridge">` (from what you
+  know), `trap`, `try` and `more`.
 - **A drill**: add it to `drills.json` with a `level` from 1 (very easy) to 4
-  (moderate-hard). Put the worst finding first; it's the one worth the most XP.
-  `"optional": true` makes it practice only.
+  (moderate-hard) and the lesson it comes `after`. Put the worst finding
+  first; it's the one worth the most XP. `"optional": true` makes it
+  practice only.
+
+The app checks all of it against itself at startup (every lesson has its
+text and a check, every link points at something real) and refuses to start
+with the reason if not.
 
 ### Tests
 

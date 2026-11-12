@@ -1,0 +1,40 @@
+<p>Getting from a new board to a Python prompt on it: install the firmware once, then copy files and type at the REPL. Two tools do all of it: <code>esptool</code> to write firmware, <code>mpremote</code> to talk to MicroPython.</p>
+
+<h3>The USB connection</h3>
+<p>Plug it in and a serial port appears: <code>/dev/cu.usbserial-*</code> or <code>/dev/cu.usbmodem*</code> on the Mac. Boards with a separate USB-serial chip (CP2102, CH340) show the first; S3 and C3 boards using the chip's own USB show the second. No port at all usually means a charge-only cable.</p>
+
+<h3>Flashing MicroPython</h3>
+<pre><code>pip install esptool mpremote             # or: uv tool install esptool; uv tool install mpremote
+esptool.py --chip esp32c3 erase_flash
+esptool.py --chip esp32c3 write_flash -z 0x0 ESP32_GENERIC_C3-v1.xx.bin</code></pre>
+<p>Download the firmware for your exact chip from micropython.org; its page gives the flash offset (<code>0x1000</code> for the original ESP32, <code>0x0</code> for S3 and C3). Erase first when switching from other firmware.</p>
+
+<h3>Boot mode</h3>
+<p>To accept new firmware, the chip must start in its download mode, which happens when GPIO0 (GPIO9 on the C3) is held low at reset. Most dev boards do it for you through the USB-serial lines. When esptool says it can't connect, do it by hand: hold <strong>BOOT</strong>, press and release <strong>RESET</strong> (EN), release BOOT, run the command again.</p>
+
+<h3>The REPL</h3>
+<pre><code>mpremote                       # connects to the first board it finds, opens the REPL
+&gt;&gt;&gt; import machine, sys
+&gt;&gt;&gt; sys.implementation
+&gt;&gt;&gt; machine.freq()
+240000000</code></pre>
+<p>Ctrl-] leaves mpremote. In the REPL: Ctrl-C stops a running program, Ctrl-D soft-resets (restarts MicroPython and runs <code>main.py</code>).</p>
+
+<h3>Files on the board</h3>
+<pre><code>mpremote ls                    # the board's little filesystem, in its flash
+mpremote cp main.py :main.py   # ":" is the board
+mpremote run test.py           # run a file from the Mac without copying it
+mpremote mip install umqtt.simple</code></pre>
+<p>At power-up MicroPython runs <code>boot.py</code>, then <code>main.py</code>. Keep <code>boot.py</code> nearly empty, put the program in <code>main.py</code>, and develop with <code>mpremote run</code>, so a broken <code>main.py</code> never stops you getting back in.</p>
+
+<aside class="bridge"><span class="label">From Python</span><p>Same language, small standard library: <code>time</code>, <code>json</code>, <code>os</code>, <code>asyncio</code> exist, but trimmed; there's no pip at run time, no threads to rely on and no <code>requests</code>. <code>machine</code>, <code>network</code> and <code>esp32</code> are the new modules.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>A <code>main.py</code> that loops forever without a pause, or crashes into a reset loop, makes the board hard to reach. Ctrl-C in the REPL usually stops it; if not, erase the flash and start again. Add a 2-second sleep at the top of <code>main.py</code> while developing.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Flash MicroPython, open the REPL, and print <code>machine.unique_id()</code> as hex. You'll use it as the board's MQTT client ID.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/esp32/tutorial/intro.html" target="_blank" rel="noopener">MicroPython: getting started on the ESP32</a></li>
+<li><a href="https://docs.micropython.org/en/latest/reference/mpremote.html" target="_blank" rel="noopener">mpremote reference</a></li>
+<li><a href="https://docs.espressif.com/projects/esptool/en/latest/esp32/" target="_blank" rel="noopener">esptool documentation</a></li>
+</ul></aside>

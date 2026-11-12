@@ -1,0 +1,35 @@
+<p>Most "random" ESP32 problems are power: resets when Wi-Fi starts, a sensor that reads nonsense, a battery that's flat in a day. Ten minutes on power saves evenings of debugging code that's fine.</p>
+
+<h3>What it draws</h3>
+<table><thead><tr><th>State</th><th>Roughly</th></tr></thead><tbody>
+<tr><td>Wi-Fi transmitting</td><td>Peaks of 200 to 400 mA, for milliseconds</td></tr>
+<tr><td>Running, Wi-Fi connected</td><td>80 to 150 mA on average</td></tr>
+<tr><td>Light sleep</td><td>About 1 mA</td></tr>
+<tr><td>Deep sleep, the chip alone</td><td>About 10 µA</td></tr>
+<tr><td>Deep sleep, a typical dev board</td><td>Several mA: its regulator, USB chip and power LED stay on</td></tr>
+</tbody></table>
+<p>Those numbers vary by chip and board; measure yours with a USB power meter. The peaks matter most: they're what a weak supply can't deliver.</p>
+
+<h3>Brownouts</h3>
+<p>When the voltage dips too low (a thin USB cable, a weak charger, a long wire), the chip's brownout detector resets it, and the serial log says <code>Brownout detector was triggered</code>. Typically this happens exactly when Wi-Fi starts, so it looks like a Wi-Fi bug. Fixes: a better cable and supply, shorter wires, and a capacitor (100 µF or so) across 3.3 V and GND near the module.</p>
+
+<h3>Powering a board</h3>
+<ul class="points">
+<li><strong>USB (5 V)</strong> into the board's regulator: the easy way, for anything near a socket.</li>
+<li><strong>The 3V3 pin</strong>: a clean, regulated 3.3 V only. Bypasses the regulator.</li>
+<li><strong>The 5V / VIN pin</strong>: 5 V into the regulator. Never feed USB and VIN at once unless the board says it can.</li>
+<li><strong>A LiPo cell</strong> (3.7 V nominal, 4.2 V full): too high for the chip directly. Use a board with a battery connector and charger, or a low-quiescent regulator. Three AA alkaline cells start at 4.5 V; two are too low as they drain.</li>
+</ul>
+
+<h3>Sensors share the supply</h3>
+<p>Power sensors from the board's 3.3 V, with grounds connected: every device in the circuit needs a common ground, or signals between them mean nothing. A sensor powered from a separate supply with no shared ground is the classic "it reads garbage".</p>
+
+<aside class="bridge"><span class="label">From the Pi</span><p>Same lesson as the Pi's undervoltage warnings and the NAS's flaky USB drive: under-powered hardware fails in ways that look like software. jarvis tells you in its kernel log; the ESP32 tells you once on the serial port, if you're watching.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Judging battery life from the chip's deep-sleep figure. A dev board's regulator and LED can draw a thousand times more than the sleeping chip. For a battery device, choose a board made for it, or measure.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>With a USB power meter, note what your board draws idle, while connecting to Wi-Fi, and in <code>machine.deepsleep()</code>. Work out how long a 2000 mAh battery would last waking once every 10 minutes for 5 seconds.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/low-power-mode/index.html" target="_blank" rel="noopener">ESP-IDF: low-power modes</a></li>
+</ul></aside>

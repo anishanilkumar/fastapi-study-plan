@@ -1,0 +1,46 @@
+<p>GPIO pins are how the chip touches the world: read a button, drive an LED, talk to a sensor. Most mistakes with them are electrical, not code, and some can kill the board.</p>
+
+<h3>3.3 volts, and small currents</h3>
+<ul class="points">
+<li>The ESP32 runs at <strong>3.3 V</strong>. A pin outputs 0 or 3.3 V and reads anything near those as 0 or 1.</li>
+<li>It is <strong>not 5 V tolerant</strong>. A 5 V sensor output (some old modules, an Arduino) into a pin can damage it. Use a level shifter or a voltage divider.</li>
+<li>A pin can supply a few milliamps comfortably. An LED with a resistor (220 Ω to 1 kΩ) is fine; a relay coil, a motor or a strip of LEDs needs a transistor or a driver board.</li>
+</ul>
+
+<h3>Output and input</h3>
+<pre><code>from machine import Pin
+led = Pin(2, Pin.OUT)          # many boards have an LED on 2 (C3 boards often 8)
+led.value(1)
+
+button = Pin(4, Pin.IN, Pin.PULL_UP)   # pressed connects 4 to GND
+if button.value() == 0:
+    print("pressed")</code></pre>
+<p>An input connected to nothing <em>floats</em>: it reads random 0s and 1s from electrical noise. A pull-up (to 3.3 V) or pull-down (to GND) gives it a defined resting value. With a pull-up, the button connects the pin to ground, so pressed reads 0.</p>
+
+<h3>Interrupts, not polling</h3>
+<pre><code>def pressed(pin):
+    global count
+    count += 1                 # keep it tiny: no printing, no network, no allocation
+
+button.irq(trigger=Pin.IRQ_FALLING, handler=pressed)</code></pre>
+<p>The handler runs in the middle of whatever else was running. Set a flag or a counter and do the real work in the main loop. Mechanical buttons and reed switches <em>bounce</em>: one press is several edges in a few milliseconds, so ignore edges within ~50 ms of the last.</p>
+
+<h3>Pins to avoid on the original ESP32</h3>
+<table><thead><tr><th>Pins</th><th>Why</th></tr></thead><tbody>
+<tr><td>6 to 11</td><td>Wired to the module's flash. Using them crashes the board.</td></tr>
+<tr><td>0, 2, 5, 12, 15</td><td>Strapping pins: read at reset to choose boot mode and flash voltage. A sensor pulling 12 high at boot can stop the board starting.</td></tr>
+<tr><td>34 to 39</td><td>Input only, and no internal pull-ups.</td></tr>
+<tr><td>ADC2 pins (e.g. 0, 2, 4, 12 to 15, 25 to 27)</td><td>Analogue reads don't work while Wi-Fi is on; use ADC1 (32 to 39).</td></tr>
+</tbody></table>
+<p>Newer chips have their own lists (the C3's strapping pins are 2, 8 and 9). Check your board's pinout before wiring, and prefer the pins its examples use.</p>
+
+<aside class="bridge"><span class="label">From the Pi</span><p>The Pi's GPIO is also 3.3 V and also not 5 V tolerant, so the rules carry over. The difference: here your code owns the pin directly, with no kernel in between, so timing is far more precise.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Connecting a 5 V relay module's input "because it worked on the Arduino". Some work at 3.3 V, some half-work, and some feed 5 V back into the pin. Read the module's schematic, or use one sold for 3.3 V logic.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Wire a button to a pin with the internal pull-up, count presses with an interrupt, and print the count once a second from the main loop. Then press quickly and see the bounce; add the 50 ms debounce.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/esp32/quickref.html#pins-and-gpio" target="_blank" rel="noopener">MicroPython: pins and GPIO on the ESP32</a></li>
+<li><a href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/gpio.html" target="_blank" rel="noopener">ESP-IDF: GPIO, with the strapping and flash pins</a></li>
+</ul></aside>

@@ -1,0 +1,98 @@
+{
+ "es-chip": [
+  ["Which of these can't join your Wi-Fi?", ["ESP32-C3", "ESP32-H2", "ESP32-S3"], 1, "The H2 has BLE and 802.15.4 (Thread, Zigbee) but no Wi-Fi."],
+  ["What does a module add to a bare chip?", ["A USB port and pins", "Flash, a crystal and an antenna, under a shield", "An operating system"], 1, "A dev board then adds USB, a regulator, buttons and pins."],
+  ["The house has only a 5 GHz network. A C3 board…", ["Joins fine", "Can't join: almost all ESP32s are 2.4 GHz only", "Joins at reduced speed"], 1, "Check the router has 2.4 GHz on."],
+  ["For MicroPython with room to spare, the comfortable choice is…", ["An S3 with PSRAM", "An H2", "The original ESP32 without PSRAM"], 0, "PSRAM gives megabytes of heap instead of ~100 KB."],
+  ["If the ESP32's program hangs, what restarts it?", ["The kernel", "Nothing, unless a watchdog is set or someone resets it", "Wi-Fi"], 1, "There's no OS supervising: the program is the device."],
+  ["For a standard sensor that will live in the house, the quickest route is usually…", ["ESP-IDF in C", "ESPHome", "Writing it from scratch in MicroPython"], 1, "YAML in, firmware with Wi-Fi, MQTT and OTA out. MicroPython is for the non-standard ones."]
+ ],
+ "es-setup": [
+  ["esptool can't connect to the board. First thing to try?", ["A new firmware file", "Hold BOOT, tap RESET, release BOOT, retry", "Reinstall Python"], 1, "That puts the chip in download mode by hand."],
+  ["No serial port appears when you plug the board in. Most likely?", ["Wrong firmware", "A charge-only USB cable", "Wi-Fi is off"], 1, "Many cables carry power only. Use one you know carries data."],
+  ["At power-up MicroPython runs…", ["main.py then boot.py", "boot.py then main.py", "Only main.py"], 1, "Keep boot.py nearly empty; the program goes in main.py."],
+  ["`mpremote run test.py` does what?", ["Copies test.py to the board", "Runs it from the Mac without copying it", "Flashes firmware"], 1, "Good for developing: a broken file never becomes main.py."],
+  ["In the REPL, Ctrl-D…", ["Exits mpremote", "Soft-resets and runs main.py", "Erases the flash"], 1, "Ctrl-C stops a program; Ctrl-] leaves mpremote."],
+  ["Why erase the flash before writing MicroPython?", ["It's faster", "So leftovers from other firmware don't interfere", "esptool requires it every time"], 1, "Especially when switching from Arduino or ESPHome firmware."]
+ ],
+ "es-gpio": [
+  ["A 5 V sensor output into an ESP32 pin…", ["Is fine", "Can damage the pin: it's 3.3 V and not 5 V tolerant", "Reads as 1 and that's all"], 1, "Use a level shifter or a divider."],
+  ["A button between a pin and GND, with Pin.PULL_UP. Pressed reads…", ["1", "0", "Random"], 1, "The pull-up holds it at 1; pressing connects it to ground."],
+  ["An input with nothing connected and no pull reads…", ["0", "Random noise: it floats", "1"], 1, "Give every input a defined resting level."],
+  ["What belongs in an interrupt handler?", ["The MQTT publish", "Set a flag or bump a counter, nothing slow", "A print and a sleep"], 1, "It runs in the middle of other code; the main loop does the work."],
+  ["On the original ESP32, GPIO 6 to 11 are…", ["Free to use", "Wired to the flash: using them crashes the board", "Input only"], 1, "They belong to the module's flash."],
+  ["On the original ESP32, which ADC pins work with Wi-Fi on?", ["ADC1 (32 to 39)", "ADC2", "Both"], 0, "ADC2 is shared with the Wi-Fi radio."]
+ ],
+ "es-power": [
+  ["The board resets exactly when Wi-Fi starts. Most likely?", ["A Wi-Fi driver bug", "A brownout: the supply can't deliver the current peak", "Wrong SSID"], 1, "Better cable and supply, shorter wires, a capacitor near the module."],
+  ["A sensor powered from a separate supply with no shared ground…", ["Works", "Reads garbage: signals need a common ground", "Is safer"], 1, "Every device in the circuit shares GND."],
+  ["A typical dev board in deep sleep draws…", ["About 10 µA", "Several mA: regulator, USB chip and LED stay on", "Nothing"], 1, "The chip's own figure is tiny; the board's isn't."],
+  ["A 3.7 V LiPo straight onto the 3V3 pin…", ["Is ideal", "Is too high when full (4.2 V): use a regulator or a board with a battery input", "Is too low"], 1, "3V3 wants a clean 3.3 V."],
+  ["Roughly what does Wi-Fi transmitting draw at its peaks?", ["2 mA", "200 to 400 mA", "2 A"], 1, "Short peaks, but they're what a weak supply fails at."],
+  ["The best way to know your board's real consumption:", ["The datasheet", "Measure it, e.g. with a USB power meter", "Guess from the chip"], 1, "Boards differ widely from the chip's figures."]
+ ],
+ "es-mpy": [
+  ["`elapsed = time.ticks_ms() - start` is…", ["Correct", "A bug: ticks wrap around; use ticks_diff", "Slower"], 1, "ticks_diff handles the wrap."],
+  ["After a power cut, the ESP32's clock says…", ["The right time", "Around 2000-01-01 until set, e.g. by ntptime", "1970"], 1, "Set it from NTP before any timestamp means anything."],
+  ["A list that grows in the main loop leads to…", ["Nothing", "MemoryError after hours or days, and a reset", "Slower Wi-Fi"], 1, "Allocate once; fixed-size buffers."],
+  ["A sensor read that blocks 750 ms in an asyncio program…", ["Only delays that task", "Stalls every task", "Is fine"], 1, "One thread, switching only at await."],
+  ["Why not write a file every few seconds?", ["Files are slow", "Flash wears out with many writes", "The filesystem is read-only"], 1, "Write rarely; NVS for small settings."],
+  ["The outer loop of a device program should…", ["Let exceptions end the program, so you notice", "Catch, log, and carry on", "Reset the board on any error"], 1, "There's nothing to return to; log and keep going (and a watchdog for hangs)."]
+ ],
+ "es-buses": [
+  ["`i2c.scan()` returns []. First suspect?", ["The driver", "Wiring, power or missing pull-ups", "The I²C address in your code"], 1, "Scan doesn't use any driver; an empty scan is electrical."],
+  ["A DS18B20 needs which resistor?", ["220 Ω in series", "4.7 kΩ pull-up from data to 3.3 V", "None"], 1, "1-Wire's data line needs the pull-up."],
+  ["The DS18B20 reads 85.0 °C in the fridge. Meaning?", ["The fridge is broken", "Its power-on value: the conversion didn't happen", "It's in °F"], 1, "Too short a wait, or power trouble."],
+  ["How long can a DS18B20 conversion take?", ["1 ms", "Up to 750 ms", "5 s"], 1, "At full 12-bit resolution."],
+  ["A BME280's I²C address is…", ["0x40", "0x76 or 0x77", "0x3C"], 1, "Set by a pin or solder jumper on the breakout."],
+  ["A sensor 5 m from the board. Which bus copes?", ["I²C", "1-Wire", "SPI"], 1, "I²C is for short runs on a board; 1-Wire handles several metres."]
+ ],
+ "es-analog": [
+  ["Without setting attenuation, the ADC reads correctly up to about…", ["3.3 V", "1 V", "5 V"], 1, "ATTN_11DB gives the widest range, roughly 0 to 3.1 V."],
+  ["How accurate is the ESP32's ADC?", ["Lab grade", "A few percent at best, worst near the ends", "Exact"], 1, "Use read_uv, average, and don't use it for measurement."],
+  ["To measure a 4.2 V battery, you…", ["Connect it to the pin", "Use a divider and multiply back", "Use PWM"], 1, "Never more than 3.3 V on a pin."],
+  ["A pin's PWM duty of 50% on an LED looks like…", ["Flicker", "About half brightness", "Off"], 1, "Switched fast enough, the eye averages it."],
+  ["A 12 V fan's speed from a pin needs…", ["Just the pin", "A MOSFET driven by the pin's PWM", "The ADC"], 1, "A pin gives a few mA at 3.3 V."],
+  ["A resistive soil probe powered all the time…", ["Lasts years", "Corrodes in weeks: power it only while reading", "Reads better"], 1, "Or buy a capacitive one."]
+ ],
+ "es-wifi": [
+  ["The best MQTT client ID for a board is…", ["`esp32`", "Built from machine.unique_id()", "Random each boot"], 1, "Stable and unique per device."],
+  ["umqtt.simple and keepalive:", ["It pings automatically", "You must ping (or publish) within the keepalive yourself", "Keepalive isn't supported"], 1, "It does exactly what you call."],
+  ["`while not wlan.isconnected(): pass` is a bug because…", ["It's slow", "No timeout: if the router's down, the board spins forever", "It uses too much memory"], 1, "Always a timeout, then back off and retry."],
+  ["Why the Pi's IP rather than `jarvis` as the broker?", ["IPs are faster", "The board may not resolve local names (no mDNS by default, no tailnet)", "MQTT needs IPs"], 1, "And give the Pi a fixed lease."],
+  ["Where does the Wi-Fi password go?", ["In main.py", "In a secrets.py on the board, not in git", "In the topic"], 1, "Code in git, secrets out."],
+  ["On any network error, the recover loop…", ["Resets the board", "Backs off and starts over from Wi-Fi", "Retries the publish forever"], 1, "The same shape as the aiomqtt loop."]
+ ],
+ "es-sleep": [
+  ["After waking from deep sleep, the program…", ["Continues after deepsleep()", "Starts again from boot.py and main.py", "Resumes its last task"], 1, "Deep sleep wake is a reset."],
+  ["What survives deep sleep?", ["All variables", "A few bytes in RTC memory", "Nothing at all"], 1, "machine.RTC().memory(); gone on a power cut."],
+  ["What dominates a sleeping device's battery use?", ["The sensor read", "Joining Wi-Fi on each wake", "The sleep itself"], 1, "Send rarely; keep the last value in RTC memory."],
+  ["A door contact should wake the board. Use…", ["A timer", "esp32.wake_on_ext0 on the contact's pin", "Polling"], 1, "Wake on the pin, plus a timer for a heartbeat."],
+  ["For a device that's asleep most of the time, the reading topic should be…", ["Not retained", "Retained, with a timestamp", "QoS 2"], 1, "So a dashboard sees the last value between wakes, and its age."],
+  ["Calling deepsleep straight after a QoS 0 publish risks…", ["Nothing", "The message not going out", "A duplicate"], 1, "Disconnect cleanly first, or use QoS 1 and wait for the ack."]
+ ],
+ "es-esphome": [
+  ["After the first USB flash, ESPHome updates a device…", ["Only over USB", "Over Wi-Fi (OTA), if ota: is in the YAML", "Never"], 1, "Leave ota: out and every change means unplugging it."],
+  ["`api:` or `mqtt:` for a sensor the house's NATS programs should see?", ["api:", "mqtt: (or both)", "Neither"], 1, "The native API talks only to Home Assistant."],
+  ["Where do passwords go in an ESPHome project?", ["The device YAML", "secrets.yaml, out of git", "The topic prefix"], 1, "Referenced with !secret."],
+  ["ESPHome with mqtt: and a topic_prefix gives you, for free:", ["Nothing", "Status with will and birth, state topics, and Home Assistant discovery", "Only state topics"], 1, "The status pattern from the MQTT course, built in."],
+  ["When is MicroPython the better choice?", ["A standard temperature sensor", "Odd logic or a protocol ESPHome doesn't know", "Anything that needs OTA"], 1, "Standard devices are quicker in ESPHome."],
+  ["The DS18B20 in current ESPHome is configured with…", ["`platform: dallas`", "a `one_wire:` bus and `platform: dallas_temp`", "`i2c:`"], 1, "The old dallas component was replaced."]
+ ],
+ "es-reliable": [
+  ["Where should the watchdog be fed?", ["A timer callback", "The main loop, after real work", "An interrupt handler"], 1, "A timer keeps feeding while the main loop is hung."],
+  ["Why publish the reset cause at boot?", ["It's required", "So watchdog resets (bugs) show up instead of going unnoticed", "To sync the clock"], 1, "A device reset twice a day is telling you something."],
+  ["A watchdog timeout should be…", ["As short as possible", "Longer than the slowest healthy cycle, Wi-Fi connect included", "Turned off in production"], 1, "Otherwise it resets a healthy device."],
+  ["Updating .py files over the network safely means…", ["Overwrite main.py directly", "Download to a temporary name, check it, then rename", "Not possible"], 1, "A broken download never replaces a working file."],
+  ["Readings before ntptime has worked should…", ["Be dated 2000-01-01", "Go without a timestamp, or not be sent", "Use ticks_ms as time"], 1, "A wrong date is worse than none."],
+  ["A safe way back in after a bad update:", ["Erase the flash every time", "A pin held low at boot skips main.py", "Wait for it to fix itself"], 1, "Leaves the REPL free."]
+ ],
+ "es-build": [
+  ["Where should \"door open for two minutes\" be decided?", ["On the device", "In a program subscribed to the device's topics", "In the broker"], 1, "Keep devices reporting facts; decisions in code you can change in seconds."],
+  ["The fridge device's MQTT user should be allowed…", ["Everything under home/", "Only home/kitchen/fridge/… (home.kitchen.fridge.> on NATS)", "Nothing; anonymous is fine"], 1, "Per-device users, limited to their own topics."],
+  ["A notice reaches the phone how?", ["The device sends it to FCM", "The watcher publishes to notify.<user>; Friday's gateway turns it into a notification", "Over SMS"], 1, "The house already has that path."],
+  ["The door topic should be published…", ["On every bounce", "Debounced, on change, retained, QoS 1", "Every second"], 1, "One notification per opening."],
+  ["The probe is unplugged from the board. The device should publish…", ["85.0", "An error it can name", "Nothing at all"], 1, "Silence and impossible values both mislead."],
+  ["\"Done\" includes surviving a router restart…", ["With someone pressing reset", "On its own", "Not required"], 1, "Nobody will be there when it happens."]
+ ]
+}

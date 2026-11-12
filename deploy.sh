@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 [ -f .deploy.env ] || { echo "Missing .deploy.env: copy .deploy.env.example and fill it in." >&2; exit 1; }
 . ./.deploy.env
 : "${DEPLOY_HOST:?set in .deploy.env}" "${DEPLOY_DIR:?set in .deploy.env}"
-files="app.py study-plan.html sw.js manifest.webmanifest quizzes.json drills.json lessons fonts icons"
+files="app.py study.html sw.js manifest.webmanifest courses fonts icons"
 [ -f config.json ] && files="$files config.json"
 # shellcheck disable=SC2086
 rsync -av --delete --exclude __pycache__ $files "$DEPLOY_HOST:$DEPLOY_DIR/"

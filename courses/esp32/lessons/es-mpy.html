@@ -1,0 +1,67 @@
+<p>MicroPython is Python, but on a machine with a few hundred kilobytes and no operating system around it. The language is familiar; what changes is time, memory and the shape of a program that must run for months.</p>
+
+<h3>The shape of a device program</h3>
+<pre><code># main.py
+import time
+from machine import Pin
+
+time.sleep(2)                  # while developing: a moment to Ctrl-C in
+led = Pin(2, Pin.OUT)
+
+def step():
+    led.value(not led.value())
+
+while True:                    # a device program never ends
+    try:
+        step()
+    except Exception as e:
+        print("step failed:", e)   # log and carry on, don't die
+    time.sleep_ms(500)</code></pre>
+<p>There's nothing to return to: when the loop ends, the device does nothing until reset. So the outer loop catches and logs, and anything that can hang (a network call) has a timeout.</p>
+
+<h3>Time</h3>
+<pre><code>start = time.ticks_ms()
+...
+elapsed = time.ticks_diff(time.ticks_ms(), start)   # never  now - start</code></pre>
+<p><code>ticks_ms()</code> wraps around, so subtracting goes wrong eventually; <code>ticks_diff</code> handles it. The real-time clock starts at 2000-01-01 after every power cut; set it from the network with <code>ntptime.settime()</code> (UTC) once Wi-Fi is up, before any timestamp means anything.</p>
+
+<h3>Memory</h3>
+<pre><code>import gc
+gc.collect(); print(gc.mem_free())</code></pre>
+<ul class="points">
+<li>Allocate once, reuse: a growing list of readings, or string concatenation in a loop, ends in <code>MemoryError</code> after hours, not seconds.</li>
+<li>The heap fragments: plenty free in total, no block big enough. Collect after big temporary objects (<code>gc.collect()</code>) and avoid building large JSON strings.</li>
+<li>Boards with PSRAM have megabytes instead of ~100 KB free; the same code is far more forgiving there.</li>
+</ul>
+
+<h3>Doing several things: asyncio</h3>
+<pre><code>import asyncio
+
+async def blink():
+    while True:
+        led.value(not led.value()); await asyncio.sleep_ms(500)
+
+async def report():
+    while True:
+        publish_reading(); await asyncio.sleep(30)
+
+async def main():
+    asyncio.create_task(blink())
+    await report()
+
+asyncio.run(main())</code></pre>
+<p>The same model as asyncio on your Mac: one thread, switching at <code>await</code>. A blocking call (<code>time.sleep</code>, a sensor read that waits 750 ms) stalls every task. Timers (<code>machine.Timer</code>) exist too, but their callbacks have the same limits as interrupts.</p>
+
+<h3>Storing a little data</h3>
+<p>The filesystem is in flash, which wears out after many thousands of writes per block. Writing a file every few seconds for a year is a problem; writing settings when they change is not. For small values, <code>esp32.NVS</code> is a key-value store built for it.</p>
+
+<aside class="bridge"><span class="label">From FastAPI</span><p>The rules you learned for the event loop apply unchanged: one blocking call stalls everything. The difference is that here, "everything" includes the Wi-Fi keepalive and the watchdog.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p><code>readings.append(value)</code> in the main loop, to "send later". After a day offline the list fills the heap and the device resets, losing it all. Keep a fixed-size buffer, or send and forget.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write a main loop that blinks the LED with asyncio while another task prints <code>gc.mem_free()</code> every 10 s. Leave it an hour: is free memory stable?</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.micropython.org/en/latest/reference/constrained.html" target="_blank" rel="noopener">MicroPython on microcontrollers: memory</a></li>
+<li><a href="https://docs.micropython.org/en/latest/library/asyncio.html" target="_blank" rel="noopener">MicroPython asyncio</a></li>
+</ul></aside>

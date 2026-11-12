@@ -1,0 +1,41 @@
+<p>A topic is a UTF-8 string split into <em>levels</em> by <code>/</code>. The broker never stores a list of topics: it matches each published topic against each subscription's <em>filter</em>. Getting the names right is most of designing an MQTT system, and the hardest part to change later, because every device and dashboard has them hard-coded.</p>
+
+<h3>Levels and the two wildcards</h3>
+<pre><code>home/kitchen/fridge/temp          # a topic: 4 levels
+home/+/fridge/temp                # + : exactly one level
+home/kitchen/#                    # # : this level and everything below, last only
+#                                 # everything (except $-topics)</code></pre>
+<ul class="points">
+<li><code>+</code> matches exactly one whole level: <code>home/+/temp</code> matches <code>home/kitchen/temp</code>, not <code>home/kitchen/fridge/temp</code>.</li>
+<li><code>#</code> must be the last character, and matches the parent too: <code>home/kitchen/#</code> matches <code>home/kitchen</code> itself.</li>
+<li>Wildcards are for subscribing only. Publishing to <code>home/+/temp</code> is a protocol error and the broker drops the connection.</li>
+<li>A wildcard is a whole level: <code>home/kit+</code> is invalid, not a prefix match.</li>
+</ul>
+
+<h3>Rules that bite</h3>
+<ul class="points">
+<li><strong>Case matters.</strong> <code>Home/Kitchen</code> and <code>home/kitchen</code> are different topics.</li>
+<li><strong>No leading slash.</strong> <code>/home/kitchen</code> has an empty first level, so <code>home/#</code> doesn't match it. Pick no slash and stick to it.</li>
+<li><strong>No spaces</strong> and no odd characters, even where the spec allows them: some brokers (NATS among them) refuse whitespace, and every shell command gets harder.</li>
+<li><strong><code>$</code> topics are the broker's.</strong> <code>$SYS/...</code> on Mosquitto carries broker statistics. A filter starting with a wildcard (<code>#</code>, <code>+/...</code>) never matches them; subscribe to <code>$SYS/#</code> explicitly.</li>
+</ul>
+
+<h3>A naming scheme that lasts</h3>
+<pre><code>&lt;site&gt;/&lt;room&gt;/&lt;device&gt;/&lt;what&gt;       home/kitchen/fridge/temp
+                                     home/kitchen/fridge/status   (online / offline)
+&lt;site&gt;/&lt;room&gt;/&lt;device&gt;/&lt;what&gt;/set   home/hall/light/power/set    (a command)</code></pre>
+<p>General to specific, left to right, so the useful wildcards fall out: one room (<code>home/kitchen/#</code>), one measurement everywhere (<code>home/+/+/temp</code>), one device (<code>home/kitchen/fridge/#</code>). Keep commands on their own topic (<code>.../set</code>) and the device's reported state on the plain topic, so a dashboard never mistakes a request for a fact. Device firmware often brings its own scheme (Tasmota's <code>cmnd/</code>, <code>stat/</code>, <code>tele/</code>, Zigbee2MQTT's <code>zigbee2mqtt/&lt;name&gt;</code>); lesson 14 covers them. Don't fight those; keep your own programs consistent.</p>
+
+<h3>What goes in a level</h3>
+<p>Stable identifiers, not display names or values. <code>home/kitchen/fridge</code>, not <code>home/Kitchen Fridge (new)</code>. And never put data in the topic that belongs in the payload: <code>home/kitchen/fridge/temp/4.2</code> creates a new topic for every reading and makes retained values and subscriptions useless.</p>
+
+<aside class="bridge"><span class="label">From NATS</span><p>Same idea, different punctuation: <code>home/kitchen/#</code> is <code>home.kitchen.&gt;</code>, <code>home/+/temp</code> is <code>home.*.temp</code>. One difference: MQTT's <code>#</code> also matches the parent level (<code>home/kitchen</code>), NATS's <code>&gt;</code> doesn't. When NATS speaks MQTT it converts between them for you, and has to subscribe twice to cover <code>#</code> (lesson 12).</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>Subscribing to <code>#</code> in a program "to see everything" and filtering in code. It's fine for debugging, but in production every message on the broker crosses the network to you, including camera snapshots someone later publishes. Subscribe to what you need.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>For each filter, say which of <code>home/kitchen</code>, <code>home/kitchen/temp</code>, <code>home/hall/light/power</code>, <code>/home/kitchen/temp</code> it matches: <code>home/#</code>, <code>home/+</code>, <code>home/+/temp</code>, <code>+/+/+</code>, <code>home/kitchen/#</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718106" target="_blank" rel="noopener">MQTT 3.1.1: topic names and filters</a></li>
+<li><a href="https://www.hivemq.com/blog/mqtt-essentials-part-5-mqtt-topics-best-practices/" target="_blank" rel="noopener">HiveMQ: topic best practices</a></li>
+</ul></aside>

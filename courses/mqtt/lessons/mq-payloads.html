@@ -1,0 +1,42 @@
+<p>To the broker, a payload is bytes: up to 256 MB, no type, no schema. Everything a subscriber needs to understand it is a convention between you and yourself, so write the convention down and keep it.</p>
+
+<h3>Plain value or JSON</h3>
+<pre><code>home/kitchen/fridge/temp     4.2                                  # one value per topic
+home/kitchen/fridge/state    {"temp": 4.2, "door": "closed", "ts": 1763000000}   # one object</code></pre>
+<p>A plain value per topic is easy to read in <code>mosquitto_sub</code> and easy for any device to publish. A JSON object keeps related values together and in step (the temperature and the door at the same moment), and has room for a timestamp. Both are fine; mixing them on one topic is not. Zigbee2MQTT uses one JSON object per device, Tasmota a mix.</p>
+
+<h3>Say what the numbers are</h3>
+<ul class="points">
+<li><strong>Units</strong> in the name or the schema, never only in your head: <code>temp_c</code>, or <code>{"temp": 4.2, "unit": "°C"}</code>.</li>
+<li><strong>Timestamps</strong> in UTC, as seconds since the epoch or ISO 8601 with an offset. A retained value without a time can't tell you it's three days old.</li>
+<li><strong>Booleans and states</strong> as words that can't be misread: <code>"ON"</code>/<code>"OFF"</code>, <code>"open"</code>/<code>"closed"</code>. A bare <code>1</code> could be a count.</li>
+</ul>
+
+<h3>Commands and state are different messages</h3>
+<pre><code>home/hall/light/power/set   ON       # what someone wants      (not retained)
+home/hall/light/power       ON       # what the light reports  (retained)</code></pre>
+<p>The light subscribes to <code>/set</code>, acts, then publishes what it actually did. The dashboard shows the state topic, so a command the light ignored or couldn't carry out shows as not done. Send the target state, not a toggle, so a repeated command (QoS 1) changes nothing.</p>
+
+<h3>Decode defensively</h3>
+<pre><code>def on_message(client, userdata, msg):
+    try:
+        data = json.loads(msg.payload)
+        temp = float(data["temp"])
+    except (ValueError, KeyError, TypeError):
+        log.warning("bad payload on %s: %r", msg.topic, msg.payload[:200])
+        return
+    ...</code></pre>
+<p>Anything with access to the topic can publish anything to it, including a device with new firmware that renamed a field. One bad message must cost one log line, not the subscriber: an exception that escapes a callback can stop a client's network loop (lesson 9).</p>
+
+<h3>Keep payloads small</h3>
+<p>MQTT is for state and events. A camera snapshot, a firmware image or a PDF goes on HTTP or a file store; the MQTT message says "a new snapshot is at this URL". It's the same rule as the household's NATS subjects: messages are announcements, content stays on each app's own HTTPS API.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>HTTP has <code>Content-Type</code>; MQTT 3.1.1 has nothing (MQTT 5 adds a content type and a "payload is UTF-8" flag). The topic is the only place to say what the bytes mean, so one topic, one format.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p><code>msg.payload</code> is <code>bytes</code>. <code>if msg.payload == "ON":</code> is never true in Python 3; compare with <code>b"ON"</code> or decode first.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Design the topics and payloads for a washing machine plug that reports power draw, and that the house should announce "washing done" from. Which messages are retained? Which is a state, which an event?</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html" target="_blank" rel="noopener">Zigbee2MQTT: topics and messages</a></li>
+</ul></aside>

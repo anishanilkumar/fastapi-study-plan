@@ -1,7 +1,7 @@
 [project]
-name = "fastapi-study-plan"
-version = "1.0.0"
-description = "A self-hosted, gamified Python + FastAPI course for PHP developers"
+name = "study"
+version = "2.0.0"
+description = "Self-hosted, gamified courses (Python and FastAPI, MQTT, ESP32) with lessons, checks, quizzes and drills"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"

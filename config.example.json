@@ -1,11 +1,17 @@
 {
-  "title": "Python and FastAPI, from the basics",
-  "start": "2026-01-10",
-  "target": { "label": "Interview", "at": "2026-01-13T14:00:00+01:00" },
-  "finish_by": "2026-01-12T21:00:00+01:00",
-  "overrides": {
-    "eve-deepdive": {
-      "why": "Two minutes on your own project: what it does, the stack, one hard problem, and what you'd do differently."
+  "courses": {
+    "fastapi": {
+      "start": "2026-01-10",
+      "target": {
+        "label": "Interview",
+        "at": "2026-01-13T14:00:00+01:00"
+      },
+      "finish_by": "2026-01-12T21:00:00+01:00",
+      "overrides": {
+        "eve-deepdive": {
+          "why": "Two minutes on your own project: what it does, the stack, one hard problem, and what you'd do differently."
+        }
+      }
     }
   }
 }

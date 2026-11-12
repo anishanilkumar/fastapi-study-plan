@@ -1,0 +1,174 @@
+{
+ "title": "ESP32, from the bench to the fridge",
+ "short": "ESP32",
+ "order": 3,
+ "blurb": "The microcontroller behind most home devices: the chips, GPIO and power, MicroPython, sensors on I²C and 1-Wire, Wi-Fi and MQTT, deep sleep, ESPHome, and a fridge probe that reports to the house.",
+ "lede": "From a bare dev board to a device in the house: MicroPython first, ESPHome for the ones that stay, MQTT into the leaf on jarvis.",
+ "goal": 250,
+ "shift": {
+  "label": "The one big mental shift",
+  "html": "<p>There's no operating system to catch you. Your program <em>is</em> the device: if it hangs, the device hangs; if it runs out of memory after three days, it resets; if the voltage dips when Wi-Fi starts, it reboots and looks like a software bug.</p><p>So for every device, ask: what happens when the network, the sensor or the power misbehaves? How does it recover with nobody there? And how will you find out it did?</p>"
+ },
+ "map": {
+  "label": "Translation",
+  "title": "What you know, on a microcontroller",
+  "from": "Python / the Pi",
+  "to": "ESP32",
+  "rows": [
+   ["pip install", "mpremote mip install, or copy a .py file"],
+   ["SSH into jarvis", "mpremote repl over USB"],
+   ["systemd Restart=always", "machine.WDT, the watchdog"],
+   ["journalctl", "print over USB, or a .../log MQTT topic"],
+   ["time.time()", "time.ticks_ms() and ticks_diff()"],
+   ["NTP keeps the clock", "ntptime.settime() after every boot"],
+   ["i2cdetect -y 1", "i2c.scan()"],
+   ["a config file in /etc", "esp32.NVS, or a small file written rarely"],
+   ["nixos-rebuild switch", "esphome run device.yaml (OTA)"],
+   ["asyncio on the Mac", "asyncio, same model, smaller"],
+   ["a 5 V USB port", "3.3 V logic: not 5 V tolerant"]
+  ]
+ },
+ "plan_foot": "When you finish a day, leave the board running overnight doing that day's thing, and check in the morning that it still is.",
+ "plan": [
+  {
+   "id": "e0",
+   "n": 0,
+   "title": "The board",
+   "groups": [
+    {
+     "label": "Before you start · the kit",
+     "items": [
+      {"id": "e0-kit", "min": 15, "t": "Order the kit", "why": "Two ESP32-C3 or S3 dev boards (one will die), a breadboard and jumper wires, a waterproof DS18B20 probe, 4.7 kΩ and 220 Ω resistors, a few LEDs and buttons, a USB cable you know carries data, and a USB power meter."}
+     ]
+    },
+    {
+     "label": "Morning · chip, firmware, REPL",
+     "items": [
+      {"id": "e0-family", "lesson": "es-chip", "t": "Chip, module, dev board; and which ESP32 is which", "why": "Original: dual-core, most quirks. S3: native USB, often PSRAM. C3: small RISC-V. C6: adds Zigbee/Thread. H2: no Wi-Fi. Almost all 2.4 GHz only.", "src": ["MicroPython: ESP32 quick reference", "https://docs.micropython.org/en/latest/esp32/quickref.html"]},
+      {"id": "e0-flash", "lesson": "es-setup", "t": "Flash MicroPython with esptool", "why": "Erase, then write the firmware for your exact chip at the offset its download page gives. Can't connect: hold BOOT, tap RESET, release BOOT.", "src": ["MicroPython: getting started on the ESP32", "https://docs.micropython.org/en/latest/esp32/tutorial/intro.html"]},
+      {"id": "e0-repl", "lesson": "es-setup", "t": "The REPL and files with mpremote", "why": "<code>mpremote</code>, <code>mpremote cp main.py :</code>, <code>mpremote run test.py</code>. boot.py then main.py at power-up; develop with <code>run</code>.", "src": ["mpremote reference", "https://docs.micropython.org/en/latest/reference/mpremote.html"]}
+     ]
+    },
+    {
+     "label": "Afternoon · pins and power",
+     "items": [
+      {"id": "e0-io", "lesson": "es-gpio", "t": "GPIO in and out, pull-ups, a resistor on every LED", "why": "3.3 V, not 5 V tolerant, a few mA per pin. A floating input reads noise: use <code>Pin.PULL_UP</code>."},
+      {"id": "e0-irq", "lesson": "es-gpio", "t": "Interrupts and debounce", "why": "The handler sets a flag; the main loop does the work. Ignore edges within ~50 ms."},
+      {"id": "e0-avoid", "lesson": "es-gpio", "t": "Pins to avoid: flash, strapping, input-only, ADC2", "why": "Original ESP32: 6–11 flash, 0/2/5/12/15 strapping, 34–39 input only, ADC2 dead with Wi-Fi. Check your board's own list."},
+      {"id": "e0-power", "lesson": "es-power", "t": "Power: peaks, brownouts, a shared ground", "why": "Wi-Fi peaks at hundreds of mA. Resets when Wi-Fi starts are usually the supply. Every device needs a common ground."}
+     ]
+    }
+   ],
+   "checks": [
+    {"id": "e0-c1", "t": "I can get from a fresh board to a REPL, including when esptool can't connect"},
+    {"id": "e0-c2", "t": "I can wire a button with the internal pull-up and say why it reads 0 when pressed"},
+    {"id": "e0-c3", "t": "I can explain a reset that happens only when Wi-Fi starts"}
+   ]
+  },
+  {
+   "id": "e1",
+   "n": 1,
+   "title": "Sensors, code, network",
+   "groups": [
+    {
+     "label": "Morning · MicroPython and sensors",
+     "items": [
+      {"id": "e1-loop", "lesson": "es-mpy", "t": "A device program: a loop that catches, logs and never ends", "why": "Timeouts on everything that can hang. <code>ticks_diff</code>, never subtraction."},
+      {"id": "e1-mem", "lesson": "es-mpy", "t": "Memory: allocate once, nothing that grows", "why": "<code>gc.mem_free()</code> stable over an hour is the test. A growing list ends in MemoryError days later."},
+      {"id": "e1-i2c", "lesson": "es-buses", "t": "I²C: scan first", "why": "<code>i2c.scan()</code> empty means wiring or power, not the driver. A BME280 is 0x76 or 0x77.", "src": ["MicroPython: machine.I2C", "https://docs.micropython.org/en/latest/library/machine.I2C.html"]},
+      {"id": "e1-ds18", "lesson": "es-buses", "t": "The DS18B20: 4.7 kΩ pull-up, 750 ms, and 85 °C means it failed", "why": "convert_temp, wait, read_temp per rom. Throw away the first reading and range-check."},
+      {"id": "e1-adc", "lesson": "es-analog", "t": "ADC and PWM, with their limits", "why": "11 dB attenuation, read_uv, average; not better than a few percent. PWM duty for LEDs and fans; a MOSFET for anything big."}
+     ]
+    },
+    {
+     "label": "Afternoon · Wi-Fi and MQTT",
+     "items": [
+      {"id": "e1-wifi", "lesson": "es-wifi", "t": "Join Wi-Fi with a timeout", "why": "A board that waits forever for a rebooting router needs unplugging. Passwords in secrets.py, not git."},
+      {"id": "e1-umqtt", "lesson": "es-wifi", "t": "umqtt: client ID from <code>machine.unique_id()</code>, a retained will, ping within keepalive", "why": "umqtt.simple doesn't ping or reconnect for you.", "src": ["umqtt.simple", "https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple"]},
+      {"id": "e1-recover", "lesson": "es-wifi", "t": "The recover loop: Wi-Fi, connect, work; on error back off and start over", "why": "The same loop as aiomqtt's in the MQTT course. mqtt_as does it for asyncio programs."},
+      {"id": "e1-build", "lesson": "es-wifi", "min": 45, "t": "Build one: the DS18B20 publishing to a broker on the Mac", "why": "Retained readings with a timestamp, on change or every 5 min, a will and birth. Restart the broker and check it comes back."}
+     ]
+    }
+   ],
+   "checks": [
+    {"id": "e1-c1", "t": "I can say what a DS18B20 reading of 85.0 means"},
+    {"id": "e1-c2", "t": "I can write the Wi-Fi + MQTT recover loop from memory"},
+    {"id": "e1-c3", "t": "I can say why <code>time.ticks_ms() - start</code> is a bug"}
+   ]
+  },
+  {
+   "id": "e2",
+   "n": 2,
+   "title": "A device for the house",
+   "groups": [
+    {
+     "label": "Morning · sleep, ESPHome, reliability",
+     "items": [
+      {"id": "e2-sleep", "lesson": "es-sleep", "t": "Deep sleep is a reset: main.py runs once per wake", "why": "RTC memory for a few bytes across sleeps. Wi-Fi is where the battery goes: send rarely.", "src": ["MicroPython: deep sleep", "https://docs.micropython.org/en/latest/esp32/quickref.html#deep-sleep-mode"]},
+      {"id": "e2-esphome", "lesson": "es-esphome", "t": "ESPHome: the fridge sensor as YAML, with OTA", "why": "<code>esphome run fridge.yaml</code>. USB once, then over Wi-Fi. MQTT so the house's programs see it.", "src": ["ESPHome: getting started", "https://esphome.io/guides/getting_started_command_line.html"]},
+      {"id": "e2-wdt", "lesson": "es-reliable", "t": "A watchdog, fed only from the main loop", "why": "Never from a timer. Publish the reset cause at boot so you hear about watchdog resets."},
+      {"id": "e2-ntp", "lesson": "es-reliable", "t": "NTP after every boot; no timestamps before it", "why": "The clock starts at 2000 after a power cut."}
+     ]
+    },
+    {
+     "label": "Afternoon · the fridge probe",
+     "items": [
+      {"id": "e2-fridge", "lesson": "es-build", "min": 90, "t": "Build the fridge probe end to end", "why": "Device to the leaf on jarvis as its own MQTT user, a watcher subscribed over NATS, <code>notify.anish</code> to Friday. Run the five \"done means\" tests."},
+      {"id": "e2-git", "lesson": "es-build", "min": 10, "t": "Put the firmware in git, secrets out", "why": "YAML or .py files in a repo (a <code>devices/</code> folder under <code>home/</code> fits the projects map); secrets.yaml and secrets.py gitignored."}
+     ]
+    }
+   ],
+   "checks": [
+    {"id": "e2-c1", "t": "I can say why a sleeping device's last will doesn't mean much, and what to use instead"},
+    {"id": "e2-c2", "t": "I can say why the door alert belongs off the device"},
+    {"id": "e2-c3", "t": "The probe has survived a router restart and a jarvis restart without me touching it"}
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "n": 1,
+   "title": "The board",
+   "short": "Board",
+   "blurb": "The chips, flashing, the REPL, GPIO, and power: the hardware side.",
+   "lessons": [
+    {"id": "es-chip", "title": "The ESP32 family: chips, modules, boards", "min": 15, "day": "e0"},
+    {"id": "es-setup", "title": "Flashing MicroPython and the REPL", "min": 20, "day": "e0"},
+    {"id": "es-gpio", "title": "GPIO: pins, pull-ups, interrupts", "min": 25, "day": "e0"},
+    {"id": "es-power", "title": "Power, brownouts and batteries", "min": 15, "day": "e0"}
+   ]
+  },
+  {
+   "n": 2,
+   "title": "Sensors and code",
+   "short": "Code",
+   "blurb": "MicroPython on a small machine, the buses sensors use, and getting onto the network.",
+   "lessons": [
+    {"id": "es-mpy", "title": "MicroPython on a microcontroller", "min": 25, "day": "e1"},
+    {"id": "es-buses", "title": "I²C, 1-Wire, SPI and UART", "min": 25, "day": "e1"},
+    {"id": "es-analog", "title": "ADC, PWM and touch", "min": 15, "day": null},
+    {"id": "es-wifi", "title": "Wi-Fi and MQTT from the board", "min": 25, "day": "e1"}
+   ]
+  },
+  {
+   "n": 3,
+   "title": "In the house",
+   "short": "House",
+   "blurb": "Sleep, ESPHome, recovering alone, and one device built end to end.",
+   "lessons": [
+    {"id": "es-sleep", "title": "Deep sleep and batteries", "min": 20, "day": "e2"},
+    {"id": "es-esphome", "title": "ESPHome", "min": 20, "day": "e2"},
+    {"id": "es-reliable", "title": "Watchdogs, time and updates", "min": 20, "day": "e2"},
+    {"id": "es-build", "title": "The fridge probe", "min": 15, "day": "e2"}
+   ]
+  }
+ ],
+ "ranks": [
+  {"xp": 0, "t": "Unboxed", "need": []},
+  {"xp": 150, "t": "Blinker", "need": [{"read": 3}]},
+  {"xp": 450, "t": "Wired", "need": [{"parts": [1]}]},
+  {"xp": 850, "t": "Sensing", "need": [{"parts": [2]}, {"drills": 3}]},
+  {"xp": 1250, "t": "Deployed", "need": [{"parts": [3]}, {"drills": 5}, {"worst": 3}]},
+  {"xp": 1700, "t": "Embedded", "need": [{"parts": "all"}, {"drills": "all", "spare": 2}, {"answered": 60, "right": 0.85}, {"noweak": true}, {"nodue": true}]}
+ ]
+}

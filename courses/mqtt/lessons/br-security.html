@@ -1,0 +1,53 @@
+<p>Anything that can connect to the broker and publish to <code>home/hall/door/lock/set</code> can open the door. So the broker's security is the house's: who can connect, from where, and to which topics.</p>
+
+<h3>Where it's reachable from</h3>
+<ul class="points">
+<li><strong>The home network only.</strong> Open 1883 on jarvis's firewall to the LAN, never forward it on the router. Devices are at home; the broker has no reason to face the internet.</li>
+<li><strong>From outside, over the tailnet.</strong> Your Mac reaches jarvis at 100.64.0.6 through Tailscale. Remember the tailnet is shared with friends: being on it is not a login.</li>
+<li><strong>Programs elsewhere use NATS,</strong> through the leaf and the hub, with their own NATS logins. They don't need the MQTT port at all.</li>
+</ul>
+
+<h3>A login per device</h3>
+<p>One shared username for every device means one leaked password (they sit in plain text in a Tasmota web UI, or in an ESPHome YAML) opens everything, and you can't revoke one device. Give each device its own user, limited to its own topics.</p>
+<pre><code># NATS (jarvis): each device a user, MQTT connections only, its own subjects
+authorization {
+  users: [
+    { user: fridge, password: "$2a$11$…",          # bcrypt, from `nats server passwd`
+      allowed_connection_types: ["MQTT"],
+      permissions: {
+        publish:   ["home.kitchen.fridge.>"],
+        subscribe: ["home.kitchen.fridge.>", "home.kitchen.fridge"]
+      } }
+  ]
+}</code></pre>
+<p>Adding <code>authorization</code> to jarvis's server makes the local client port need a login too, which today's local programs don't send. Check how <code>no_auth_user</code> maps them to a user before switching it on, and test on the Mac first.</p>
+<p>On Mosquitto the same thing is a password file and an ACL file:</p>
+<pre><code># mosquitto.conf (Mosquitto 2 listens on localhost only until you add a listener)
+listener 1883
+allow_anonymous false
+password_file /etc/mosquitto/passwd          # mosquitto_passwd -c /etc/mosquitto/passwd fridge
+acl_file /etc/mosquitto/acl
+
+# acl
+user fridge
+topic readwrite home/kitchen/fridge/#
+pattern read home/+/+/status                 # everyone may read status
+user homeassistant
+topic readwrite #</code></pre>
+
+<h3>TLS</h3>
+<p>Without TLS, the username and password in CONNECT, and every payload, cross the network in clear. On a home LAN with devices that can't do TLS well (an ESP8266 has little memory for it), plain 1883 inside the house is a common, deliberate trade-off. Anything leaving the house goes over TLS (8883) or the tailnet, which is already encrypted.</p>
+
+<h3>What a compromised device can do</h3>
+<p>Assume one will be: cheap firmware, old libraries. With per-device permissions, a compromised fridge sensor can lie about the fridge and nothing else. Without them, it can publish retained garbage to every topic (stuck forever until cleared), subscribe to <code>#</code> and read the house, or send commands to the lock. Permissions are cheap; set them when the device is added, not after.</p>
+
+<aside class="bridge"><span class="label">From HTTP</span><p>An API checks on every request who you are and what you may touch. A broker does it in two places: at CONNECT (who) and on every PUBLISH and SUBSCRIBE (which topics). A denied publish is often silently dropped, so a device that "publishes but nothing arrives" may simply not be allowed.</p></aside>
+
+<aside class="trap"><span class="label">Trap</span><p>"It's only on the LAN" as the whole security story. The LAN has guests' phones, the TV and every cheap plug. A broker with anonymous access lets any of them open the door.</p></aside>
+
+<aside class="try"><span class="label">Try it</span><p>Write the users and permissions for: the fridge sensor, a Zigbee2MQTT bridge (publishes and subscribes under <code>zigbee2mqtt/</code>), Home Assistant (everything), and a Python logger that only reads <code>home/#</code>.</p></aside>
+
+<aside class="more"><span class="label">Further reading</span><ul>
+<li><a href="https://docs.nats.io/running-a-nats-service/configuration/securing_nats/authorization" target="_blank" rel="noopener">NATS: authorization</a></li>
+<li><a href="https://mosquitto.org/man/mosquitto-conf-5.html" target="_blank" rel="noopener">mosquitto.conf: listeners, password_file, acl_file</a></li>
+</ul></aside>
