@@ -2558,7 +2558,14 @@ body[data-focus="on"] .park { display: flex; }
     else if (document.getElementById("status").dataset.state === "local") pull();
   }
   window.addEventListener("online", retry);
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) { retry(); updateCounts(); } });
+  // Coming back to the tab: also take the server's copy when nothing here is
+  // unsent, since Friday may have saved progress meanwhile, and a stale tab's
+  // next save would otherwise put the old state back.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    if (!DEMO && !MENTOR && !dirty && !inflight && synced) pull(); else retry();
+    updateCounts();
+  });
   setInterval(retry, 30000);
   setInterval(function () { updateCountdown(); updateCounts(); }, 60000);   // the deadline moves with the clock
 
@@ -2602,6 +2609,10 @@ body[data-focus="on"] .park { display: flex; }
       setStatus("ok", "Synced with server" + at);
     }).catch(function (e) { inflight = false; unreachable(e); });
   }
+  // For test/game_cases.mjs: the scoring, run headless against shared cases
+  // that Friday's copy of it (study/Game.kt) is held to as well.
+  if (window.__studyTest) window.__studyTest({ score: score, adopt: adopt, nextAction: nextAction, setDrills: setDrills,
+    setQuizzes: function (q) { quizzes = q; }, ranks: RANKS, badges: BADGES, state: function () { return state; } });
   if (MENTOR) setStatus("ok", "Read-only" + (MENTOR.state.updated_at ? " · last change " + fmtWhen(new Date(MENTOR.state.updated_at)) : " · nothing recorded yet"));
   else if (!DEMO) pull();
 

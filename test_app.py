@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sqlite3
 
@@ -312,3 +313,20 @@ def test_config_naming_a_missing_course_stops_the_app(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="no such course"):
         with TestClient(study.app):
             pass
+
+
+def test_course_file_for_other_clients(client):
+    got = client.get("/mqtt/course.json").json()
+    assert got["id"] == "mqtt" and got["parts"] and got["ranks"][0]["xp"] == 0
+    assert client.get("/nope/course.json").status_code == 404
+
+
+def test_shared_game_cases_hold_for_the_page():
+    # The page's own scoring, run headless against the cases Friday's copy is held to.
+    import shutil
+    import subprocess
+    if not shutil.which("node"):
+        pytest.skip("node not installed")
+    r = subprocess.run(["node", "tests/game_cases.mjs"], cwd=study.HERE, capture_output=True, text=True,
+                       env={**os.environ, "TZ": "UTC"})
+    assert r.returncode == 0, r.stdout + r.stderr

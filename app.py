@@ -9,6 +9,7 @@ learner's progress per course in SQLite.
     GET  /<course>/lessons/<id>.html  one lesson's reading text (an HTML fragment)
     GET  /<course>/quizzes.json     the questions for every lesson
     GET  /<course>/drills.json      the drills
+    GET  /<course>/course.json      the course itself (plan, parts, ranks), for other clients
     GET  /<course>/state            {"done": ..., "quiz": ..., "log": ..., "review": ..., "cleared": n, "updated_at": ...}
     PUT  /<course>/state            the same without updated_at; replaces the course's state
     GET  /courses.json              course ids and lesson ids, for the service worker
@@ -822,6 +823,12 @@ def page(cid: str, request: Request) -> HTMLResponse:
     if token:
         extra["mentor_path"] = "/mentor/" + token   # shown in the masthead and on Record, to copy
     return HTMLResponse(course_page(user, c, "", extra), headers=PER_LEARNER)
+
+
+@app.get("/{cid}/course.json", include_in_schema=False)
+def course_file(cid: str) -> JSONResponse:
+    # What the page gets injected, for clients that aren't the page (Friday).
+    return JSONResponse(course_of(cid).data, headers=NO_CACHE)
 
 
 @app.get("/{cid}/quizzes.json", include_in_schema=False)
